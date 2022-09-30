@@ -8,7 +8,7 @@ running molecular dynamics with [`ase`](https://wiki.fysik.dtu.dk/ase/).
 If you use (parts of) <span style="font-variant:small-caps;">So3krates</span> please cite the corresponding paper [1]
 ```
 @article{frank2022so3krates,
-  title={So3krates--Self-attention for higher-order geometric interactions on arbitrary length-scales},
+  title={So3krates: Equivariant attention for interactions on arbitrary length-scales in molecular systems},
   author={Frank, J Thorben and Unke, Oliver T and M{\"u}ller, Klaus-Robert},
   journal={arXiv preprint arXiv:2205.14276},
   year={2022}
@@ -18,7 +18,7 @@ If you use parts of the code, please consider citing this repo
 ```
 @software{mlff2022github,
   author = {J. Thorben Frank},
-  title = {mlff: Build Machine Learning Force Fields with JAX},
+  title = {mlff: Build Neural Networks for Machine Learning Force Fields with JAX},
   url = {https://github.com/thorben-frank/mlff},
   version = {0.1},
   year = {2022},
