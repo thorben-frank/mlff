@@ -1,0 +1,7 @@
+.DS_Store
+*.egg-info
+.ipynb_checkpoints
+*.traj
+mlff/examples/example_model
+mlff/examples/wandb
+*.pyc

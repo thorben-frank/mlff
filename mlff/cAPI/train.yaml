@@ -1,0 +1,115 @@
+# define the property keys
+prop_keys: 
+  energy: E
+  force: F
+  atomic_position: R
+  atomic_type: z
+
+# set the units if you want them to be converted to ASE default units (recommended).
+# The keys have the names <property_name>_unit
+units:
+  energy_unit: kcal/mol # (ASE default is eV)
+  force_unit: kcal/(mol*Ang)  # (ASE default is eV/Ang)
+  # atomic_position_unit: ....
+
+# Training parameters
+coach:
+  target_keys:
+    - $energy
+    - $force
+  input_keys:
+    - $atomic_position
+    - $atomic_type
+  loss_weights:
+    energy_weight: 0.01
+    force_weight: 0.99
+
+  training_batch_size: 5
+  validation_batch_size: 5
+  epochs: 1000
+  ckpt_dir: '/Users/thorbenfrank/Desktop/test_module'
+  data_path: '/Users/thorbenfrank/Documents/data/mol-data/dft/ethanol_dft.npz'
+  net_seed: 0
+  training_seed: 0
+
+# Run parameters
+run:
+  eval_every_t: 1000
+  log_every_t: 1
+
+
+# Dataset
+dataset:
+  n_train: 100
+  n_valid: 100
+  seed: 0
+  r_cut: 5.
+  # strat_key: $energy
+  
+
+# Network parameters
+
+stack_net:
+  prop_keys: $prop_keys
+
+  geometry_embeddings:
+    - geometry_embed: # corresponds to the 'module_name' in the corresponding class.
+        radial_basis_function: phys
+        n_rbf: 32
+        radial_cutoff_fn: cosine_cutoff_fn
+        r_cut: $r_cut
+        sphc: True
+        degrees: [1]
+        prop_keys: $prop_keys
+        
+  feature_embeddings:
+    - atom_type_embed: # corresponds to the 'module_name' in the corresponding class.
+        num_embeddings: 100
+        features: 32  # one can also reuse properties which have been defined in some other module before. Here features from 'geometry_embed'
+        prop_keys: $prop_keys
+
+  layers:
+    - so3krates_layer: # corresponds to the 'module_name' in the corresponding class.
+        degrees: $degrees
+        fb_filter: radial_spherical
+        fb_rad_filter_features: [128, $features]
+        fb_sph_filter_features: [32, $features]
+        fb_attention: conv_att
+        gb_filter: radial_spherical
+        gb_rad_filter_features: [128, $features]
+        gb_sph_filter_features: [32, $features]
+        gb_attention: conv_att
+        n_heads: 4
+        chi_cut: null
+        chi_cut_dynamic: False
+
+    - so3krates_layer:
+        $so3krates_layer
+
+  observables:
+    - energy: # corresponds to the 'module_name' in the corresponding observable class.
+        prop_keys: $prop_keys
+        per_atom_shift: null
+        per_atom_scale: null
+#          1: 10.
+#          10: 3.
+
+train_state:
+  learning_rate: 0.001
+  clip_by_global_norm: 1.
+  reduce_lr_on_plateau:
+    patience: 25
+    decay_factor: 0.5
+  polyak_step_size: 0.999
+
+
+wandb:
+  project: yaml_start
+  group: first_try
+  name: null
+  
+
+
+ 
+  
+  
