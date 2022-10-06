@@ -26,5 +26,4 @@ If you use parts of the code, please consider citing this repo
 ```
 ### References
 * [1] J.T. Frank, O.T. Unke, K.-R. Müller.  
-*So3krates: Equivariant interactions on arbitrary length-scales and high efficiency for molecular graphs.* 
-Advances in Neural Information Processing Systems 36, pp. XXX-XXX (2022) [Paper](https://arxiv.org/abs/2205.14276)
+*So3krates: Equivariant attention for interactions on arbitrary length-scales in molecular systems.* [Paper](https://arxiv.org/abs/2205.14276)
