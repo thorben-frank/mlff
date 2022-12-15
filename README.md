@@ -7,11 +7,10 @@ running molecular dynamics with [`ase`](https://wiki.fysik.dtu.dk/ase/).
 ### Cite
 If you use (parts of) <span style="font-variant:small-caps;">So3krates</span> please cite the corresponding paper [1]
 ```
-@article{frank2022so3krates,
+@inproceedings{frankso3krates,
   title={So3krates: Equivariant attention for interactions on arbitrary length-scales in molecular systems},
-  author={Frank, J Thorben and Unke, Oliver T and M{\"u}ller, Klaus-Robert},
-  journal={arXiv preprint arXiv:2205.14276},
-  year={2022}
+  author={Frank, Thorben and Unke, Oliver Thorsten and M{\"u}ller, Klaus Robert},
+  booktitle={Advances in Neural Information Processing Systems}
 }
 ```
 If you use parts of the code, please consider citing this repo
@@ -26,4 +25,4 @@ If you use parts of the code, please consider citing this repo
 ```
 ### References
 * [1] J.T. Frank, O.T. Unke, K.-R. Müller.  
-*So3krates: Equivariant attention for interactions on arbitrary length-scales in molecular systems.* [Paper](https://arxiv.org/abs/2205.14276)
+*So3krates: Equivariant attention for interactions on arbitrary length-scales in molecular systems.* [Paper](https://openreview.net/forum?id=tlUnxtAmcJq)
