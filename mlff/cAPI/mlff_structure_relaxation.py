@@ -1,7 +1,6 @@
 import argparse
 import os
 import logging
-import numpy as np
 
 from flax.training import checkpoints
 from ase.units import *
@@ -210,7 +209,9 @@ def run_relaxation():
                                                   capacity_multiplier=1.25
                                                   )
 
-        optimizer = mdx.LBFGS.create(potential=potential, save_dir=save_dir)
+        optimizer = mdx.LBFGS.create(atoms=atomsx,
+                                     potential=potential,
+                                     save_dir=save_dir)
         optimizer.minimize(atomsx, max_steps=qn_max_steps, tol=qn_tol)
     else:
         if n_interactions_max is None:

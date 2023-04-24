@@ -58,15 +58,13 @@ class LBFGS:
 
     step_fn: Callable = struct.field(pytree_node=False)
     optimizer: jaxopt.LBFGS = struct.field(pytree_node=False)
-    # optimizer_kwargs: Dict = struct.field(pytree_node=False)
 
     @classmethod
     def create(cls,
                atoms,
                potential: MachineLearningPotential,
-               max_steps: int = 1000,
-               save_dir: str = None,
-               optimizer_kwargs: Dict = None):
+               save_dir: str = None
+               ):
 
         def f_opj(x):
             # TODO: save the whole optimization using id_tab here
@@ -74,7 +72,7 @@ class LBFGS:
             return potential(a.to_graph()).sum().astype(x['positions'].dtype), atoms.neighbors.overflow
 
         opt = jaxopt.LBFGS(f_opj,
-                           maxiter=max_steps,
+                           maxiter=1,
                            implicit_diff=False,
                            unroll=False,
                            has_aux=True,
@@ -88,14 +86,13 @@ class LBFGS:
         return LBFGS(potential=potential,
                      save_dir=save_dir,
                      optimizer=opt,
-                     step_fn=take_step,)
-                     # TODO: this would require to set all optimizer kwargs. Make sure one can set only selected ones
-                     # optimizer_kwargs=_get_lbfgs_defaults() if optimizer_kwargs is None else optimizer_kwargs)
+                     step_fn=take_step
+                     )
 
     def step(self, atoms: AtomsX) -> (AtomsX, jnp.ndarray):
         pass
 
-    def minimize(self, atoms: AtomsX, max_steps: int = 1000, tol: float = 1e-3):
+    def minimize(self, atoms: AtomsX, max_steps: int, tol: float = 1e-3):
         from tqdm import trange
 
         params = {'positions': atoms.get_positions().reshape(-1)}
