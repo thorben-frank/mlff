@@ -72,7 +72,7 @@ run_relaxation  --qn_max_steps 1000 --qn_tol 0.0001
 which will save the relaxed geometry to `relaxed_structure.h5`. Next, convert the `.h5` file to an 
 `xyz` file, by running
 ```
-trajectory_to_xyz --trajectory relaxed_structure.h5 --output relaxed_structure.xyz
+trajectory_to_xyz --trajectory relaxed_structure.h5 --output relaxed_structure.xyz --use_mdx
 ```
 We now run an MD with the relaxed structure as start geometry
 ```
