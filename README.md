@@ -65,11 +65,21 @@ git clone https://github.com/sirmarcel/glp-dev.git
 git cd glp-dev
 pip install -e .
 ```
-Run an MD as
+First, lets create a relaxed structure, using the LBFGS optimizer
 ```
-run_md --thermostat velocity_verlet --temperature_init 600 --time_step 0.5 --total_time 1 --use_mdx
+run_relaxation  --qn_max_steps 1000 --qn_tol 0.0001
 ```
-It will save a `trajectory.h5` file to the current working directory.
+which will save the relaxed geometry to `relaxed_structure.h5`. Next, convert the `.h5` file to an 
+`xyz` file, by running
+```
+trajectory_to_xyz --trajectory relaxed_structure.h5 --output relaxed_structure.xyz
+```
+We now run an MD with the relaxed structure as start geometry
+```
+run_md --start_geometry relaxed_structure.xyz --thermostat velocity_verlet --temperature_init 600 --time_step 0.5 --total_time 1 --use_mdx
+```
+Temperature is in Kelvin, time step in femto seconds and total time in nano seconds. It will save a `trajectory.h5` 
+file to the current working directory.
 ### Analysis
 After the MD is finished you can either work with the `trajectory.h5` using e.g. a `jupyter notebook` and `h5py`. 
 Alternatively, you can run
