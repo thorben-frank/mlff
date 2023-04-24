@@ -7,7 +7,7 @@ setup(
     python_requires='>=3.8',
     packages=['mlff'],  # same as name
     install_requires=['numpy',
-                      'jax >= 0.3.23',
+                      'jax == 0.3.23',
                       'flax == 0.6.1',
                       'jaxopt',
                       'optax',
