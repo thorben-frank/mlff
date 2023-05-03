@@ -11,7 +11,7 @@ setup(
                       'flax >= 0.6.1',
                       'jaxopt',
                       'optax',
-                      'tensorflow',
+                      # 'tensorflow',
                       'scikit-learn',
                       'ase',
                       'tqdm',
