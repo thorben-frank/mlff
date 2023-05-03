@@ -9,13 +9,25 @@ pip install --upgrade pip
 # Note: wheels only available on linux.
 pip install --upgrade "jax[cuda]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
 ```
-for details check the official [`jax`](https://github.com/google/jax#pip-installation-gpu-cuda) repository.   
+for details (e.g. CUDA 12) check the official [`JAX`](https://github.com/google/jax#pip-installation-gpu-cuda) repository.
+
+Since the `optax` package has a `tensorflow` dependency for checkpointing and does not install it itself, we also have to 
+install `tensorflow`, although the models in `mlff` are written in `JAX`. It can be installed running
+```
+pip install tensorflow
+```
+**Apple ARM M1/M2** 
+
+In case you have an Apple ARM M1/M2 chip, the designated `tensorflow` package called `tensorflow-maxos` has to be 
+installed. More details on doing so can be found e.g. [here](https://stackoverflow.com/questions/72964800/what-is-the-proper-way-to-install-tensorflow-on-apple-m1-in-2022)
+or [here](https://developer.apple.com/metal/tensorflow-plugin/) (the metal plugin is not needed). 
+Unfortunately, we didn't found an M1 for testing, so we are happy about reported issues.
 
 Next clone the `mlff` repository by running
 ```
 git clone https://github.com/thorben-frank/mlff.git
 ```
-**In case you have an Apply Mx chip, check the next sub-section before continuing.** 
+ 
 
 Now do
 ```
@@ -23,12 +35,6 @@ cd mlff
 pip install -e .
 ```
 which completes the installation and installs remaining dependencies.
-### Apple Mx
-In case you have an Apple Mx chip, there is a known issue when installing tensorflow using the 
-`setup.py` command. Thus, you have to install the appropriate version by hand, by executing
-```
-do Apple m chip installation for tensorflow
-```
 ## Weights and Bias
 If you do not have a weights and bias account already you can create on [here](https://wandb.ai/site). After installing
 ``mlff`` run
