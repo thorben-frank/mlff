@@ -1,5 +1,6 @@
 # MLFF
-Repository for training, testing and developing machine learned force fields using the `So3krates` transformer.
+Repository for training, testing and developing machine learned force fields using the `So3krates` transformer (check
+out the [NeurIPS paper](https://proceedings.neurips.cc/paper_files/paper/2022/hash/bcf4ca90a8d405201d29dd47d75ac896-Abstract-Conference.html)).
 ## Installation
 Assuming you have already set up an virtual environment with python version `>= 3.8.` In order to ensure compatibility
 with CUDA `jax/jaxlib` have to be installed manually. Therefore **before** you install `MLFF` run 
