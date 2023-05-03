@@ -33,7 +33,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install jax jaxlib
+          pip install jax jaxlib tensorflow
 
       - name: Test with pytest
         run: |
