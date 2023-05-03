@@ -123,7 +123,7 @@ Thus, `mlff` needs to "know" under which key to find e.g. the positions, the for
 assumes the following relations between property and key
 ```
 {
- position: R,     # shape: (n_data, n, 3) 
+ atomic_position: R,     # shape: (n_data, n, 3) 
  atomic_type: z,  # shape: (n_data, n) or (n)
  energy: E,       # shape: (n_data, 1)
  force: F         # shape: (n_data, n, 3)
@@ -132,7 +132,7 @@ assumes the following relations between property and key
 If you have an `*.npz` file which uses a different convention, you can specify the keys customizing the property keys
 via 
 ```
-train_so3krates --data_file file.npz --n_train 1000 --n_valid 100 --prop_keys position=pos,atomic_type=numbers 
+train_so3krates --data_file file.npz --n_train 1000 --n_valid 100 --prop_keys atomic_position=pos,atomic_type=numbers 
 ``` 
 The above examples would assume that the properties `energy` and `force` are still found under the `keys` `E` and `F`,
 respectively but `position` and `atomic_type` are found under `pos` and `numbers`.
