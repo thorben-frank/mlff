@@ -150,7 +150,7 @@ train_so3krates --train_file dha.npz --n_train 1000 --n_valid 500 --units energy
 Note the character strings for the units, which are necessary in the course of internal processing. This will internally
 rescale the energy and the forces to `eV` and `eV/Ang`.
 ### Minimal Image Convention
-In `CITE_GLP_IMPL` `So3krates` was used to calculate EOS and heat flux in solids, such that it must be capable of
+In [1] `So3krates` was used to calculate EOS and heat flux in solids, such that it must be capable of
 handling periodic boundary conditions. If you want to apply the minimal image convention, you can specify this by 
 adding the corresponding flag to the training command 
 ```
@@ -244,3 +244,5 @@ If you use parts of the code please cite the corresponding paper
   year={2022}
 }
 ```
+## References
+* [1] M.F. Langer, J.T. Frank, and F. Knoop.  [*Stress and heat flux via automatic differentiation*](https://arxiv.org/abs/2305.01401), arxiv 2305.01401 (2023)
