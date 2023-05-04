@@ -65,12 +65,13 @@ As before, when your data is not in eV and Angstrom add the `--units` keyword. T
 Angstrom (e.g. `--units energy='kcal/mol',force='kcal/(mol*Ang)'` if the energy in your data is in `kcal/mol`).
 ## Molecular Dynamics
 You can use the `mdx` package which is the `mlff` internal MD package, fully relying on `jax` and thus fully 
-optimized for XLA compilation on GPU. Before you can use it make sure you install the `glp` package by cloning
-the `glp` repository and install it
+optimized for XLA compilation on GPU. Before you can use it make sure you install the [`glp`](https://github.com/sirmarcel/glp) 
+package by cloning the `glp` repository and install it
 ```
-git clone https://github.com/sirmarcel/glp-dev.git
-git cd glp-dev
-pip install -e .
+git clone git@github.com:sirmarcel/glp.git
+cd glp
+
+pip install .
 ```
 First, lets create a relaxed structure, using the LBFGS optimizer
 ```
