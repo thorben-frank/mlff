@@ -11,6 +11,7 @@ import jax
 import numpy as np
 from ase.units import *
 from flax.training import checkpoints
+from pathlib import Path
 
 from mlff.cAPI.process_argparse import StoreDictKeyPair
 from mlff.data import DataSet, DataTuple
@@ -59,6 +60,9 @@ def evaluate():
                         help='Path to data file that the model should be applied to. '
                              'Defaults to the training data file.')
 
+    parser.add_argument('--on', type=str, required=False, default='test',
+                        help='Evaluate the model on the `train`,`valid` or `test` split. Defaults to `test`.')
+
     # Arguments that determine the training parameters
     parser.add_argument('--n_test', type=int, required=False, default=None,
                         help="Number of test points. Defaults to all data points that have been not seen during "
@@ -88,7 +92,7 @@ def evaluate():
 
     parser.add_argument('--x64', type=bool, required=False, default=False)
 
-    parser.add_argument('--save_predictions_to', type=str, required=False, default='evaluate_predictions.npz',
+    parser.add_argument('--save_predictions_to', type=str, required=False, default='predictions.npz',
                         help='Save the predictions and ground truth values to a ckpt_dir/$save_predictions_to.npz.')
 
     args = parser.parse_args()
@@ -105,6 +109,8 @@ def evaluate():
     x64 = args.x64
     _targets = args.targets
     save_predictions_to = args.save_predictions_to
+
+    evaluate_on = args.on
 
     if x64:
         from jax.config import config
@@ -182,6 +188,22 @@ def evaluate():
 
         return scale_and_shift_fn(nn_out, z)
 
+    # one can either load train, valid or test split
+    if evaluate_on == 'train':
+        n_train = h['dataset']['split']['n_train']
+        n_valid = 0
+        n_test = 0
+    elif evaluate_on == 'valid':
+        n_train = 0
+        n_valid = h['dataset']['split']['n_train']
+        n_test = 0
+    elif evaluate_on == 'test':
+        n_train = 0
+        n_valid = 0
+        # n_test has already been set above
+    else:
+        raise ValueError(f'`--on {evaluate_on}` is invalid. Use one of `train`, `valid`, `test`.')
+
     # TODO: load from xyz for evaluation
     # if apply_to and from_split are not specified default split_from to default split_name 'split' from DataSet.
     if apply_to is None and from_split is None:
@@ -201,13 +223,13 @@ def evaluate():
         test_data = unit_convert_data(test_data, table=conversion_table)
         test_data_set = DataSet(prop_keys=prop_keys, data=test_data)
         test_data_set.load_split(file=os.path.join(ckpt_dir, 'splits.json'),
-                                 n_train=0,
-                                 n_valid=0,
+                                 n_train=n_train,
+                                 n_valid=n_valid,
                                  n_test=n_test,
                                  r_cut=r_cut,
                                  mic=mic,
                                  split_name=from_split)
-        d_test = test_data_set.get_data_split()['test']
+        d_test = test_data_set.get_data_split()[evaluate_on]
     elif apply_to is not None and from_split is None:
         logging.info(f'Loading test points from {apply_to}.')
         test_data = dict(np.load(apply_to))
@@ -230,13 +252,13 @@ def evaluate():
         test_data = unit_convert_data(test_data, table=conversion_table)
         test_data_set = DataSet(prop_keys=prop_keys, data=test_data)
         test_data_set.load_split(file=os.path.join(ckpt_dir, 'splits.json'),
-                                 n_train=0,
-                                 n_valid=0,
+                                 n_train=n_train,
+                                 n_valid=n_valid,
                                  n_test=n_test,
                                  r_cut=r_cut,
                                  mic=mic,
                                  split_name=from_split)
-        d_test = test_data_set.get_data_split()['test']
+        d_test = test_data_set.get_data_split()[evaluate_on]
     else:
         msg = 'One should not end up here. This is likely due to a bug in the mlff package. Please report to ' \
               'https://github.com/thorben-frank/mlff'
@@ -256,13 +278,16 @@ def evaluate():
                                                             'rmse': partial(rmse_metric, pad_value=0),
                                                             'R2': partial(r2_metric, pad_value=0)}
                                                  )
+    print(f'Metrics on the {evaluate_on} data split: ')
     pprint(test_metrics)
-    np.savez(os.path.join(ckpt_dir, 'evaluate_metrics.npz'), **test_metrics)
-    with open(os.path.join(ckpt_dir, 'evaluate_metrics.json'), 'w') as f:
+    # np.savez(os.path.join(ckpt_dir, 'evaluate_metrics.npz'), **test_metrics)
+    with open(os.path.join(ckpt_dir, f'metrics_on_{evaluate_on}.json'), 'w') as f:
         json.dump(test_metrics, f, indent=1)
     if save_predictions_to is not None:
         #test_obs_pred.pop('inputs')
-        np.savez(os.path.join(ckpt_dir, save_predictions_to), **test_obs_pred)
+        p = Path(save_predictions_to)
+        _save_predictions_to = f'{p.stem}_on_{evaluate_on}{p.suffix}'
+        np.savez(os.path.join(ckpt_dir, _save_predictions_to), **test_obs_pred)
 
 
 if __name__ == '__main__':
