@@ -204,22 +204,29 @@ def evaluate():
     else:
         raise ValueError(f'`--on {evaluate_on}` is invalid. Use one of `train`, `valid`, `test`.')
 
-    # TODO: load from xyz for evaluation
     # if apply_to and from_split are not specified default split_from to default split_name 'split' from DataSet.
     if apply_to is None and from_split is None:
         logging.info('Loading ')
         from_split = 'split'
 
     if apply_to is None and from_split is not None:
-        logging.info('Loading test points according to the saved splits in {} from {}.'
-                     .format(os.path.join(ckpt_dir, 'splits.json'), coach.data_path))
+        logging.info('Loading evaluation points according to the saved {} split in {} from {}.'
+                     .format(evaluate_on, os.path.join(ckpt_dir, 'splits.json'), coach.data_path))
 
         data_path = Path(coach.data_path)
 
         if not data_path.is_absolute():
             data_path = (Path().absolute().parent / data_path).resolve()
 
-        test_data = dict(np.load(data_path))
+        if data_path.suffix == '.npz':
+            test_data = dict(np.load(data_path))
+        else:
+            from mlff.data import AseDataLoader
+            load_stress = pn.stress in targets
+            data_loader = AseDataLoader(data_path, load_stress=load_stress)
+            test_data = dict(data_loader.load_all())
+
+        # test_data = dict(np.load(data_path))
         test_data = unit_convert_data(test_data, table=conversion_table)
         test_data_set = DataSet(prop_keys=prop_keys, data=test_data)
         test_data_set.load_split(file=os.path.join(ckpt_dir, 'splits.json'),
@@ -230,9 +237,17 @@ def evaluate():
                                  mic=mic,
                                  split_name=from_split)
         d_test = test_data_set.get_data_split()[evaluate_on]
+
     elif apply_to is not None and from_split is None:
         logging.info(f'Loading test points from {apply_to}.')
-        test_data = dict(np.load(apply_to))
+        if Path(apply_to).suffix == '.npz':
+            test_data = dict(np.load(apply_to))
+        else:
+            from mlff.data import AseDataLoader
+            load_stress = pn.stress in targets
+            data_loader = AseDataLoader(apply_to, load_stress=load_stress)
+            test_data = dict(data_loader.load_all())
+
         test_data = unit_convert_data(test_data, table=conversion_table)
         test_data_set = DataSet(prop_keys=prop_keys, data=test_data)
 
@@ -245,10 +260,17 @@ def evaluate():
         d_test = test_data_set.get_data_split()['test']
 
     elif apply_to is not None and from_split is not None:
-        logging.info('Loading test points according to the saved splits in {} from {}.'
-                     .format(os.path.join(ckpt_dir, 'splits.json'), apply_to))
+        logging.info('Loading evaluation points according to the saved {} split in {} from {}.'
+                     .format(evaluate_on, os.path.join(ckpt_dir, 'splits.json'), apply_to))
 
-        test_data = dict(np.load(apply_to))
+        if Path(apply_to).suffix == '.npz':
+            test_data = dict(np.load(apply_to))
+        else:
+            from mlff.data import AseDataLoader
+            load_stress = pn.stress in targets
+            data_loader = AseDataLoader(apply_to, load_stress=load_stress)
+            test_data = dict(data_loader.load_all())
+
         test_data = unit_convert_data(test_data, table=conversion_table)
         test_data_set = DataSet(prop_keys=prop_keys, data=test_data)
         test_data_set.load_split(file=os.path.join(ckpt_dir, 'splits.json'),
