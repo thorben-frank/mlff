@@ -1,11 +1,11 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 
 setup(
     name="mlff",
     version="0.2",
     description="Build Neural Networks for Force Fields with JAX",
     python_requires=">=3.8",
-    packages=["mlff"],  # same as name
+    packages=find_packages(),
     install_requires=[
         "numpy",
         "jax >= 0.3.23",
@@ -23,7 +23,6 @@ setup(
         "h5py",
     ],
     include_package_data=True,
-    package_dir={"": "."},
     package_data={
         "": [
             "mlff/sph_ops/cgmatrix.npz",
