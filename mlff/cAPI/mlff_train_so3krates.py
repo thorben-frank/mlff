@@ -5,6 +5,8 @@ import logging
 import os
 import argparse
 import wandb
+
+from pathlib import Path
 from typing import Dict
 from ase.units import *
 
@@ -133,16 +135,14 @@ def train_so3krates():
 
     prop_keys = args.prop_keys
 
-    data_file = args.data_file
+    data_file = Path(args.data_file).absolute().resolve().as_posix()
     shift_by = args.shift_by
     shifts = args.shifts
 
     if shifts is not None:
         shifts = {int(k): float(v) for (k, v) in shifts.items()}
 
-    ckpt_dir = args.ckpt_dir
-    if ckpt_dir.strip() == '.':
-        ckpt_dir = os.path.join(os.getcwd(), 'module')
+    ckpt_dir = (Path(args.ckpt_dir).absolute().resolve() / 'module').as_posix()
 
     jax_dtype = args.jax_dtype
     if jax_dtype == 'x64':
