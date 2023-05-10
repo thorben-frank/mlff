@@ -90,7 +90,8 @@ def evaluate():
 
     parser.add_argument('--targets', nargs='+', required=False, default=None)
 
-    parser.add_argument('--x64', type=bool, required=False, default=False)
+    parser.add_argument('--jax_dtype', type=str, required=False, default='x32',
+                        help='Set JAX default dtype. Default is jax.numpy.float32')
 
     parser.add_argument('--save_predictions_to', type=str, required=False, default='predictions.npz',
                         help='Save the predictions and ground truth values to a ckpt_dir/$save_predictions_to.npz.')
@@ -112,7 +113,8 @@ def evaluate():
 
     evaluate_on = args.on
 
-    if x64:
+    jax_dtype = args.jax_dtype
+    if jax_dtype == 'x64':
         from jax.config import config
         config.update("jax_enable_x64", True)
 
