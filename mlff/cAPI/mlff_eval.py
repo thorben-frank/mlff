@@ -107,7 +107,6 @@ def evaluate():
     units = args.units
     prop_keys = args.prop_keys
     n_cut = args.neigh_cut
-    x64 = args.x64
     _targets = args.targets
     save_predictions_to = args.save_predictions_to
 
