@@ -25,7 +25,7 @@ setup(
     include_package_data=True,
     package_data={
         "": [
-            "mlff/sph_ops/cgmatrix.npz",
+            "sph_ops/cgmatrix.npz",
             "tests/test_data/test_solid.npz",
             "tests/test_data/ethanol.npz",
         ]
