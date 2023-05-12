@@ -23,13 +23,7 @@ setup(
         "h5py",
     ],
     include_package_data=True,
-    package_data={
-        "": [
-            "sph_ops/cgmatrix.npz",
-            "tests/test_data/test_solid.npz",
-            "tests/test_data/ethanol.npz",
-        ]
-    },
+    package_data={"": ["sph_ops/cgmatrix.npz"]},
     entry_points={
         "console_scripts": [
             "evaluate=mlff.cAPI.mlff_eval:evaluate",
