@@ -3,11 +3,13 @@ import jax.numpy as jnp
 import json
 import os
 
+from pathlib import Path
 from typing import (Any, Callable, Dict, Sequence, Tuple)
 
 from mlff.nn.layer import get_layer
 from mlff.nn.embed import get_embedding_module
 from mlff.nn.observable import get_observable_module
+from mlff.io import read_json
 
 
 Array = Any
@@ -27,6 +29,12 @@ class StackNet(nn.Module):
         if len(self.observables) == 0:
             msg = "At least one observable module in `observables` is required."
             raise ValueError(msg)
+
+    @classmethod
+    def create_from_ckpt_dir(cls, ckpt_dir: str):
+        h_path = Path(ckpt_dir).absolute().resolve() / 'hyperparameters.json'
+        stack_net = init_stack_net(read_json(h_path))
+        return stack_net
 
     @nn.compact
     def __call__(self,
