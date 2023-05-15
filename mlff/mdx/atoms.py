@@ -474,7 +474,7 @@ class AtomsX:
 
         mask = neighbors['idx_i'] != positions.shape[0]
 
-        return Graph(edges, nodes, neighbors['idx_j'], neighbors['idx_i'], mask)
+        return Graph(edges, nodes, neighbors['idx_i'], neighbors['idx_j'], mask)
 
     def update_cell(self, cell):
         return self.replace(cell=cell)
