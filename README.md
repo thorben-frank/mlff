@@ -3,14 +3,21 @@ Repository for training, testing and developing machine learned force fields usi
 out the [NeurIPS paper](https://proceedings.neurips.cc/paper_files/paper/2022/hash/bcf4ca90a8d405201d29dd47d75ac896-Abstract-Conference.html)).
 ## Installation
 Assuming you have already set up an virtual environment with python version `>= 3.8.` In order to ensure compatibility
-with CUDA `jax/jaxlib` have to be installed manually. Therefore **before** you install `MLFF` run 
+with CUDA `jax/jaxlib` have to be installed manually. Therefore **before** you install `MLFF` run one of the following 
+commands (depending on your CUDA version)
 ```
 pip install --upgrade pip
-# Installs the wheel compatible with CUDA 11 and cuDNN 8.6 or newer.
+
+# CUDA 12 installation
 # Note: wheels only available on linux.
-pip install --upgrade "jax[cuda]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+pip install --upgrade "jax[cuda12_pip]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+
+# CUDA 11 installation
+# Note: wheels only available on linux.
+pip install --upgrade "jax[cuda11_pip]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
 ```
-for details (e.g. CUDA 12) check the official [`JAX`](https://github.com/google/jax#pip-installation-gpu-cuda) repository.
+for details check the official [`JAX`](https://github.com/google/jax#pip-installation-gpu-cuda-installed-via-pip-easier) 
+repository.
 
 Since the `optax` package has a `tensorflow` dependency for checkpointing and does not install it itself, we also have to 
 install `tensorflow`, although the models in `mlff` are written in `JAX`. It can be installed running
