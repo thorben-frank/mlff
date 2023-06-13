@@ -33,6 +33,7 @@ setup(
             "run_relaxation=mlff.cAPI.mlff_structure_relaxation:run_relaxation",
             "analyse_md=mlff.cAPI.mlff_analyse:analyse_md",
             "train_so3krates=mlff.cAPI.mlff_train_so3krates:train_so3krates",
+            "train_so3kratACE=mlff.cAPI.mlff_train_so3krates:train_so3kratace",
             "trajectory_to_xyz=mlff.cAPI.mlff_postprocessing:trajectory_to_xyz",
             "to_mlff_input=mlff.cAPI.mlff_input_processing:to_mlff_input",
         ],
