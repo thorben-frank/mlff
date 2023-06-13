@@ -23,7 +23,8 @@ setup(
         "h5py",
     ],
     include_package_data=True,
-    package_data={"": ["sph_ops/cgmatrix.npz"]},
+    package_data={"": ["sph_ops/cgmatrix.npz",
+                       "sph_ops/u_matrix.pickle"]},
     entry_points={
         "console_scripts": [
             "evaluate=mlff.cAPI.mlff_eval:evaluate",
