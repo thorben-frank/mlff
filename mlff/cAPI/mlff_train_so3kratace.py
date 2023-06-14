@@ -60,8 +60,9 @@ def train_so3kratace():
     parser.add_argument('--shifts', action=StoreDictKeyPair, required=False, default=None,
                         metavar="1=-100.5,6=-550.2,...")
 
-    parser.add_argument('--ckpt_dir', type=str, required=False, default=os.path.join(os.getcwd(), 'module'),
-                        help='Path to the checkpoint directory. Defaults to current `directory/module_X`')
+    parser.add_argument('--ckpt_dir', type=str, required=False, default=None,
+                        help='Path to the checkpoint directory (must not exist). '
+                             'If not set, defaults to `current_directory/module`.')
 
     # Model Arguments
     parser.add_argument('--r_cut', type=float, required=False, default=5., help='Local neighborhood cutoff.')
@@ -146,7 +147,13 @@ def train_so3kratace():
     if shifts is not None:
         shifts = {int(k): float(v) for (k, v) in shifts.items()}
 
-    ckpt_dir = (Path(args.ckpt_dir).absolute().resolve() / 'module').as_posix()
+    if args.ckpt_dir is None:
+        ckpt_dir = (Path(os.getcwd()).absolute().resolve() / 'module').as_posix()
+    else:
+        ckpt_dir = (Path(args.ckpt_dir).absolute().resolve()).as_posix()
+
+    if Path(ckpt_dir).exists():
+        raise FileExistsError(f'Checkpoint directory {ckpt_dir} already exists.')
 
     jax_dtype = args.jax_dtype
     if jax_dtype == 'x64':
@@ -369,7 +376,11 @@ def train_so3kratace():
     h_coach = coach.__dict_repr__()
     h_dataset = data_set.__dict_repr__()
     h = bundle_dicts([h_net, h_opt, h_coach, h_dataset, h_train_state])
-    save_dict(path=ckpt_dir, filename='hyperparameters.json', data=h, exists_ok=True)
+
+    Path(ckpt_dir).mkdir(parents=True, exist_ok=False)
+    data_set.save_splits_to_file(ckpt_dir, 'splits.json')
+    data_set.save_scales(ckpt_dir, 'scales.json')
+    save_dict(path=ckpt_dir, filename='hyperparameters.json', data=h, exists_ok=False)
 
     if use_wandb:
         wandb.init(config=h, **args.wandb_init)
