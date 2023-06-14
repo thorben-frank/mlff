@@ -59,8 +59,8 @@ Train your fist `So3krates` model by running
 train_so3krates --data_file data.xyz  --n_train 1000 --n_valid 100 --wandb_init project=so3krates,name=first_run
 ```
 The `--data_file` can be any format digestible by the `ase.io.read` method. In case minimal image convention
-should be applied, add `--mic` to the command. The model parameters will be saved per default to `/module`. Another 
-directory can be specified using `--ckpt_dir $CKPT_DIR`, which will safe the model parameters to `$CKPT_DIR/module`. 
+should be applied, add `--mic` to the command. The model parameters will be saved per default to `module/`. Another 
+directory can be specified using `--ckpt_dir $CKPT_DIR`, which will safe the model parameters to `$CKPT_DIR/`. 
 More details on training can be found in the detailed training section below.
 ## Evaluation
 After training, change into the model directory, e.g. and run the `evaluate` command
@@ -116,12 +116,12 @@ as running an MD simulation. If you want to learn more about each of the steps, 
 ## Training
 Lets start start from the training command already shown in the quickstart section
 ```
-train_so3krates --data_file atoms.xyz --n_train 1000 --n_valid 100
+train_so3krates --ckpt_dir first_module --data_file atoms.xyz --n_train 1000 --n_valid 100
 ```
 for which all data in `atoms.xyz` is loaded an split into `1000` data points for training, 
 `100` data points for validation and the remaining data points `n_test = n_tot - 1000 - 100` is hold back for testing 
 the potential after training. The validation data points are used to determine the best performing model during training,
-for which the parameters are saved to `module/checkpoint_loss_XXX` where XXX denotes the training step for which the best performing
+for which the parameters are saved to `first_module/checkpoint_loss_XXX` where XXX denotes the training step for which the best performing
 model was found. We will show later, how to load the checkpoint such that one use the trained potential directly in 
 `Python`.
 ### Input Data Files
@@ -140,7 +140,7 @@ assumes the following relations between property and key
 If you have an `*.npz` file which uses a different convention, you can specify the keys customizing the property keys
 via 
 ```
-train_so3krates --data_file file.npz --n_train 1000 --n_valid 100 --prop_keys atomic_position=pos,atomic_type=numbers 
+train_so3krates --ckpt_dir second_module --data_file file.npz --n_train 1000 --n_valid 100 --prop_keys atomic_position=pos,atomic_type=numbers 
 ``` 
 The above examples would assume that the properties `energy` and `force` are still found under the `keys` `E` and `F`,
 respectively but `position` and `atomic_type` are found under `pos` and `numbers`.
@@ -152,7 +152,7 @@ way that allows reading them via `ase.io.read` method). For both data sets the e
 the forces are in `kcal/(mol*Ang)`. You can either pre-process the data yourself by applying the proper conversion 
 factors and pass the data directly into the `train_so3krates` command. Alternatively, you can set them manually by
 ```
-train_so3krates --train_file dha.npz --n_train 1000 --n_valid 500 --units energy='kcal/mol',force='kcal/(mol*Ang)'
+train_so3krates --ckpt_dir dha_module --train_file dha.npz --n_train 1000 --n_valid 500 --units energy='kcal/mol',force='kcal/(mol*Ang)'
 ```
 Note the character strings for the units, which are necessary in the course of internal processing. This will internally
 rescale the energy and the forces to `eV` and `eV/Ang`.
@@ -161,7 +161,7 @@ In [1] `So3krates` was used to calculate EOS and heat flux in solids, such that 
 handling periodic boundary conditions. If you want to apply the minimal image convention, you can specify this by 
 adding the corresponding flag to the training command 
 ```
-train_so3krates --train_file file_with_pbc.xyz --n_train 100 --n_valid 100 --mic
+train_so3krates --ckpt_dir pbc_module --train_file file_with_pbc.xyz --n_train 100 --n_valid 100 --mic
 ```
 Internally, `mlff` uses the [`ase.neighborlist.primitive_neighborlist`](https://wiki.fysik.dtu.dk/ase/ase/neighborlist.html#ase.neighborlist.primitive_neighbor_list) 
 for computing the atomic neighborhoods.
@@ -171,7 +171,7 @@ of energy changes is usually on the scale of a few eV, such that one typically s
 energies in the `--n_train` training data points. This is done by default when running the `train_so3krates` command. 
 However, it might be desired to atom type specific shifts, which is possible via
 ```
-train_so3krates --atoms.xyz --n_train 1000 --n_valid 200 --shifts 1=-500.30, 6=-6000.25
+train_so3krates --energy_shift_module --atoms.xyz --n_train 1000 --n_valid 200 --shifts 1=-500.30, 6=-6000.25
 ```
 and would shift the energy by `-500.30` for each hydrogen in the structure and by `-6000.25` for each carbon.
 ### `So3krates` Hyperparameters
@@ -180,7 +180,7 @@ feature dimension, `--degrees` sets the degrees for spherical harmonic coordinat
 atomic neighborhoods. E.g. a model with 2 message passing layers, feature dimension 64, degree 1 and 2 and cutoff of 4 Angstrom
 can be trained by running
 ```
-train_so3krates --atoms.xyz --n_train 1000 --n_valid 200 --L 2 --F 64 --degrees 1 2 --r_cut 4
+train_so3krates --new_hypers_module --atoms.xyz --n_train 1000 --n_valid 200 --L 2 --F 64 --degrees 1 2 --r_cut 4
 ```
 ### Optimization Hyperparameters
 TODO
@@ -188,7 +188,7 @@ TODO
 To keep track of the performed experiments, you can organize your trainings using weights and bias. You can specify the 
 project and name of the current trainings run via
 ```
-train_so3krates --atoms.xyz --n_train 1000 --n_valid 200 --wandb_init project=so3krates,name=deep_dive_run
+train_so3krates --wandb_module --atoms.xyz --n_train 1000 --n_valid 200 --wandb_init project=so3krates,name=deep_dive_run
 ```
 The arguments passed to `--wandb_init` are passed as is to the `wandb.init` for which you can find all possible 
 arguments [here](https://docs.wandb.ai/ref/python/init).
@@ -223,7 +223,7 @@ Below you find a code snippet how to load a trained `So3krates` model and use it
 import jax.numpy as jnp
 from mlff.mdx import MLFFPotential
 
-ckpt_dir = 'path/to/module/' 
+ckpt_dir = 'path/to/ckpt_dir/' 
 dtype = jnp.float64
 pot = MLFFPotential.create_from_ckpt_dir(ckpt_dir=ckpt_dir, dtype=dtype)
 ```
