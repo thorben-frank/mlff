@@ -23,7 +23,8 @@ setup(
         "h5py",
     ],
     include_package_data=True,
-    package_data={"": ["sph_ops/cgmatrix.npz"]},
+    package_data={"": ["sph_ops/cgmatrix.npz",
+                       "sph_ops/u_matrix.pickle"]},
     entry_points={
         "console_scripts": [
             "evaluate=mlff.cAPI.mlff_eval:evaluate",
@@ -32,6 +33,7 @@ setup(
             "run_relaxation=mlff.cAPI.mlff_structure_relaxation:run_relaxation",
             "analyse_md=mlff.cAPI.mlff_analyse:analyse_md",
             "train_so3krates=mlff.cAPI.mlff_train_so3krates:train_so3krates",
+            "train_so3kratACE=mlff.cAPI.mlff_train_so3kratace:train_so3kratace",
             "trajectory_to_xyz=mlff.cAPI.mlff_postprocessing:trajectory_to_xyz",
             "to_mlff_input=mlff.cAPI.mlff_input_processing:to_mlff_input",
         ],

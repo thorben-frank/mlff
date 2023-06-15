@@ -14,6 +14,7 @@ from mlff.basis_function.radial import get_rbf_fn
 from mlff.cutoff_function import add_cell_offsets
 from mlff.cutoff_function import get_cutoff_fn
 from mlff.basis_function.spherical import init_sph_fn
+from mlff.properties import property_names as pn
 
 
 # TODO: write init_from_dict methods in order to improve backward compatibility. E.g. AtomTypeEmbed(**h)
@@ -231,3 +232,36 @@ class AtomTypeEmbed(BaseSubModule):
         return {self.module_name: {'num_embeddings': self.num_embeddings,
                                    'features': self.features,
                                    'prop_keys': self.prop_keys}}
+
+
+class OneHotEmbed(BaseSubModule):
+    prop_keys: Dict
+    atomic_types: Sequence[int]
+    module_name: str = 'one_hot_embed'
+
+    def setup(self):
+        self.to_one_hot = lambda x: to_onehot(x, node_types=self.atomic_types)
+        self.atomic_type_key = self.prop_keys[pn.atomic_type]
+
+    def __call__(self, inputs: Dict, *args, **kwargs):
+        z = inputs[self.atomic_type_key]
+        return {'z_one_hot': self.to_one_hot(z)}
+
+    def __dict_repr__(self):
+        return {self.module_name: {'atomic_types': self.atomic_types,
+                                   'prop_keys': self.prop_keys}
+                }
+
+
+def to_onehot(features: jnp.ndarray, node_types: Sequence):
+    r"""
+    Create onehot encoded vectors from :data:`features`.
+
+    Args:
+        features (Array): type of the nodes, shape: (n)
+        node_types (Sequence[int]): list of possible node types.
+    """
+    ones = []
+    for i, e in enumerate(node_types):
+        ones.append(jnp.where(features == e, jnp.ones(1), jnp.zeros(1))[..., None])
+    return jnp.concatenate(ones, axis=-1)

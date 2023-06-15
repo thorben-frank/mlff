@@ -1,4 +1,5 @@
 from .representation import (So3krates,
+                             So3kratACE,
                              SchNet)
 
 from .stacknet import (get_observable_fn,

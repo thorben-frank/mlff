@@ -6,7 +6,7 @@ import os
 from functools import partial
 from flax.traverse_util import flatten_dict, unflatten_dict
 
-from typing import Dict
+from typing import Dict, Sequence
 
 from mlff.indexing.indices import get_indices, get_pbc_neighbors
 from mlff.random.random import set_seeds
@@ -98,6 +98,11 @@ class DataSet:
             return _n_atoms.item()
         else:
             return int(_n_atoms.mean().item())
+
+    def all_atomic_types(self) -> Sequence[int]:
+        z_key = self.prop_keys['atomic_type']
+        z_unique = np.unique(self.data[z_key])
+        return z_unique[z_unique > 0].tolist()
 
     def index_split(self,
                     data_idx_train,
