@@ -196,7 +196,7 @@ def evaluate():
         n_test = 0
     elif evaluate_on == 'valid':
         n_train = 0
-        n_valid = h['dataset']['split']['n_train']
+        n_valid = h['dataset']['split']['n_valid']
         n_test = 0
     elif evaluate_on == 'test':
         n_train = 0
