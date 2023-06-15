@@ -55,7 +55,7 @@ def train_so3krates():
     # Add the arguments
     parser.add_argument('--data_file', type=str, required=True)
     parser.add_argument('--shift_by', type=str, required=False, default='mean',
-                        metavar='Possible values: mean, atomic_number')
+                        metavar='Possible values: mean, atomic_number, lse')
 
     parser.add_argument('--shifts', action=StoreDictKeyPair, required=False, default=None,
                         metavar="1=-100.5,6=-550.2,...")
@@ -262,6 +262,8 @@ def train_so3krates():
         data_set.shift_x_by_mean_x(x=pn.energy)
     elif shift_by == 'atomic_number':
         data_set.shift_x_by_type(x=pn.energy, shifts=shifts)
+    elif shift_by == 'lse':
+        data_set.shift_x_by_type(x=pn.energy)
 
     d = data_set.get_data_split()
 
