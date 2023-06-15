@@ -266,6 +266,8 @@ def train_so3kratace():
         data_set.shift_x_by_mean_x(x=pn.energy)
     elif shift_by == 'atomic_number':
         data_set.shift_x_by_type(x=pn.energy, shifts=shifts)
+    elif shift_by == 'lse':
+        data_set.shift_x_by_type(x=pn.energy)
 
     ckpt_dir = create_directory(ckpt_dir, exists_ok=False)
     data_set.save_splits_to_file(ckpt_dir, 'splits.json')
