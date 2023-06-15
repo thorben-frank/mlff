@@ -369,7 +369,7 @@ def train_so3krates():
     Path(ckpt_dir).mkdir(parents=True, exist_ok=False)
     data_set.save_splits_to_file(ckpt_dir, 'splits.json')
     data_set.save_scales(ckpt_dir, 'scales.json')
-    save_dict(path=ckpt_dir, filename='hyperparameters.json', data=h, exists_ok=False)
+    save_dict(path=ckpt_dir, filename='hyperparameters.json', data=h, exists_ok=True)
 
     if use_wandb:
         wandb.init(config=h, **args.wandb_init)
