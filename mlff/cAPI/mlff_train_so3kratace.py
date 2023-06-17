@@ -5,6 +5,7 @@ import logging
 import os
 import argparse
 import wandb
+import json
 
 from pathlib import Path
 from typing import Dict
@@ -64,16 +65,21 @@ def train_so3kratace():
                         help='Path to the checkpoint directory (must not exist). '
                              'If not set, defaults to `current_directory/module`.')
 
+    parser.add_argument('--ckpt_manager_options', type=json.loads, required=False, default=None,
+                        metavar='{"key": value, "key1": value1, ...}',
+                        help='Options for the checkpoint manager. See '
+                             'https://github.com/google/orbax/blob/main/docs/checkpoint.md for all options.')
+
     # Model Arguments
     parser.add_argument('--r_cut', type=float, required=False, default=5., help='Local neighborhood cutoff.')
     parser.add_argument('--F', type=int, required=False, default=132, help='Feature dimension.')
     parser.add_argument('--L', type=int, required=False, default=3, help='Number of layers.')
     parser.add_argument('--degrees', nargs='+', type=int, required=False, default=[1, 2, 3],
                         help='Degrees for the spherical harmonic coordinates.')
-    parser.add_argument('--max_body_order', type=int, required=False, default=2, help='Maximal body order.'
-                                                                                      'Defaults to 2.')
-    parser.add_argument('--F_bo', type=int, required=False, default=1, help='Features used in the body order expansion'
-                                                                            'block. Defaults to 1.')
+    parser.add_argument('--max_body_order', type=int, required=False, default=2,
+                        help='Maximal body order. Defaults to 2.')
+    parser.add_argument('--F_bo', type=int, required=False, default=1,
+                        help='Features used in the body order expansion block. Defaults to 1.')
 
     # Structure arguments
     parser.add_argument('--mic', action="store_true", required=False,
@@ -387,8 +393,8 @@ def train_so3kratace():
               train_ds=train_ds,
               valid_ds=valid_ds,
               loss_fn=loss_fn,
-              ckpt_overwrite=True,
               eval_every_t=eval_every_t,
+              ckpt_manager_options=args.ckpt_manager_options,
               log_every_t=1,
               restart_by_nan=True,
               use_wandb=use_wandb)

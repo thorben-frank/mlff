@@ -42,6 +42,7 @@ class Coach:
             loss_fn,
             metric_fn=None,
             use_wandb: bool = True,
+            ckpt_manager_options: dict = None,
             *args,
             **kwargs):
         if self.stop_lr_min is not None:
@@ -63,6 +64,7 @@ class Coach:
                      train_bs=self.training_batch_size,
                      valid_bs=self.validation_batch_size,
                      ckpt_dir=self.ckpt_dir,
+                     ckpt_manager_options=ckpt_manager_options,
                      stop_lr_fn=stop_lr_fn,
                      stop_metric_fn=stop_metric_fn,
                      seed=self.training_seed,
