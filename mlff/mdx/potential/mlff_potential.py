@@ -7,13 +7,11 @@ from flax import struct
 from flax.training import checkpoints
 
 from mlff.nn.stacknet import init_stack_net, get_observable_fn
-from mlff.io import read_json
+from mlff.io import read_json, load_params_from_ckpt_dir
 from mlff.nn.stacknet import StackNet
 from mlff.utils import Graph
 
 from .machine_learning_potential import MachineLearningPotential
-
-
 
 
 def get_model_cutoff(x: StackNet) -> float:
@@ -52,7 +50,7 @@ class MLFFPotential(MachineLearningPotential):
 
         net = init_stack_net(read_json(os.path.join(ckpt_dir, 'hyperparameters.json')))
         scales = read_json(os.path.join(ckpt_dir, 'scales.json'))
-        params = checkpoints.restore_checkpoint(ckpt_dir=ckpt_dir, target=None, prefix='checkpoint_loss_')['params']
+        params = load_params_from_ckpt_dir(ckpt_dir)
 
         _prop_keys = {'displacement_vector': 'displacements',
                       'atomic_energy': net.prop_keys['energy']}
