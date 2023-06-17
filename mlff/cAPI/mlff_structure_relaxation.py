@@ -2,13 +2,12 @@ import argparse
 import os
 import logging
 
-from flax.training import checkpoints
 from ase.units import *
 from ase import Atoms
 from ase.optimize import QuasiNewton
 
 from mlff.md.calculator import mlffCalculator
-from mlff.io import read_json, create_directory
+from mlff.io import read_json, create_directory, load_params_from_ckpt_dir
 from mlff.nn.stacknet import init_stack_net
 from mlff.cAPI.process_argparse import StoreDictKeyPair, default_access
 from mlff.data import DataSet
@@ -152,7 +151,7 @@ def run_relaxation():
             conversion_table[k] = eval(v)
 
     # load the parameters
-    params = checkpoints.restore_checkpoint(ckpt_dir=ckpt_dir, target=None, prefix='checkpoint_loss_')['params']
+    params = load_params_from_ckpt_dir(ckpt_dir)
 
     # load the start geometry
     def load_start_geometry(f: str) -> Atoms:
