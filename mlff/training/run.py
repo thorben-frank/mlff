@@ -8,10 +8,6 @@ import optax
 
 from orbax.checkpoint import (CheckpointManagerOptions,
                               PyTreeCheckpointer,
-                              AsyncCheckpointer,
-                              PyTreeCheckpointHandler,
-                              Checkpointer,
-                              JsonCheckpointHandler,
                               CheckpointManager)
 
 from functools import partial

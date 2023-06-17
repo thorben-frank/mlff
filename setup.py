@@ -12,6 +12,7 @@ setup(
         "flax <= 0.6.9",
         "jaxopt",
         "optax",
+        "orbax",
         # 'tensorflow',
         "scikit-learn",
         "ase",

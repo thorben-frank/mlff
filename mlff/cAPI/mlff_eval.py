@@ -2,7 +2,6 @@ import argparse
 import logging
 import os
 from functools import partial
-from pathlib import Path
 from pprint import pprint
 from typing import Dict
 import json
@@ -10,13 +9,12 @@ import json
 import jax
 import numpy as np
 from ase.units import *
-from flax.training import checkpoints
 from pathlib import Path
 
 from mlff.cAPI.process_argparse import StoreDictKeyPair
 from mlff.data import DataSet, DataTuple
 from mlff.inference.evaluation import evaluate_model, mae_metric, rmse_metric, r2_metric
-from mlff.io.io import read_json
+from mlff.io import read_json, load_params_from_ckpt_dir
 from mlff.nn.stacknet import (
     get_energy_force_stress_fn,
     get_obs_and_force_fn,
@@ -117,6 +115,8 @@ def evaluate():
         from jax.config import config
         config.update("jax_enable_x64", True)
 
+    ckpt_dir = (Path(args.ckpt_dir).absolute().resolve()).as_posix()
+
     h = read_json(os.path.join(ckpt_dir, 'hyperparameters.json'))
 
     coach = Coach(**h['coach'])
@@ -149,8 +149,7 @@ def evaluate():
             logging.warning(f"The specified cutoff for neighborhood calculations n_cut={n_cut} is smaller than the "
                             f"model cutoff r_cut={r_cut}. This will likely result in wrong model prediction.")
 
-    test_params = checkpoints.restore_checkpoint(ckpt_dir=ckpt_dir, target=None, prefix='checkpoint_loss')[
-        'valid_params']
+    test_params = load_params_from_ckpt_dir(ckpt_dir)
 
     if pn.force in targets:
         if pn.stress in targets:
@@ -303,11 +302,10 @@ def evaluate():
                                                  )
     print(f'Metrics on the {evaluate_on} data split: ')
     pprint(test_metrics)
-    # np.savez(os.path.join(ckpt_dir, 'evaluate_metrics.npz'), **test_metrics)
+
     with open(os.path.join(ckpt_dir, f'metrics_on_{evaluate_on}.json'), 'w') as f:
         json.dump(test_metrics, f, indent=1)
     if save_predictions_to is not None:
-        #test_obs_pred.pop('inputs')
         p = Path(save_predictions_to)
         _save_predictions_to = f'{p.stem}_on_{evaluate_on}{p.suffix}'
         np.savez(os.path.join(ckpt_dir, _save_predictions_to), **test_obs_pred)
