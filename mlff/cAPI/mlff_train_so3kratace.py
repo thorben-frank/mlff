@@ -269,10 +269,6 @@ def train_so3kratace():
     elif shift_by == 'lse':
         data_set.shift_x_by_type(x=pn.energy)
 
-    ckpt_dir = create_directory(ckpt_dir, exists_ok=False)
-    data_set.save_splits_to_file(ckpt_dir, 'splits.json')
-    data_set.save_scales(ckpt_dir, 'scales.json')
-
     d = data_set.get_data_split()
 
     scales = {}
