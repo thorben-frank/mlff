@@ -293,7 +293,8 @@ def run_training(state: TrainState,
         times = {'Step time (s)': e_time,
                  'Training step time (s)': t_time,
                  'Validation step time (s)': v_time,
-                 'Total time (s)': tot_time}
+                 'Total time (s)': tot_time,
+                 'Epoch': int(i // steps_per_epoch)}
 
         if i % log_every_t == 0:
 
