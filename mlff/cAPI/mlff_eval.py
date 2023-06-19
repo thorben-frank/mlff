@@ -24,8 +24,6 @@ from mlff.nn.stacknet import (
 from mlff.properties import property_names as pn
 from mlff.training import Coach
 
-logging.basicConfig(level=logging.INFO)
-
 
 def unit_convert_data(x: Dict, table: Dict):
     """
@@ -40,7 +38,7 @@ def unit_convert_data(x: Dict, table: Dict):
     """
     for (k, v) in x.items():
         if k in list(table.keys()):
-            logging.info('Converted {} to ase default unit.'.format(k))
+            print('Converted {} to ase default unit.'.format(k))
             x[k] *= table[k]
     return x
 
@@ -206,12 +204,12 @@ def evaluate():
 
     # if apply_to and from_split are not specified default split_from to default split_name 'split' from DataSet.
     if apply_to is None and from_split is None:
-        logging.info('Loading ')
+        print('Loading ')
         from_split = 'split'
 
     if apply_to is None and from_split is not None:
-        logging.info('Loading evaluation points according to the saved {} split in {} from {}.'
-                     .format(evaluate_on, os.path.join(ckpt_dir, 'splits.json'), coach.data_path))
+        print('Loading evaluation points according to the saved {} split in {} from {}.'
+              .format(evaluate_on, os.path.join(ckpt_dir, 'splits.json'), coach.data_path))
 
         data_path = Path(coach.data_path)
 
@@ -239,7 +237,7 @@ def evaluate():
         d_test = test_data_set.get_data_split()[evaluate_on]
 
     elif apply_to is not None and from_split is None:
-        logging.info(f'Loading test points from {apply_to}.')
+        print(f'Loading test points from {apply_to}.')
         if Path(apply_to).suffix == '.npz':
             test_data = dict(np.load(apply_to))
         else:
@@ -260,8 +258,8 @@ def evaluate():
         d_test = test_data_set.get_data_split()['test']
 
     elif apply_to is not None and from_split is not None:
-        logging.info('Loading evaluation points according to the saved {} split in {} from {}.'
-                     .format(evaluate_on, os.path.join(ckpt_dir, 'splits.json'), apply_to))
+        print('Loading evaluation points according to the saved {} split in {} from {}.'
+              .format(evaluate_on, os.path.join(ckpt_dir, 'splits.json'), apply_to))
 
         if Path(apply_to).suffix == '.npz':
             test_data = dict(np.load(apply_to))

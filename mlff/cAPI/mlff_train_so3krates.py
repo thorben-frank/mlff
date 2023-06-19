@@ -22,7 +22,7 @@ from mlff.properties import md17_property_keys
 
 import mlff.properties.property_names as pn
 
-logging.basicConfig(level=logging.INFO)
+# logging.basicConfig(level=logging.INFO)
 
 
 def unit_convert_data(x: Dict, table: Dict):
