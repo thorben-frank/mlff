@@ -86,7 +86,7 @@ class So3krataceLayer(BaseSubModule):
                                n_heads=self.n_heads)(x=x_pre_1,
                                                      rbf_ij=rbf_ij,
                                                      d_chi_ij_l=m_chi_ij,
-                                                     phi_r_cut=jnp.zeros_like(phi_r_cut, dtype=phi_r_cut.dtype),
+                                                     phi_r_cut=phi_r_cut,
                                                      idx_i=idx_i,
                                                      idx_j=idx_j,
                                                      pair_mask=pair_mask)  # shape: (n,F)

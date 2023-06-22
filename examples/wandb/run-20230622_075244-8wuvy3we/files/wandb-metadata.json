@@ -1,0 +1,42 @@
+{
+    "os": "macOS-12.1-x86_64-i386-64bit",
+    "python": "3.8.9",
+    "heartbeatAt": "2023-06-22T05:52:45.706921",
+    "startedAt": "2023-06-22T05:52:44.992086",
+    "docker": null,
+    "cuda": null,
+    "args": [],
+    "state": "running",
+    "program": "/Users/thorbenfrank/Documents/git/mlff-public/examples/train_so3kratACE.py",
+    "codePath": "examples/train_so3kratACE.py",
+    "git": {
+        "remote": "https://github.com/thorben-frank/mlff.git",
+        "commit": "d8b27a11416452cc12d299125698fd62f6375b54"
+    },
+    "email": "thorbenjan.frank@gmail.com",
+    "root": "/Users/thorbenfrank/Documents/git/mlff-public",
+    "host": "Thorbens-MacBook-Pro-5349.local",
+    "username": "thorbenfrank",
+    "executable": "/Users/thorbenfrank/Documents/venvs/mlff-public/bin/python3",
+    "cpu_count": 6,
+    "cpu_count_logical": 12,
+    "cpu_freq": {
+        "current": 2600,
+        "min": 2600,
+        "max": 2600
+    },
+    "cpu_freq_per_core": [
+        {
+            "current": 2600,
+            "min": 2600,
+            "max": 2600
+        }
+    ],
+    "disk": {
+        "total": 465.62699127197266,
+        "used": 23.578964233398438
+    },
+    "memory": {
+        "total": 16.0
+    }
+}
