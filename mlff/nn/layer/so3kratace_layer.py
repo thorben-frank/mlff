@@ -112,8 +112,8 @@ class So3krataceLayer(BaseSubModule):
                                                self.n_node_type)(x_local, chi_local, z_one_hot)
 
         # add local and potential non local features and sphc, respectively and first skip connection
-        x_skip_1 = x + x_bo
-        chi_skip_1 = chi + chi_bo
+        x_skip_1 = x + x_local + x_bo
+        chi_skip_1 = chi + chi_local + chi_bo
 
         # second pre layer-normalization
         if self.layer_normalization:
