@@ -65,7 +65,7 @@ opt = Optimizer()
 tx = opt.get(learning_rate=1e-3)
 
 coach = Coach(inputs=[pn.atomic_position, pn.atomic_type, pn.idx_i, pn.idx_j, pn.node_mask],
-              targets=[pn.energy],
+              targets=[pn.energy, pn.force],
               epochs=1000,
               training_batch_size=5,
               validation_batch_size=5,

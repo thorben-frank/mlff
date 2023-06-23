@@ -1,6 +1,7 @@
 import jax.numpy as jnp
 import flax.linen as nn
 import jax
+import logging
 
 from jax.ops import segment_sum
 from functools import partial
@@ -86,7 +87,7 @@ class So3krataceLayer(BaseSubModule):
                                n_heads=self.n_heads)(x=x_pre_1,
                                                      rbf_ij=rbf_ij,
                                                      d_chi_ij_l=m_chi_ij,
-                                                     phi_r_cut=jnp.zeros_like(phi_r_cut, dtype=phi_r_cut.dtype),
+                                                     phi_r_cut=phi_r_cut,
                                                      idx_i=idx_i,
                                                      idx_j=idx_j,
                                                      pair_mask=pair_mask)  # shape: (n,F)
@@ -111,6 +112,7 @@ class So3krataceLayer(BaseSubModule):
                                                self.max_body_order,
                                                self.n_node_type)(x_local, chi_local, z_one_hot)
 
+        logging.warning('Running new version ... ')
         # add local and potential non local features and sphc, respectively and first skip connection
         x_skip_1 = x + x_local + x_bo
         chi_skip_1 = chi + chi_local + chi_bo
