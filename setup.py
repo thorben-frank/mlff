@@ -8,7 +8,7 @@ setup(
     packages=find_packages(),
     install_requires=[
         "numpy",
-        "jax >= 0.3.23",
+        "jax == 0.4.8",
         "flax == 0.6.9",
         "jaxopt",
         "optax",
