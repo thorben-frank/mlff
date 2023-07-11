@@ -9,7 +9,7 @@ setup(
     install_requires=[
         "numpy",
         "jax >= 0.3.23",
-        "flax >= 0.6.1",
+        "flax == 0.6.9",
         "jaxopt",
         "optax",
         # 'tensorflow',
@@ -19,7 +19,7 @@ setup(
         "wandb",
         "pyyaml",
         "pytest",
-        # "jax_md",
+        "jax_md == 0.2.5",
         "h5py",
     ],
     include_package_data=True,
