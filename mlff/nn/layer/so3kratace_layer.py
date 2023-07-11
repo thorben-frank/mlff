@@ -112,8 +112,7 @@ class So3krataceLayer(BaseSubModule):
                                                self.max_body_order,
                                                self.n_node_type)(x_local, chi_local, z_one_hot)
 
-        logging.warning('Running new version ... ')
-        # add local and potential non local features and sphc, respectively and first skip connection
+        # add features
         x_skip_1 = x + x_local + x_bo
         chi_skip_1 = chi + chi_local + chi_bo
 

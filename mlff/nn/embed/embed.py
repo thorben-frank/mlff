@@ -252,6 +252,9 @@ class OneHotEmbed(BaseSubModule):
                                    'prop_keys': self.prop_keys}
                 }
 
+    def reset_input_convention(self, input_convention: str) -> None:
+        pass
+
 
 def to_onehot(features: jnp.ndarray, node_types: Sequence):
     r"""
