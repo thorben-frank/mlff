@@ -197,7 +197,6 @@ def test_so3krates_training():
               train_ds=train_ds,
               valid_ds=valid_ds,
               loss_fn=loss_fn,
-              ckpt_overwrite=True,
               eval_every_t=50,
               log_every_t=1,
               restart_by_nan=True,
