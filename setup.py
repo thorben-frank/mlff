@@ -2,14 +2,14 @@ from setuptools import setup, find_packages
 
 setup(
     name="mlff",
-    version="0.2",
+    version="0.3.0",
     description="Build Neural Networks for Force Fields with JAX",
     python_requires=">=3.8",
     packages=find_packages(),
     install_requires=[
         "numpy",
         # "jax == 0.4.8",
-        "flax <= 0.6.9",
+        "flax",
         "jaxopt",
         "optax",
         "orbax",
