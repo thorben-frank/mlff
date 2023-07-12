@@ -19,7 +19,7 @@ setup(
         "wandb",
         "pyyaml",
         "pytest",
-        "jax_md == 0.1.29",
+        "jax_md == 0.2.0",
         "h5py",
     ],
     include_package_data=True,
