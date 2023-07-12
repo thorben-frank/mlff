@@ -4,7 +4,6 @@ import os
 
 from orbax.checkpoint import PyTreeCheckpointer, Checkpointer, PyTreeCheckpointHandler
 
-__CHECKPOINTERS__: Dict[str, Any] = {'state': PyTreeCheckpointer()}
 __STEP_PREFIX__: str = 'ckpt'
 
 
