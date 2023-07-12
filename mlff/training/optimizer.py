@@ -9,8 +9,6 @@ from flax.core.frozen_dict import freeze, unfreeze
 from dataclasses import dataclass
 
 
-
-
 @dataclass
 class Optimizer:
     b1: float = 0.9

@@ -5,6 +5,7 @@ import logging
 import os
 import argparse
 import wandb
+import json
 
 from pathlib import Path
 from typing import Dict
@@ -21,7 +22,7 @@ from mlff.properties import md17_property_keys
 
 import mlff.properties.property_names as pn
 
-logging.basicConfig(level=logging.INFO)
+# logging.basicConfig(level=logging.INFO)
 
 
 def unit_convert_data(x: Dict, table: Dict):
@@ -63,6 +64,11 @@ def train_so3krates():
     parser.add_argument('--ckpt_dir', type=str, required=False, default=None,
                         help='Path to the checkpoint directory (must not exist). '
                              'If not set, defaults to `current_directory/module`.')
+
+    parser.add_argument('--ckpt_manager_options', type=json.loads, required=False, default=None,
+                        metavar='{"key": value, "key1": value1, ...}',
+                        help='Options for the checkpoint manager. See '
+                             'https://github.com/google/orbax/blob/main/docs/checkpoint.md for all options.')
 
     # Model Arguments
     parser.add_argument('--r_cut', type=float, required=False, default=5., help='Local neighborhood cutoff.')
@@ -380,9 +386,9 @@ def train_so3krates():
               train_ds=train_ds,
               valid_ds=valid_ds,
               loss_fn=loss_fn,
-              ckpt_overwrite=True,
               eval_every_t=eval_every_t,
               log_every_t=1,
+              ckpt_manager_options=args.ckpt_manager_options,
               restart_by_nan=True,
               use_wandb=use_wandb)
 

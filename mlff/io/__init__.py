@@ -4,3 +4,7 @@ from .io import (read_json,
                  bundle_dicts,
                  save_dict,
                  )
+
+from .checkpoint import (load_state_from_ckpt_dir,
+                         load_params_from_ckpt_dir
+                         )

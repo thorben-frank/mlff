@@ -12,12 +12,11 @@ from ase.neighborlist import primitive_neighbor_list
 from functools import partial
 
 from flax.core.frozen_dict import FrozenDict
-from flax.training import checkpoints
 
 from mlff.nn.stacknet import get_obs_and_force_fn, get_energy_force_stress_fn, init_stack_net, get_observable_fn
 from mlff.geometric import coordinates_to_distance_matrix, coordinates_to_distance_matrix_mic
 from mlff.padding.padding import pad_indices
-from mlff.io import read_json
+from mlff.io import read_json, load_params_from_ckpt_dir
 
 
 logging.basicConfig(level=logging.INFO)
@@ -42,7 +41,7 @@ class mlffCalculator(Calculator):
 
         net = init_stack_net(read_json(os.path.join(ckpt_dir, 'hyperparameters.json')))
         scales = read_json(os.path.join(ckpt_dir, 'scales.json'))
-        params = checkpoints.restore_checkpoint(ckpt_dir=ckpt_dir, target=None, prefix='checkpoint_loss_')['params']
+        params = load_params_from_ckpt_dir(ckpt_dir)
 
         return cls(params=params,
                    stack_net=net,

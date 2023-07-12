@@ -54,14 +54,14 @@ class DataSet:
 
         def repeat(name, y, repeats):
             if len(y) == 1:
-                logging.info('Detected missing data dimension (0-th axis) for {}. Assume that the '
-                             'data dimension is missing and repeat the entry {} times. Reshaped '
-                             'array to ({}, {})'.format(name, n_data, n_data, y.shape[0]))
+                print('Detected missing data dimension (0-th axis) for {}. Assume that the '
+                      'data dimension is missing and repeat the entry {} times. Reshaped '
+                      'array to ({}, {})'.format(name, n_data, n_data, y.shape[0]))
                 return np.repeat(y, repeats=repeats, axis=0)
             elif 1 < len(y) < n_data:
-                logging.info('Detected missing data dimension (0-th axis) for {}. Assume that the '
-                             'data dimension is missing and repeat the entry {} times. Reshaped '
-                             'array to ({}, {})'.format(name, n_data, n_data, y.shape))
+                print('Detected missing data dimension (0-th axis) for {}. Assume that the '
+                      'data dimension is missing and repeat the entry {} times. Reshaped '
+                      'array to ({}, {})'.format(name, n_data, n_data, y.shape))
                 return np.repeat(y[None], repeats=repeats, axis=0)
             else:
                 return y
@@ -400,7 +400,7 @@ class DataSet:
     def save_splits_to_file(self, path, filename):
         splits_ = jax.tree_map(lambda y: y.tolist(), self.splits)
         save_dict(path=path, filename=filename, data=splits_, exists_ok=True)
-        logging.info('Saved the data indices of the splits to {}'.format(os.path.join(path, filename)))
+        print('Saved the data indices of the splits to {}'.format(os.path.join(path, filename)))
 
     @staticmethod
     def load_splits_from_file(path, filename):

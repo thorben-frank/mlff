@@ -6,13 +6,16 @@ import time
 import wandb
 import optax
 
+from orbax.checkpoint import (CheckpointManagerOptions,
+                              CheckpointManager)
+
 from functools import partial
 from typing import (Any, Callable, Dict, Tuple)
 from flax.training.train_state import TrainState
 from flax.core.frozen_dict import FrozenDict, unfreeze
-from flax.training import checkpoints
 
 from mlff.io import save_dict
+from mlff.io.checkpoint import __CHECKPOINTERS__, __STEP_PREFIX__
 
 logging.basicConfig(level=logging.INFO)
 
@@ -47,7 +50,7 @@ def train_step_fn(state: TrainState,
 def valid_epoch(state: TrainState,
                 ds: DataTupleT,
                 metric_fn: LossFn,
-                bs: int) -> Tuple[Dict[str, float], int]:
+                bs: int) -> Tuple[Dict[str, np.array], int]:
     """
     Validation epoch for NN training.
 
@@ -109,10 +112,9 @@ def run_training(state: TrainState,
                  metric_fn: LossFn = None,
                  epochs: int = 100,
                  ckpt_dir: str = None,
-                 save_every_t: int = None,
+                 ckpt_manager_options: dict = None,
                  eval_every_t: int = None,
                  log_every_t: int = None,
-                 ckpt_overwrite: bool = False,
                  restart_by_nan: bool = True,
                  stop_lr_fn: Callable[[float], bool] = None,
                  stop_metric_fn: Callable[[Dict[str, float]], bool] = None,
@@ -135,10 +137,9 @@ def run_training(state: TrainState,
         metric_fn (Callable): Dictionary of functions, which are evaluated on the validation set and logged.
         epochs (int): Number of training epochs.
         ckpt_dir (str): Checkpoint path.
-        save_every_t (int): Save the model every t-th step
+        ckpt_manager_options (dict): Checkpoint manager options.
         eval_every_t (int): Evaluate the metrics every t-th step
         log_every_t (int): Log the training loss every t-th step
-        ckpt_overwrite (bool): Whether overwriting of existing checkpoints is allowed.
         restart_by_nan (bool): Soft restart from last checkpoint when NaNs appear in the gradients.
         stop_lr_fn (Callable): Function that returns True if a certain lr threshold is passed.
         stop_metric_fn (Callable): Function that returns True if a certain threshold for one of the specified metrics
@@ -172,6 +173,14 @@ def run_training(state: TrainState,
     if log_every_t is None:
         log_every_t = 1
 
+    if ckpt_manager_options is None:
+        ckpt_manager_options = {'max_to_keep': 1}
+
+    options = CheckpointManagerOptions(best_fn=lambda u: u['loss'], best_mode='min', step_prefix=__STEP_PREFIX__,
+                                       **ckpt_manager_options)
+
+    mngr = CheckpointManager(ckpt_dir, __CHECKPOINTERS__, options=options)
+
     for i in range(1, int(steps_per_epoch * epochs) + 1):
         epoch_start = time.time()
 
@@ -179,13 +188,7 @@ def run_training(state: TrainState,
         # validation metrics
         if i == 1:
             best_valid_metrics, _ = valid_epoch(state, valid_ds, metric_fn, bs=valid_bs)
-            for _k, _v in best_valid_metrics.items():
-                checkpoints.save_checkpoint(ckpt_dir,
-                                            state,
-                                            step=i - 1,
-                                            keep=1,
-                                            prefix=f'checkpoint_{_k}_',
-                                            overwrite=ckpt_overwrite)
+            mngr.save(i - 1, {'state': state}, metrics={'loss': best_valid_metrics['loss'].item()})
 
         step_in_epoch = (i - 1) % steps_per_epoch
         if step_in_epoch == 0:
@@ -226,7 +229,7 @@ def run_training(state: TrainState,
                 y = jax.tree_map(lambda x: jnp.zeros(x.shape), state.valid_params['record'])
                 return x, y
 
-            state_dict = checkpoints.restore_checkpoint(ckpt_dir=ckpt_dir, target=None, prefix='checkpoint_loss_')
+            state_dict = mngr.restore(mngr.best_step(), items={'state': None})['state']
             try:
                 state_dict['params']['record'], state_dict['valid_params']['record'] = reset_records()
             except KeyError:
@@ -235,14 +238,6 @@ def run_training(state: TrainState,
                                        valid_params=FrozenDict(state_dict['valid_params']))
             opt_state = state.tx.init(state.params)
             state = state.reset_opt_state(opt_state=opt_state)
-        if save_every_t is not None:
-            if i % save_every_t == 0:
-                checkpoints.save_checkpoint(ckpt_dir,
-                                            state,
-                                            i,
-                                            keep=int(int(steps_per_epoch * epochs) // save_every_t) + 1,
-                                            prefix='checkpoint_step_',
-                                            overwrite=ckpt_overwrite)
 
         valid_start, valid_end, n_valid = (0., 0., 1.)
         evaluate = (i % eval_every_t == 0)
@@ -261,20 +256,12 @@ def run_training(state: TrainState,
 
             # keep track if metrics improved
             if valid_metrics['loss'] < best_valid_metrics['loss']:
+                best_valid_metrics['loss'] = valid_metrics['loss']
                 state = state.improved(True)
             else:
                 state = state.improved(False)
 
-            # loop over all metrics and compare
-            for _k, _v in best_valid_metrics.items():
-                if valid_metrics[_k] < _v:
-                    best_valid_metrics[_k] = valid_metrics[_k]
-                    checkpoints.save_checkpoint(ckpt_dir,
-                                                state,
-                                                i,
-                                                keep=1,
-                                                prefix=f'checkpoint_{_k}_',
-                                                overwrite=ckpt_overwrite)
+            mngr.save(i - 1, {'state': state}, metrics={'loss': best_valid_metrics['loss'].item()})
 
             # check if one of the metrics meets a defined stopping criteria
             if stop_metric_fn is not None:
@@ -297,7 +284,6 @@ def run_training(state: TrainState,
                  'Epoch': int(i // steps_per_epoch)}
 
         if i % log_every_t == 0:
-
             # log the training metrics
             if use_wandb:
                 wandb.log({'Training {}'.format(k): v for (k, v) in train_batch_metrics_np.items()}, step=i)

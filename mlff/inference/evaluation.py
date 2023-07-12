@@ -6,7 +6,6 @@ import logging
 from tqdm import tqdm
 from typing import (Any, Callable, Dict, Tuple, Union)
 
-logging.basicConfig(level=logging.INFO)
 Array = Any
 
 
@@ -60,7 +59,7 @@ def evaluate_model(params,
     idxs = idxs.reshape((n_batches, batch_size))
 
     obs_pred = {}
-    logging.info('Model evaluation (Total number of data: {}, number of batches: {}, batch size: {}'
+    print('Model evaluation (Total number of data: {}, number of batches: {}, batch size: {}'
                  .format(int(n_batches * batch_size), n_batches, batch_size))
     for (i, idx) in enumerate(tqdm(idxs)):
         # if verbose:
