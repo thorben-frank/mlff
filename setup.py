@@ -12,7 +12,7 @@ setup(
         "flax",
         "jaxopt",
         "optax",
-        "orbax",
+        "orbax-checkpoint",
         # 'tensorflow',
         "scikit-learn",
         "ase",
