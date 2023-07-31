@@ -8,7 +8,7 @@ from mlff.nn.layer.so3krates_layer import So3kratesLayer
 from mlff.nn.observable import Energy
 from mlff.nn.embed import AtomTypeEmbed, GeometryEmbed
 
-logging.basicConfig(level=logging.INFO)
+# logging.basicConfig(level=logging.INFO)
 
 
 def init_so3krates(prop_keys: Dict[str, str],

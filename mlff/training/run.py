@@ -20,7 +20,7 @@ from flax.core.frozen_dict import FrozenDict, unfreeze
 from mlff.io import save_dict
 from mlff.io.checkpoint import __STEP_PREFIX__
 
-logging.basicConfig(level=logging.INFO)
+# logging.basicConfig(level=logging.INFO)
 
 Array = Any
 StackNet = Any

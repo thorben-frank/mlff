@@ -8,7 +8,7 @@ from mlff.nn.layer.schnet_layer import SchNetLayer
 from mlff.nn.observable import Energy
 from mlff.nn.embed import AtomTypeEmbed, GeometryEmbed
 
-logging.basicConfig(level=logging.INFO)
+# logging.basicConfig(level=logging.INFO)
 
 
 def init_schnet(prop_keys: Dict[str, str],

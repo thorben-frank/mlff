@@ -5,7 +5,7 @@ import logging
 from typing import (Any, Callable, Dict, Sequence, Tuple)
 from flax.core.frozen_dict import FrozenDict
 
-logging.basicConfig(level=logging.INFO)
+# logging.basicConfig(level=logging.INFO)
 
 Array = Any
 StackNet = Any
