@@ -8,7 +8,7 @@ from mlff.nn.layer.so3kratace_layer import So3krataceLayer
 from mlff.nn.observable import Energy
 from mlff.nn.embed import AtomTypeEmbed, GeometryEmbed, OneHotEmbed
 
-logging.basicConfig(level=logging.INFO)
+# logging.basicConfig(level=logging.INFO)
 
 
 def init_so3kratace(prop_keys: Dict[str, str],

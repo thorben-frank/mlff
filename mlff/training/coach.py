@@ -9,7 +9,7 @@ from functools import partial
 from mlff.training.stopping_criteria import stop_by_lr, stop_by_metric
 from .run import run_training
 
-logging.basicConfig(level=logging.INFO)
+# logging.basicConfig(level=logging.INFO)
 
 Array = Any
 StackNet = Any

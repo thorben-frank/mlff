@@ -8,7 +8,9 @@ import optax
 
 from orbax.checkpoint import (CheckpointManagerOptions,
                               CheckpointManager,
-                              PyTreeCheckpointer)
+                              PyTreeCheckpointer,
+                              PyTreeCheckpointHandler,
+                              AsyncCheckpointer)
 
 from functools import partial
 from typing import (Any, Callable, Dict, Tuple)
@@ -18,7 +20,7 @@ from flax.core.frozen_dict import FrozenDict, unfreeze
 from mlff.io import save_dict
 from mlff.io.checkpoint import __STEP_PREFIX__
 
-logging.basicConfig(level=logging.INFO)
+# logging.basicConfig(level=logging.INFO)
 
 Array = Any
 StackNet = Any
@@ -180,7 +182,8 @@ def run_training(state: TrainState,
     options = CheckpointManagerOptions(best_fn=lambda u: u['loss'], best_mode='min', step_prefix=__STEP_PREFIX__,
                                        **ckpt_manager_options)
 
-    mngr = CheckpointManager(ckpt_dir, {'state': PyTreeCheckpointer()}, options=options)
+    mngr = CheckpointManager(ckpt_dir, {'state': AsyncCheckpointer(PyTreeCheckpointHandler())}, options=options)
+    # mngr = CheckpointManager(ckpt_dir, {'state': PyTreeCheckpointer()}, options=options)
 
     for i in range(1, int(steps_per_epoch * epochs) + 1):
         epoch_start = time.time()
@@ -311,3 +314,4 @@ def run_training(state: TrainState,
             if (i > 1) and (i % log_every_t == 0):
                 if use_wandb:
                     wandb.log(times, step=i)
+    mngr.wait_until_finished()

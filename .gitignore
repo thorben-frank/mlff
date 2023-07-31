@@ -12,3 +12,5 @@ build
 *.xml
 *.h5
 *.xyz
+wandb/
+ckpt_dir/
