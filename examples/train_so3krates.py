@@ -3,6 +3,7 @@ import jax
 import jax.numpy as jnp
 import os
 import wandb
+import portpicker
 import ase.units as si
 
 from mlff.io.io import create_directory, bundle_dicts, save_dict
@@ -14,6 +15,9 @@ from mlff.nn import So3krates
 from mlff.properties import md17_property_keys as prop_keys
 
 import mlff.properties.property_names as pn
+
+port = portpicker.pick_unused_port()
+jax.distributed.initialize(f'localhost:{port}', num_processes=1, process_id=0)
 
 data_path = 'example_data/ethanol.npz'
 save_path = 'ckpt_dir'
