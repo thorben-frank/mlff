@@ -11,4 +11,5 @@ from .stacknet import (get_observable_fn,
 from .embed import (AtomTypeEmbed,
                     GeometryEmbed)
 
-from .observable import Energy
+from .observable import (Energy,
+                         ZBLRepulsion)

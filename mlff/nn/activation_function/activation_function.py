@@ -14,3 +14,7 @@ def get_activation_fn(key: str) -> Callable:
 @jax.jit
 def shifted_softplus(x):
     return softplus(x) - softplus(jnp.zeros(1))
+
+
+def softplus_inverse(x):
+    return x + jnp.log(-jnp.expm1(-x))
