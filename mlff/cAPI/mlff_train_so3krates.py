@@ -57,7 +57,10 @@ def train_so3krates():
                              'has been trained on.')
 
     # Add the arguments
-    parser.add_argument('--data_file', type=str, required=True)
+    parser.add_argument('--data_file', type=str, required=False, default=None)
+    parser.add_argument('--train_data_file', type=str, required=False, default=None)
+    parser.add_argument('--valid_data_file', type=str, required=False, default=None)
+
     parser.add_argument('--shift_by', type=str, required=False, default='mean',
                         metavar='Possible values: mean, atomic_number, lse')
 
@@ -85,8 +88,8 @@ def train_so3krates():
                         help='If minimal image convention should be applied.')
 
     # Data Arguments
-    parser.add_argument('--n_train', type=int, required=True, help='Number of training points.')
-    parser.add_argument('--n_valid', type=int, required=True, help='Number of validation points.')
+    parser.add_argument('--n_train', type=int, required=False, help='Number of training points.', default=None)
+    parser.add_argument('--n_valid', type=int, required=False, help='Number of validation points.', default=None)
     parser.add_argument('--n_test', type=int, required=False, help='Number of test points.', default=None)
 
     parser.add_argument('--epochs', type=int, required=False, help='Number of training epochs.')
@@ -145,7 +148,24 @@ def train_so3krates():
 
     prop_keys = args.prop_keys
 
-    data_file = Path(args.data_file).absolute().resolve().as_posix()
+    def parse_data_file(x):
+        if x is not None:
+            return Path(x).absolute().resolve().as_posix()
+        else:
+            return x
+
+    data_file = parse_data_file(args.data_file)
+    train_data_file = parse_data_file(args.train_data_file)
+    valid_data_file = parse_data_file(args.valid_data_file)
+
+    if data_file is None and (train_data_file is None or valid_data_file is None):
+        raise ValueError("Either `--data_file` or (`--train_data_file` + `--valid_data_file`) must be specified.")
+
+    if data_file is None:
+        data_files = [train_data_file, valid_data_file]
+    else:
+        data_files = [data_file]
+
     shift_by = args.shift_by
     shifts = args.shifts
 
@@ -204,27 +224,15 @@ def train_so3krates():
     n_train = args.n_train
     n_valid = args.n_valid
     n_test = args.n_test
+
+    if data_file is not None:
+        if n_train is None or n_valid is None:
+            raise ValueError('If only a single `--data_file` is provided, please specify the number of training'
+                             'and validation samples via `--n_train` and `--n_valid`.')
+
     model_seed = args.model_seed
     training_seed = args.training_seed
     data_seed = args.data_seed
-
-    def autoset_batch_size(u):
-        if u < 500:
-            return 1
-        elif 500 <= u < 1000:
-            return 5
-        elif 1000 <= u < 10_000:
-            return 10
-        elif u >= 10_000:
-            return 100
-
-    if args.batch_size is not None:
-        batch_size = args.batch_size
-    else:
-        batch_size = autoset_batch_size(n_train)
-
-    training_batch_size = batch_size if args.training_batch_size is None else args.training_batch_size
-    validation_batch_size = batch_size if args.validation_batch_size is None else args.validation_batch_size
 
     units = args.units
     conversion_table = {}
@@ -233,39 +241,59 @@ def train_so3krates():
             k = prop_keys[q]
             conversion_table[k] = eval(v)
 
-    extension = os.path.splitext(data_file)[1]
-    if extension == '.npz':
-        data = dict(np.load(data_file))
+    all_data = []
+    for d in data_files:
+        extension = os.path.splitext(d)[1]
+        if extension == '.npz':
+            data = dict(np.load(d))
+        else:
+            load_stress = pn.stress in targets
+            data_loader = AseDataLoader(d, load_stress=load_stress)
+            data = data_loader.load_all()
+
+        data = unit_convert_data(data, table=conversion_table)
+        if pn.stress in targets:
+            cell_key = prop_keys[pn.unit_cell]
+            stress_key = prop_keys[pn.stress]
+
+            stress = data[stress_key]
+            try:
+                assert stress.shape[-2:] == (3, 3)
+            except AssertionError:
+                raise ValueError('Stress tensor must be a matrix with shape (3,3). '
+                                 'Voigt convention not supported yet.')
+
+            # re-scale stress with cell volume
+            cells = data[cell_key]  # shape: (B,3,3)
+            cell_volumes = np.abs(np.linalg.det(cells))  # shape: (B)
+            data[stress_key] = stress * cell_volumes[:, None, None]
+        all_data += [data]
+
+    if len(all_data) == 2:
+        n_train = len(all_data[0][prop_keys[pn.atomic_position]])
+        n_valid = len(all_data[1][prop_keys[pn.atomic_position]])
+
+        data = jax.tree_map(lambda x, y: np.concatenate([x, y]), *all_data)
+
+        data_set = DataSet(data=data, prop_keys=prop_keys)
+        data_set.index_split(data_idx_train=list(range(n_train)),
+                             data_idx_valid=list(range(n_train, int(n_train+n_valid))),
+                             data_idx_test=[],
+                             r_cut=r_cut,
+                             training=True,
+                             mic=mic)
+    elif len(all_data) == 1:
+        data = all_data[0]
+        data_set = DataSet(data=data, prop_keys=prop_keys)
+        data_set.random_split(n_train=n_train,
+                              n_valid=n_valid,
+                              n_test=n_test,
+                              r_cut=r_cut,
+                              training=True,
+                              mic=mic,
+                              seed=data_seed)
     else:
-        load_stress = pn.stress in targets
-        data_loader = AseDataLoader(data_file, load_stress=load_stress)
-        data = data_loader.load_all()
-
-    data = unit_convert_data(data, table=conversion_table)
-    if pn.stress in targets:
-        cell_key = prop_keys[pn.unit_cell]
-        stress_key = prop_keys[pn.stress]
-
-        stress = data[stress_key]
-        try:
-            assert stress.shape[-2:] == (3, 3)
-        except AssertionError:
-            raise ValueError('Stress tensor must be a matrix with shape (3,3). '
-                             'Voigt convention not supported yet.')
-
-        # re-scale stress with cell volume
-        cells = data[cell_key]  # shape: (B,3,3)
-        cell_volumes = np.abs(np.linalg.det(cells))  # shape: (B)
-        data[stress_key] = stress * cell_volumes[:, None, None]
-
-    data_set = DataSet(data=data, prop_keys=prop_keys)
-    data_set.random_split(n_train=n_train,
-                          n_valid=n_valid,
-                          n_test=n_test,
-                          r_cut=r_cut,
-                          training=True,
-                          mic=mic,
-                          seed=data_seed)
+        raise RuntimeError('You should not end up here. Please file an issue :-)')
 
     if shift_by == 'mean':
         data_set.shift_x_by_mean_x(x=pn.energy)
@@ -317,6 +345,24 @@ def train_so3krates():
 
     tx = opt.get(learning_rate=lr)
 
+    def autoset_batch_size(u):
+        if u < 500:
+            return 1
+        elif 500 <= u < 1000:
+            return 5
+        elif 1000 <= u < 10_000:
+            return 10
+        elif u >= 10_000:
+            return 100
+
+    if args.batch_size is not None:
+        batch_size = args.batch_size
+    else:
+        batch_size = autoset_batch_size(n_train)
+
+    training_batch_size = batch_size if args.training_batch_size is None else args.training_batch_size
+    validation_batch_size = batch_size if args.validation_batch_size is None else args.validation_batch_size
+
     if epochs is None and steps is None:
         assert lr_stop is not None
         if args.lr_decay_exp is None and lr_decay_plateau is None:
@@ -344,6 +390,8 @@ def train_so3krates():
                   loss_weights=effective_loss_weights,
                   ckpt_dir=ckpt_dir,
                   data_path=data_file,
+                  train_data_path=data_file if train_data_file is None else train_data_file,
+                  valid_data_path=data_file if valid_data_file is None else valid_data_file,
                   net_seed=model_seed,
                   training_seed=training_seed,
                   stop_lr_min=lr_stop)
@@ -378,7 +426,9 @@ def train_so3krates():
     h = bundle_dicts([h_net, h_opt, h_coach, h_dataset, h_train_state])
 
     Path(ckpt_dir).mkdir(parents=True, exist_ok=False)
-    data_set.save_splits_to_file(ckpt_dir, 'splits.json')
+    if data_file is not None:
+        data_set.save_splits_to_file(ckpt_dir, 'splits.json')
+
     data_set.save_scales(ckpt_dir, 'scales.json')
     save_dict(path=ckpt_dir, filename='hyperparameters.json', data=h, exists_ok=True)
 

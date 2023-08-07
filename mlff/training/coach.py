@@ -29,7 +29,9 @@ class Coach:
     validation_batch_size: int
     loss_weights: Dict[str, float]
     ckpt_dir: str
-    data_path: str
+    data_path: str = None
+    train_data_path: str = None
+    valid_data_path: str = None
     net_seed: int = 0
     training_seed: int = 0
     stop_lr_min: float = None
@@ -81,6 +83,8 @@ class Coach:
                           'loss_weights': self.loss_weights,
                           'ckpt_dir': self.ckpt_dir,
                           'data_path': self.data_path,
+                          'train_data_path': self.train_data_path,
+                          'valid_data_path': self.valid_data_path,
                           'training_seed': self.training_seed,
                           'net_seed': self.net_seed,
                           'stop_lr_min': self.stop_lr_min,
