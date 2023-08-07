@@ -11,8 +11,6 @@ from collections import namedtuple
 
 from mlff.utils import Graph, Neighbors, System
 
-from jax_md.space import periodic_general, free
-
 
 SpatialPartitioning = namedtuple(
     "SpatialPartitioning", ("allocate_fn", "update_fn", "cutoff", "skin", "capacity_multiplier")
@@ -512,7 +510,9 @@ def neighbor_list(system, cutoff, skin, capacity_multiplier=1.25):
 
 
 def to_displacement(atoms):
-    if atoms.get_cell() is not None:
-        return periodic_general(atoms.get_cell(), fractional_coordinates=False)[0]
-    else:
-        return free()[0]
+    from glp.periodic import make_displacement
+
+    displacement = make_displacement(atoms.cell)
+
+    # reverse sign convention for backwards compatibility
+    return lambda Ra, Rb: raw_disp(Rb, Ra)
