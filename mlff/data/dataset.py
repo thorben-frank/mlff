@@ -172,12 +172,16 @@ class DataSet:
 
                 cell_lengths = np.linalg.norm(unit_cell_dat, axis=-1).reshape(-1)
                 if 0.5 * min(cell_lengths) <= r_cut:
-                    raise NotImplementedError(f'Minimal image convention currently only implemented for '
-                                              f'r_cut < 0.5*min(cell_lengths), but r_cut={r_cut} and '
-                                              f'0.5*min(cell_lengths) = {0.5 * min(cell_lengths)}. Consider '
-                                              f'using `get_pbc_indices` which uses ASE under the hood. '
-                                              f'However, the latter takes ~15 times longer so maybe '
-                                              f'reduce r_cut.')
+                    # raise NotImplementedError(f'Minimal image convention currently only implemented for '
+                    #                           f'r_cut < 0.5*min(cell_lengths), but r_cut={r_cut} and '
+                    #                           f'0.5*min(cell_lengths) = {0.5 * min(cell_lengths)}. Consider '
+                    #                           f'using `get_pbc_indices` which uses ASE under the hood. '
+                    #                           f'However, the latter takes ~15 times longer so maybe '
+                    #                           f'reduce r_cut.')
+                    logging.warning(f'r_cut > 0.5*min(cell_lengths) detected! r_cut={r_cut} and '
+                                    f'0.5*min(cell_lengths) = {0.5 * min(cell_lengths)}. '
+                                    f'This case has not been tested rigorously yet and might leave to unwanted'
+                                    f'artifacts, so use with care!')
 
                 neigh_idxs = get_pbc_neighbors(pos=R_dat,
                                                node_mask=n_msk_dat,
