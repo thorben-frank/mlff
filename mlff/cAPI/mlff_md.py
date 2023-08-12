@@ -180,6 +180,9 @@ def run_md():
     use_mdx = args.use_mdx
 
     mdx_skin = args.mdx_skin
+    if mdx_skin != 0:
+        raise NotImplementedError('--mdx_skin != 0, not supported yet!')
+
     mdx_capacity_multiplier = args.mdx_capacity_multiplier
     mdx_scan_interval = args.mdx_scan_interval
 

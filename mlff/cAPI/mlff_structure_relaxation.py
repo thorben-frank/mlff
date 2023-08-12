@@ -204,7 +204,7 @@ def run_relaxation():
 
         atomsx = mdx.AtomsX.create(molecule, dtype=_mdx_dtype)
         atomsx = atomsx.init_spatial_partitioning(cutoff=potential.cutoff,
-                                                  skin=1.,
+                                                  skin=0.,
                                                   capacity_multiplier=1.25
                                                   )
 
