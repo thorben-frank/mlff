@@ -12,6 +12,22 @@ def test_SO3_invariance_so3krates():
     _test_SO3_invariance_model(net)
 
 
+def test_SO3_invariance_so3krates_repeated_degrees():
+    from mlff.nn import So3krates
+    from mlff.properties import md17_property_keys as prop_keys
+
+    net = So3krates(F=32,
+                    n_layer=2,
+                    prop_keys=prop_keys,
+                    geometry_embed_kwargs={'degrees': [1, 2, 2, 3]},
+                    so3krates_layer_kwargs={'n_heads': 4,
+                                            'degrees': [1, 2, 2, 3],
+                                            }
+                    )
+
+    _test_SO3_invariance_model(net)
+
+
 def test_padding_invariance_so3krates():
     from mlff.nn import So3krates
     from mlff.properties import md17_property_keys as prop_keys
