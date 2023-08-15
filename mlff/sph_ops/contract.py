@@ -122,39 +122,70 @@ def init_expansion_fn(degrees: Sequence[int], cg: jnp.ndarray) -> Callable[[jnp.
     return _expansion_fn
 
 
-def make_l0_contraction_fn(degrees: Sequence[int], dtype=jnp.float32):
-    if 0 in degrees:
-        # raise ValueError('SPHCs are defined with l > 0.')
-        cg = init_clebsch_gordan_matrix(degrees=[*degrees], l_out_max=0).astype(dtype)  # shape: (1,m_tot,m_tot)
-        expansion_fn = init_expansion_fn(degrees=[*degrees], cg=cg)  # shape: (n,1,|l|,|l|)
+# def make_l0_contraction_fn(degrees: Sequence[int], dtype=jnp.float32):
+#     if 0 in degrees:
+#         # raise ValueError('SPHCs are defined with l > 0.')
+#         cg = init_clebsch_gordan_matrix(degrees=[*degrees], l_out_max=0).astype(dtype)  # shape: (1,m_tot,m_tot)
+#         expansion_fn = init_expansion_fn(degrees=[*degrees], cg=cg)  # shape: (n,1,|l|,|l|)
+#
+#         def contraction_fn(sphc):
+#             """
+#             Args:
+#                 sphc (Array): Spherical harmonic coordinates, shape: (n,m_tot)
+#             Returns: Contraction on degree l=0 for each degree up to l_max, shape: (n,|l|)
+#             """
+#
+#             # zeroth_degree = jnp.zeros((sphc.shape[0], 1))
+#             # sphc_ = jnp.concatenate([zeroth_degree, sphc], axis=-1)
+#             sphc_x_sphc = jnp.einsum('nm, nl -> nml', sphc, sphc)[:, None, :, :]  # shape: (n,1,m_tot,m_tot)
+#             return jax.vmap(jnp.diagonal)(expansion_fn(sphc_x_sphc)[:, 0])  # shape: (n,|l|)
+#
+#     else:
+#         cg = init_clebsch_gordan_matrix(degrees=[0, *degrees], l_out_max=0).astype(dtype)  # shape: (1,m_tot,m_tot)
+#         expansion_fn = init_expansion_fn(degrees=[0, *degrees], cg=cg)  # shape: (n,1,|l|,|l|)
+#
+#         def contraction_fn(sphc):
+#             """
+#             Args:
+#                 sphc (Array): Spherical harmonic coordinates, shape: (n,m_tot)
+#             Returns: Contraction on degree l=0 for each degree up to l_max, shape: (n,|l|)
+#             """
+#
+#             zeroth_degree = jnp.zeros((sphc.shape[0], 1), dtype=sphc.dtype)
+#             sphc_ = jnp.concatenate([zeroth_degree, sphc], axis=-1)
+#             sphc_x_sphc = jnp.einsum('nm, nl -> nml', sphc_, sphc_)[:, None, :, :]  # shape: (n,1,m_tot,m_tot)
+#             return jax.vmap(jnp.diagonal)(expansion_fn(sphc_x_sphc)[:, 0])[:, 1:]  # shape: (n,|l|)
+#
+#     return contraction_fn
 
-        def contraction_fn(sphc):
-            """
-            Args:
-                sphc (Array): Spherical harmonic coordinates, shape: (n,m_tot)
-            Returns: Contraction on degree l=0 for each degree up to l_max, shape: (n,|l|)
-            """
 
-            # zeroth_degree = jnp.zeros((sphc.shape[0], 1))
-            # sphc_ = jnp.concatenate([zeroth_degree, sphc], axis=-1)
-            sphc_x_sphc = jnp.einsum('nm, nl -> nml', sphc, sphc)[:, None, :, :]  # shape: (n,1,m_tot,m_tot)
-            return jax.vmap(jnp.diagonal)(expansion_fn(sphc_x_sphc)[:, 0])  # shape: (n,|l|)
+def make_l0_contraction_fn(degrees, dtype=jnp.float32):
+    # get CG coefficients
+    cg = np.diagonal(init_clebsch_gordan_matrix(degrees=list({0, *degrees}), l_out_max=0), axis1=1, axis2=2)[0]
+    # shape: (m_tot**2)
+    # if 0 not in degrees:
+    #     cg = cg[1:]  # remove degree zero if not in degrees
 
-    else:
-        cg = init_clebsch_gordan_matrix(degrees=[0, *degrees], l_out_max=0).astype(dtype)  # shape: (1,m_tot,m_tot)
-        expansion_fn = init_expansion_fn(degrees=[0, *degrees], cg=cg)  # shape: (n,1,|l|,|l|)
+    cg_rep = []
+    for d, r in zip(*np.unique(np.array(degrees), return_counts=True)):
+        cg_rep += [np.tile(cg[indx_fn(d - 1): indx_fn(d)], r)]
 
-        def contraction_fn(sphc):
-            """
-            Args:
-                sphc (Array): Spherical harmonic coordinates, shape: (n,m_tot)
-            Returns: Contraction on degree l=0 for each degree up to l_max, shape: (n,|l|)
-            """
+    cg_rep = np.concatenate(cg_rep)  # shape: (m_tot), m_tot = \sum_l 2l+1 for l in degrees
+    cg_rep = jnp.array(cg_rep, dtype=dtype)  # shape: (m_tot)
 
-            zeroth_degree = jnp.zeros((sphc.shape[0], 1), dtype=sphc.dtype)
-            sphc_ = jnp.concatenate([zeroth_degree, sphc], axis=-1)
-            sphc_x_sphc = jnp.einsum('nm, nl -> nml', sphc_, sphc_)[:, None, :, :]  # shape: (n,1,m_tot,m_tot)
-            return jax.vmap(jnp.diagonal)(expansion_fn(sphc_x_sphc)[:, 0])[:, 1:]  # shape: (n,|l|)
+    segment_ids = jnp.array(
+        [y for y in it.chain(*[[n] * int(2 * degrees[n] + 1) for n in range(len(degrees))])])
+    num_segments = len(degrees)
+    _segment_sum = jax.vmap(partial(jax.ops.segment_sum, segment_ids=segment_ids, num_segments=num_segments))
+
+    def contraction_fn(sphc):
+        """
+        Args:
+            sphc (Array): Spherical harmonic coordinates, shape: (n,m_tot)
+        Returns: Contraction on degree l=0 for each degree up to l_max, shape: (n,|l|)
+        """
+
+        return _segment_sum(sphc*sphc*cg_rep[None, :])  # shape: (n,len(degrees))
 
     return contraction_fn
 
