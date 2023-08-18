@@ -80,6 +80,7 @@ def train_so3krates():
     parser.add_argument('--r_cut', type=float, required=False, default=5., help='Local neighborhood cutoff.')
     parser.add_argument('--F', type=int, required=False, default=132, help='Feature dimension.')
     parser.add_argument('--L', type=int, required=False, default=3, help='Number of layers.')
+    parser.add_argument('--H', type=int, required=False, default=4, help='Number of heads.')
     parser.add_argument('--degrees', nargs='+', type=int, required=False, default=[1, 2, 3],
                         help='Degrees for the spherical harmonic coordinates.')
 
@@ -323,13 +324,16 @@ def train_so3krates():
     else:
         scales = None
 
+    n_heads = args.H
+
     net = So3krates(prop_keys=prop_keys,
                     F=F,
                     n_layer=L,
                     geometry_embed_kwargs={'degrees': degrees,
                                            'mic': mic,
                                            'r_cut': r_cut},
-                    so3krates_layer_kwargs={'degrees': degrees})
+                    so3krates_layer_kwargs={'degrees': degrees,
+                                            'n_heads': n_heads})
 
     if pn.force in targets:
         if pn.stress in targets:
