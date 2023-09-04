@@ -121,22 +121,25 @@ def atomsx_to_graph(atoms: Any):
     nodes = atoms.get_atomic_numbers()
 
     displacement_fn = to_displacement(atoms)
+    # displacement_fn(Ra, Rb) calculates Ra - Rb
 
     neighbors = atoms.get_neighbors()
 
     edges = jax.vmap(displacement_fn)(
         positions[neighbors['idx_j']], positions[neighbors['idx_i']]
     )
+    # edges = Rb - Ra
 
     mask = neighbors['idx_i'] != positions.shape[0]
 
-    return Graph(edges, nodes, neighbors['idx_j'], neighbors['idx_i'], mask)
+    return Graph(edges, nodes, neighbors['idx_i'], neighbors['idx_j'], mask)
 
 
 def to_displacement(atoms):
     from glp.periodic import make_displacement
 
     displacement = make_displacement(atoms.cell)
+    # displacement(Ra, Rb) calculates Rb - Ra
 
-    # reverse sign convention for backwards compatibility
-    return lambda Ra, Rb: raw_disp(Rb, Ra)
+    # reverse sign convention bc feels more natural
+    return lambda Ra, Rb: displacement(Rb, Ra)

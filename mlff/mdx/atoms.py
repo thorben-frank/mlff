@@ -463,6 +463,7 @@ class AtomsX:
         nodes = self.get_atomic_numbers()
 
         displacement_fn = to_displacement(self)
+        # displacement_fn(Ra, Rb) calculates Ra - Rb
 
         neighbors = self.get_neighbors()
 
@@ -510,9 +511,19 @@ def neighbor_list(system, cutoff, skin, capacity_multiplier=1.25):
 
 
 def to_displacement(atoms):
+    """
+    Returns function to calculate replacement. Returned function takes Ra and Rb as input and return Ra - Rb
+
+    Args:
+        atoms ():
+
+    Returns:
+
+    """
     from glp.periodic import make_displacement
 
     displacement = make_displacement(atoms.cell)
+    # displacement(Ra, Rb) calculates Rb - Ra
 
-    # reverse sign convention for backwards compatibility
-    return lambda Ra, Rb: raw_disp(Rb, Ra)
+    # reverse sign convention bc feels more natural
+    return lambda Ra, Rb: displacement(Rb, Ra)
