@@ -265,7 +265,7 @@ def run_training(state: TrainState,
             else:
                 state = state.improved(False)
 
-            mngr.save(i - 1, {'state': state}, metrics={'loss': best_valid_metrics['loss'].item()})
+            mngr.save(i - 1, {'state': state}, metrics={'loss': valid_metrics['loss'].item()})
 
             # check if one of the metrics meets a defined stopping criteria
             if stop_metric_fn is not None:
