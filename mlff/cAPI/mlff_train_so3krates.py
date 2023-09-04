@@ -83,6 +83,10 @@ def train_so3krates():
     parser.add_argument('--H', type=int, required=False, default=4, help='Number of heads.')
     parser.add_argument('--degrees', nargs='+', type=int, required=False, default=[1, 2, 3],
                         help='Degrees for the spherical harmonic coordinates.')
+    parser.add_argument('--so3krates_layer_kwargs', type=json.loads, required=False, default=None,
+                        metavar='{"key": value, "key1": value1, ...}',
+                        help='Additional options for SO3krates layer.'
+                        )
 
     # Structure arguments
     parser.add_argument('--mic', action="store_true", required=False,
@@ -326,14 +330,19 @@ def train_so3krates():
 
     n_heads = args.H
 
+    so3krates_layer_kwargs = {'degrees': degrees,
+                              'n_heads': n_heads}
+
+    if args.so3krates_layer_kwargs is not None:
+        so3krates_layer_kwargs.update(args.so3krates_layer_kwargs)
+
     net = So3krates(prop_keys=prop_keys,
                     F=F,
                     n_layer=L,
                     geometry_embed_kwargs={'degrees': degrees,
                                            'mic': mic,
                                            'r_cut': r_cut},
-                    so3krates_layer_kwargs={'degrees': degrees,
-                                            'n_heads': n_heads})
+                    so3krates_layer_kwargs=so3krates_layer_kwargs)
 
     if pn.force in targets:
         if pn.stress in targets:
