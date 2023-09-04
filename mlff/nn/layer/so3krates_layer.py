@@ -9,7 +9,7 @@ from itertools import chain
 
 from mlff.nn.base.sub_module import BaseSubModule
 from mlff.masking.mask import safe_scale, safe_mask
-from mlff.nn.mlp import MLP
+from mlff.nn.mlp import MLP, ResidualMLP
 from mlff.nn.activation_function.activation_function import silu
 from mlff.sph_ops import make_l0_contraction_fn
 
@@ -19,12 +19,19 @@ class So3kratesLayer(BaseSubModule):
     gb_rad_filter_features: Sequence[int]
     fb_sph_filter_features: Sequence[int]
     gb_sph_filter_features: Sequence[int]
+
     degrees: Sequence[int]
+
     fb_attention: str = 'conv_att'
     gb_attention: str = 'conv_att'
     fb_filter: str = 'radial_spherical'
     gb_filter: str = 'radial_spherical'
+
+    residual_mlp_1: bool = False
+    residual_mlp_2: bool = False
+
     n_heads: int = 4
+
     final_layer: bool = False
     non_local_sphc: bool = False
     non_local_feature: bool = False
@@ -139,6 +146,9 @@ class So3kratesLayer(BaseSubModule):
         x_skip_1 = x + x_local + x_non_local
         chi_skip_1 = chi + chi_local + chi_non_local
 
+        if self.residual_mlp_1:
+            x_skip_1 = ResidualMLP()(x_skip_1)
+
         # second pre layer-normalization
         if self.layer_normalization:
             x_pre_2 = safe_mask(point_mask[:, None] != 0, fn=nn.LayerNorm(), operand=x_skip_1)
@@ -152,6 +162,9 @@ class So3kratesLayer(BaseSubModule):
         # second skip connection
         x_skip_2 = (x_skip_1 + delta_x)
         chi_skip_2 = (chi_skip_1 + delta_chi)
+
+        if self.residual_mlp_2:
+            x_skip_2 = ResidualMLP()(x_skip_2)
 
         # in the final layer apply post layer-normalization
         if self.final_layer:
@@ -174,6 +187,8 @@ class So3kratesLayer(BaseSubModule):
                                    'gb_sph_filter_features': self.gb_sph_filter_features,
                                    'gb_attention': self.gb_attention,
                                    'n_heads': self.n_heads,
+                                   'residual_mlp_1': self.residual_mlp_1,
+                                   'residual_mlp_2': self.residual_mlp_2,
                                    'non_local_sphc': self.non_local_sphc,
                                    'non_local_feature': self.non_local_feature,
                                    'fast_attention_kwargs': self.fast_attention_kwargs,
