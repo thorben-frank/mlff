@@ -94,7 +94,7 @@ class Energy(BaseSubModule):
 
     def reset_output_convention(self, output_convention):
         self.output_convention = output_convention
-        self.zbl_repulsion_energy.reset_output_convention(output_convention)
+        # self.zbl_repulsion_energy.reset_output_convention(output_convention)
 
     def __dict_repr__(self) -> Dict[str, Dict[str, Any]]:
         return {self.module_name: {'per_atom_scale': self.per_atom_scale,
