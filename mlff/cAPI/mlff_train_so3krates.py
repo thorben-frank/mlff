@@ -18,6 +18,7 @@ from mlff.data import DataTuple, DataSet
 from mlff.cAPI.process_argparse import StoreDictKeyPair
 from mlff.nn.stacknet import get_obs_and_force_fn, get_observable_fn, get_energy_force_stress_fn
 from mlff.nn import So3krates
+from mlff.nn.observable import Energy
 from mlff.data import AseDataLoader
 from mlff.properties import md17_property_keys
 
@@ -83,10 +84,17 @@ def train_so3krates():
     parser.add_argument('--H', type=int, required=False, default=4, help='Number of heads.')
     parser.add_argument('--degrees', nargs='+', type=int, required=False, default=[1, 2, 3],
                         help='Degrees for the spherical harmonic coordinates.')
+
     parser.add_argument('--so3krates_layer_kwargs', type=json.loads, required=False, default=None,
                         metavar='{"key": value, "key1": value1, ...}',
                         help='Additional options for SO3krates layer.'
                         )
+
+    parser.add_argument('--zbl_repulsion', action="store_true", required=False,
+                        help='Add ZBL repulsion to learned PES.')
+    parser.add_argument('--geometry_embed_kwargs', type=json.loads, required=False, default=None,
+                        metavar='{"key": value, "key1": value1, ...}',
+                        help='Keyword arguments that should be passed to `GeometryEmbed` module.')
 
     # Structure arguments
     parser.add_argument('--mic', action="store_true", required=False,
@@ -328,6 +336,7 @@ def train_so3krates():
     else:
         scales = None
 
+
     n_heads = args.H
 
     so3krates_layer_kwargs = {'degrees': degrees,
@@ -336,12 +345,21 @@ def train_so3krates():
     if args.so3krates_layer_kwargs is not None:
         so3krates_layer_kwargs.update(args.so3krates_layer_kwargs)
 
+    if args.zbl_repulsion:
+        print('Running with ZBL repulsion.')
+
+    geometry_embed_kwargs = {'degrees': degrees,
+                             'mic': mic,
+                             'r_cut': r_cut}
+    if args.geometry_embed_kwargs is not None:
+        geometry_embed_kwargs.update(args.geometry_embed_kwargs)
+
+    obs = [Energy(prop_keys=prop_keys, zbl_repulsion=args.zbl_repulsion)]
     net = So3krates(prop_keys=prop_keys,
                     F=F,
                     n_layer=L,
-                    geometry_embed_kwargs={'degrees': degrees,
-                                           'mic': mic,
-                                           'r_cut': r_cut},
+                    obs=obs,
+                    geometry_embed_kwargs=geometry_embed_kwargs,
                     so3krates_layer_kwargs=so3krates_layer_kwargs)
 
     if pn.force in targets:

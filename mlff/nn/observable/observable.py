@@ -14,6 +14,15 @@ import mlff.properties.property_names as pn
 Array = Any
 
 
+def sigma(x):
+    return safe_mask(x > 0, fn=lambda u: jnp.exp(-1. / u), operand=x, placeholder=0)
+
+
+def switching_fn(x, x_on, x_off):
+    c = (x - x_on) / (x_off - x_on)
+    return sigma(1 - c) / (sigma(1 - c) + sigma(c))
+
+
 def get_observable_module(name, h):
     if name == 'energy':
         return Energy(**h)
@@ -159,11 +168,12 @@ class ZBLRepulsion(nn.Module):
 
         x = self.ke * phi_r_cut_ij * z_d_ij  # shape: (P)
 
-        rzd = d_ij * (jnp.power(z_i, p) + jnp.power(z_j, p)) / d  # shape: (P)
+        rzd = d_ij * (jnp.power(z_i, p) + jnp.power(z_j, p)) * d  # shape: (P)
         y = c1 * jnp.exp(-a1 * rzd) + c2 * jnp.exp(-a2 * rzd) + c3 * jnp.exp(-a3 * rzd) + c4 * jnp.exp(-a4 * rzd)
         # shape: (P)
 
-        e_rep_edge = safe_scale(x * y, scale=pair_mask) / jnp.asarray(2, dtype=d_ij.dtype)  # shape: (P)
+        w = switching_fn(d_ij, x_on=0, x_off=1.5)  # shape: (P)
+        e_rep_edge = safe_scale(w * x * y, scale=pair_mask) / jnp.asarray(2, dtype=d_ij.dtype)  # shape: (P)
 
         if self.output_convention == 'per_atom':
             return segment_sum(e_rep_edge, segment_ids=idx_i, num_segments=len(z))[:, None]  # shape: (n,1)

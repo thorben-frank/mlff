@@ -20,8 +20,8 @@ port = portpicker.pick_unused_port()
 jax.distributed.initialize(f'localhost:{port}', num_processes=1, process_id=0)
 
 # data_path = '/Users/thorbenfrank/Documents/data/mol-data/dissipation-curves/NaCl.npz'
-# data_path = '/Users/thorbenfrank/Documents/data/MD22/nanotube.npz'
-data_path = '/Users/thorbenfrank/Documents/data/mol-data/dft/ethanol_dft.npz'
+data_path = '/Users/thorbenfrank/Documents/data/MD22/nanotube.npz'
+# data_path = '/Users/thorbenfrank/Documents/data/mol-data/dft/ethanol_dft.npz'
 save_path = 'ckpt_dir'
 
 ckpt_dir = os.path.join(save_path, 'module')
@@ -75,7 +75,7 @@ data_tuple = DataTuple(inputs=coach.inputs,
 train_ds = data_tuple(d['train'])
 valid_ds = data_tuple(d['valid'])
 
-obs = [Energy(prop_keys=prop_keys, zbl_repulsion=False)]
+obs = [Energy(prop_keys=prop_keys, zbl_repulsion=True)]
 net = So3krates(F=32,
                 n_layer=2,
                 prop_keys=prop_keys,
