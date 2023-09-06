@@ -15,6 +15,7 @@ from mlff.data import DataSet
 from mlff.md.integrator import NoseHoover, Langevin, VelocityVerlet
 from mlff.md.simulate import Simulator
 from mlff.random.random import set_seeds
+
 logging.basicConfig(level=logging.INFO)
 
 ns = 10 ** 6 * fs
@@ -436,9 +437,15 @@ def run_md():
                                                  temperature=temperature,
                                                  calculator=calc)
         elif _thermostat == 'langevin':
+            integratorx = mdx.LangevinX.create(timestep=time_step,
+                                               temperature=temperature,
+                                               calculator=calc,
+                                               friction=friction)
+        elif _thermostat == 'langevin_baoab':
             integratorx = mdx.BAOABLangevinX.create(timestep=time_step,
                                                     temperature=temperature,
-                                                    calculator=calc)
+                                                    calculator=calc,
+                                                    gamma=friction)
         elif _thermostat == 'velocity_verlet':
             integratorx = mdx.VelocityVerletX.create(timestep=time_step,
                                                      calculator=calc)
