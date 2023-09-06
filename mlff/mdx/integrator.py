@@ -6,6 +6,7 @@ from collections import namedtuple
 from flax import struct
 from .atoms import AtomsX
 from .calculator import CalculatorX
+from .utils import zero_rotation, zero_translation
 
 from typing import Any, Callable
 
@@ -171,15 +172,17 @@ class BAOABLangevinX:
     prng_key: Any
 
     fixcm: bool = struct.field(pytree_node=False)
+    fixrot: bool = struct.field(pytree_node=False, default=True)
 
     @classmethod
-    def create(cls, timestep, temperature, calculator, gamma: float = 1e-1, fixcm: bool = True, seed: int = 0):
+    def create(cls, timestep, temperature, calculator, gamma: float = 1e-1, fixcm: bool = True, fixrot: bool = True, seed: int = 0):
         rng = jax.random.PRNGKey(seed)
         return BAOABLangevinX(timestep=timestep,
                               temperature=temperature,
                               calculator=calculator,
                               gamma=gamma,
                               fixcm=fixcm,
+                              fixrot=fixrot,
                               prng_key=rng)
 
     def step(self, atoms: AtomsX):
@@ -194,12 +197,16 @@ class BAOABLangevinX:
             rnd0, rnd1 = jax.random.split(self.prng_key, num=2)
             p_rnd = p_dist.sample(rnd0)
 
-            if self.fixcm:
-                p_rnd -= p_rnd.sum(axis=0, keepdims=True) / x.get_number_of_atoms()
+            # if self.fixcm:
+            #     p_rnd -= p_rnd.sum(axis=0, keepdims=True) / x.get_number_of_atoms()
 
             # update the atoms momenta
             x = x.update_momenta(momenta=p_rnd)
-
+            if self.fixcm:
+                x = zero_translation(x, preserve_temperature=False)
+            if self.fixrot:
+                x = zero_rotation(x, preserve_temperature=False)
+                
             # return new atoms object and new rng key
             return x, rnd1
 
