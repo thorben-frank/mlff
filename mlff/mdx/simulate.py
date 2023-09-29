@@ -36,6 +36,7 @@ class SimulatorX:
         dataset = {
             'positions': DataSetEntry(chunk_length=1, shape=(self.run_interval, self.n_atoms, 3), dtype=np.float32),
             'velocities': DataSetEntry(chunk_length=1, shape=(self.run_interval, self.n_atoms, 3), dtype=np.float32),
+            'forces': DataSetEntry(chunk_length=1, shape=(self.run_interval, self.n_atoms, 3), dtype=np.float32),
             'atomic_numbers': DataSetEntry(chunk_length=1, shape=(self.n_atoms,), dtype=np.int32),
             'temperature': DataSetEntry(chunk_length=1, shape=(self.run_interval,), dtype=np.float32),
             'kinetic_energy': DataSetEntry(chunk_length=1, shape=(self.run_interval,), dtype=np.float32),
@@ -61,9 +62,11 @@ class SimulatorX:
             e_kin = atoms.get_kinetic_energy()
             temperature = atoms.get_temperature() / jnp.asarray(units.kB)
             potential_energy = properties['energy']
+            forces = properties['forces']
             stats = {'kinetic_energy': e_kin,
                      'temperature': temperature,
-                     'potential_energy': potential_energy}
+                     'potential_energy': potential_energy,
+                     'forces': forces}
             return stats
 
         def _step(x, aux):
