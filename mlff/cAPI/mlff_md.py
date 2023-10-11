@@ -149,6 +149,12 @@ def run_md():
     parser.add_argument('--mdx_opt_lr', type=float, required=False, default=1e-2,
                         help='Step size for steps during structure relaxation. Defaults to 1e-2.')
 
+    parser.add_argument('--mdx_langevin_fixrot', action="store_true", default=False,
+                        help='')
+
+    parser.add_argument('--mdx_langevin_fixcm', action="store_true", default=False,
+                        help='')
+
     args = parser.parse_args()
 
     # Read arguments
@@ -445,7 +451,9 @@ def run_md():
             integratorx = mdx.BAOABLangevinX.create(timestep=time_step,
                                                     temperature=temperature,
                                                     calculator=calc,
-                                                    gamma=friction)
+                                                    gamma=friction,
+                                                    fixrot=args.mdx_langevin_fixrot,
+                                                    fixcm=args.mdx_langevin_fixcm)
         elif _thermostat == 'velocity_verlet':
             integratorx = mdx.VelocityVerletX.create(timestep=time_step,
                                                      calculator=calc)
