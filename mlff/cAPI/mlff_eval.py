@@ -249,12 +249,20 @@ def evaluate():
         test_data = unit_convert_data(test_data, table=conversion_table)
         test_data_set = DataSet(prop_keys=prop_keys, data=test_data)
 
-        test_data_set.random_split(n_train=0,
-                                   n_valid=0,
-                                   n_test=n_test,
-                                   mic=mic,
-                                   training=False,
-                                   r_cut=r_cut)
+        test_data_set.index_split(data_idx_train=[],
+                                  data_idx_valid=[],
+                                  data_idx_test=np.arange(n_test),
+                                  mic=mic,
+                                  training=False,
+                                  r_cut=r_cut)
+
+        # test_data_set.random_split(n_train=0,
+        #                            n_valid=0,
+        #                            n_test=n_test,
+        #                            mic=mic,
+        #                            training=False,
+        #                            r_cut=r_cut)
+
         d_test = test_data_set.get_data_split()['test']
 
     elif apply_to is not None and from_split is not None:
@@ -304,9 +312,14 @@ def evaluate():
     with open(os.path.join(ckpt_dir, f'metrics_on_{evaluate_on}.json'), 'w') as f:
         json.dump(test_metrics, f, indent=1)
     if save_predictions_to is not None:
-        p = Path(save_predictions_to)
-        _save_predictions_to = f'{p.stem}_on_{evaluate_on}{p.suffix}'
-        np.savez(os.path.join(ckpt_dir, _save_predictions_to), **test_obs_pred)
+        if apply_to is None:
+            p = Path(save_predictions_to)
+            _save_predictions_to = f'{p.stem}_on_{evaluate_on}{p.suffix}'
+            np.savez(os.path.join(ckpt_dir, _save_predictions_to), **test_obs_pred)
+        else:
+            p = Path(save_predictions_to)
+            _save_predictions_to = f'{p.stem}{p.suffix}'
+            np.savez(os.path.join(ckpt_dir, _save_predictions_to), **test_obs_pred)
 
 
 if __name__ == '__main__':
