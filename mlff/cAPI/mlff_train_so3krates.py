@@ -452,7 +452,7 @@ def train_so3krates():
         params = net.init(jax.random.PRNGKey(coach.net_seed), inputs)
     else:
         print(f"Restarting training from {restart_from_ckpt_dir}.")
-        params = load_params_from_ckpt_dir(ckpt_dir)
+        params = load_params_from_ckpt_dir(restart_from_ckpt_dir)
 
     train_state, h_train_state = create_train_state(net,
                                                     params,
