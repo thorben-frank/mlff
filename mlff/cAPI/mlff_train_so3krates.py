@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Dict
 from ase.units import *
 
-from mlff.io import create_directory, bundle_dicts, save_dict
+from mlff.io import create_directory, bundle_dicts, save_dict, load_params_from_ckpt_dir
 from mlff.training import Coach, Optimizer, get_loss_fn, create_train_state
 from mlff.data import DataTuple, DataSet
 from mlff.cAPI.process_argparse import StoreDictKeyPair
@@ -76,6 +76,10 @@ def train_so3krates():
                         metavar='{"key": value, "key1": value1, ...}',
                         help='Options for the checkpoint manager. See '
                              'https://github.com/google/orbax/blob/main/docs/checkpoint.md for all options.')
+
+    parser.add_argument('--restart_from_ckpt_dir', type=str, required=False, default=None,
+                        help='Path to a checkpoint directory from which to load model parameters and start the '
+                             'training.')
 
     # Model Arguments
     parser.add_argument('--r_cut', type=float, required=False, default=5., help='Local neighborhood cutoff.')
@@ -189,6 +193,11 @@ def train_so3krates():
         ckpt_dir = (Path(os.getcwd()).absolute().resolve() / 'module').as_posix()
     else:
         ckpt_dir = (Path(args.ckpt_dir).absolute().resolve()).as_posix()
+
+    restart_from_ckpt_dir = None
+    if args.restart_from_ckpt_dir is not None:
+        restart_from_ckpt_dir = (Path(args.restart_from_ckpt_dir).absolute().resolve()).as_posix()
+        assert restart_from_ckpt_dir != ckpt_dir
 
     if Path(ckpt_dir).exists():
         raise FileExistsError(f'Checkpoint directory {ckpt_dir} already exists.')
@@ -336,7 +345,6 @@ def train_so3krates():
     else:
         scales = None
 
-
     n_heads = args.H
 
     so3krates_layer_kwargs = {'degrees': degrees,
@@ -440,7 +448,12 @@ def train_so3krates():
     valid_ds = data_tuple(d['valid'])
 
     inputs = jax.tree_map(lambda x: jnp.array(x[0, ...]), train_ds[0])
-    params = net.init(jax.random.PRNGKey(coach.net_seed), inputs)
+    if restart_from_ckpt_dir is None:
+        params = net.init(jax.random.PRNGKey(coach.net_seed), inputs)
+    else:
+        print(f"Restarting training from {restart_from_ckpt_dir}.")
+        params = load_params_from_ckpt_dir(ckpt_dir)
+
     train_state, h_train_state = create_train_state(net,
                                                     params,
                                                     tx,
