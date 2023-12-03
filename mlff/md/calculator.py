@@ -4,6 +4,7 @@ import numpy as np
 import logging
 import os
 
+from collections import namedtuple
 from typing import Any, Dict
 
 from ase.calculators.calculator import Calculator
@@ -18,6 +19,9 @@ from mlff.geometric import coordinates_to_distance_matrix, coordinates_to_distan
 from mlff.padding.padding import pad_indices
 from mlff.io import read_json, load_params_from_ckpt_dir
 
+SpatialPartitioning = namedtuple(
+    "SpatialPartitioning", ("allocate_fn", "update_fn", "cutoff", "skin", "capacity_multiplier")
+)
 
 logging.basicConfig(level=logging.INFO)
 
@@ -62,6 +66,7 @@ class mlffCalculator(Calculator):
             scales: Dict,
             E_to_eV: float = 1.,
             F_to_eV_Ang: float = 1.,
+            capacity_multiplier: float = 1.25,
             n_interactions_max: int = None,
             r_cut: int = None,
             mic: str = None,
@@ -102,6 +107,8 @@ class mlffCalculator(Calculator):
         self.scales = scales
         self.calculate_stress = calculate_stress
         self.dtype = dtype
+
+        self.capacity_multiplier = capacity_multiplier
 
         def scale(k, v):
             return np.asarray(self.scales[k]['scale'], self.dtype) * v
@@ -180,6 +187,9 @@ class mlffCalculator(Calculator):
 
         self.energy_and_force_and_stress_fn = jax.jit(jax.vmap(energy_and_force_and_stress_fn))
 
+        self.neighbors = None
+        self.spatial_partitioning = None
+
         self.idx_pad_fn = lambda x: x
         if n_interactions_max is not None:
             if self.mic == 'bins':
@@ -213,33 +223,32 @@ class mlffCalculator(Calculator):
     def calculate(self, atoms=None, *args, **kwargs):
         super(mlffCalculator, self).calculate(atoms, *args, **kwargs)
 
-        R = np.array(atoms.get_positions())  # shape: (n,3)
-        z = np.array(atoms.get_atomic_numbers())  # shape: (n)
-        # from mlff.geometric import coordinates_to_distance_matrix
-        # logging.warning(coordinates_to_distance_matrix(R[None]))
-        cell = None
-        if self.mic is not None:
-            cell = np.array(atoms.get_cell())  # shape: (3,3)
-            pbc = np.array(atoms.get_pbc())  # shape: (3)
-            if self.mic == "bins":
-                neigh_indx = _md_get_pbc_indices(R=R[None], r_cut=self.r_cut, cell=cell[None], pbc=pbc)
-                neigh_indx = jax.tree_map(lambda x: x.squeeze(), neigh_indx)
-            elif self.mic == 'naive':
-                assert pbc.sum() == 3
-                assert self.r_cut < 0.5 * min(np.linalg.norm(cell, axis=-1))
-                neigh_indx = _get_md_indices(R=R[None], z=z[None], r_cut=self.r_cut, cell=cell[None], mic=True)
-            else:
-                raise ValueError(f"{self.mic} is not a valid attribute for `mic` in `mlffCalculator`.")
-
+        R = jnp.array(atoms.get_positions(), dtype=self.dtype)  # shape: (n,3)
+        z = jnp.array(atoms.get_atomic_numbers(), dtype=jnp.int16)  # shape: (n)
+        if self.mic:
+            cell = jnp.array(np.array(atoms.get_cell()), dtype=self.dtype)  # (3,3)
         else:
-            neigh_indx = _get_md_indices(R=R[None], z=z[None], r_cut=self.r_cut)
+            cell = None
 
-        neigh_indx = jax.tree_map(lambda x: x[None], neigh_indx)  # add batch dimension
-        neigh_indx = self.idx_pad_fn(neigh_indx)  # pad the indices to avoid recompiling
+        if self.spatial_partitioning is None:
+            self.neighbors, self.spatial_partitioning = neighbor_list(positions=R,
+                                                                      cell=cell,
+                                                                      cutoff=self.r_cut,
+                                                                      skin=0.,
+                                                                      capacity_multiplier=self.capacity_multiplier)
 
-        input_dict = {self.R_key: R, self.z_key: z}
-        input_dict = jax.tree_map(lambda x: x[None], input_dict)  # add batch dimension
-        input_dict.update(neigh_indx)
+        neighbors = self.spatial_partitioning.update_fn(R, self.neighbors)
+        if neighbors.overflow:
+            raise RuntimeError('Spatial overflow.')
+        else:
+            self.neighbors = neighbors
+
+        input_dict = {self.R_key: R,
+                      self.z_key: z,
+                      'idx_i': neighbors.centers,
+                      'idx_j': neighbors.others}
+
+        input_dict = add_batch_dim(input_dict)  # add batch dimension
 
         if self.mic is not None:
             input_dict.update({self.unit_cell_key: cell[None]})
@@ -267,6 +276,11 @@ class mlffCalculator(Calculator):
             self.results = {'energy': nn_out['energy'] * self.E_to_eV,
                             'forces': nn_out['force'] * self.F_to_eV_Ang,
                             'free_energy': nn_out['energy'] * self.E_to_eV}
+
+
+@jax.jit
+def add_batch_dim(tree):
+    return jax.tree_map(lambda x: x[None], tree)
 
 
 def _get_md_indices(R: np.ndarray, z: np.ndarray, r_cut: float, cell: np.ndarray = None, mic: bool = False):
@@ -322,6 +336,43 @@ def _get_md_indices(R: np.ndarray, z: np.ndarray, r_cut: float, cell: np.ndarray
                                         axis=-2))
 
     return {'idx_i': pad_idx_i, 'idx_j': pad_idx_j}
+
+
+def neighbor_list(positions: jnp.ndarray, cutoff: float, skin: float, cell: jnp.ndarray = None,
+                  capacity_multiplier: float = 1.25):
+    """
+
+    Args:
+        positions ():
+        cutoff ():
+        skin ():
+        cell (): ASE cell.
+        capacity_multiplier ():
+
+    Returns:
+
+    """
+    try:
+        from glp.neighborlist import quadratic_neighbor_list
+    except ImportError:
+        raise ImportError('For neighborhood list, please install the glp package from ...')
+    # Convenience interface for system but with for atomsX adapted update_fn
+    if cell is not None:
+        cell_T = cell.T
+    else:
+        cell_T = None
+
+    allocate, update = quadratic_neighbor_list(
+        cell_T, cutoff, skin, capacity_multiplier=capacity_multiplier
+    )
+
+    neighbors = allocate(positions)
+
+    return neighbors, SpatialPartitioning(allocate_fn=allocate,
+                                          update_fn=jax.jit(update),
+                                          cutoff=cutoff,
+                                          skin=skin,
+                                          capacity_multiplier=capacity_multiplier)
 
 
 def _md_get_pbc_indices(R: np.ndarray,
