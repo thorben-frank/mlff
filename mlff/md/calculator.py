@@ -3,6 +3,7 @@ import jax.numpy as jnp
 import numpy as np
 import logging
 import os
+import functools
 
 from collections import namedtuple
 from typing import Any, Dict
@@ -248,6 +249,7 @@ class mlffCalculator(Calculator):
                       'idx_i': neighbors.centers,
                       'idx_j': neighbors.others}
 
+        input_dict = apply_neighbor_convention(input_dict)
         input_dict = add_batch_dim(input_dict)  # add batch dimension
 
         if self.mic is not None:
@@ -281,6 +283,14 @@ class mlffCalculator(Calculator):
 @jax.jit
 def add_batch_dim(tree):
     return jax.tree_map(lambda x: x[None], tree)
+
+@jax.jit
+def apply_neighbor_convention(tree):
+    idx_i = jnp.where(tree['idx_i'] < len(tree['z']), tree['idx_i'], -1)
+    idx_j = jnp.where(tree['idx_j'] < len(tree['z']), tree['idx_j'], -1)
+    tree['idx_i'] = idx_i
+    tree['idx_j'] = idx_j
+    return tree
 
 
 def _get_md_indices(R: np.ndarray, z: np.ndarray, r_cut: float, cell: np.ndarray = None, mic: bool = False):
