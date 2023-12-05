@@ -121,7 +121,7 @@ def run_md():
     parser.add_argument('--mdx_unfolding_skin', type=float, required=False, default=0.,
                         help='Skin for spatial unfolding. Defaults to 0.')
 
-    parser.add_argument('--mdx_capacity_multiplier', type=float, required=False, default=1.25,
+    parser.add_argument('--capacity_multiplier', type=float, required=False, default=1.25,
                         help='Capacity multiplier for neighborhood calculation. Defaults to 1.25')
 
     parser.add_argument('--mdx_scan_interval', type=int, required=False, default=1000.,
@@ -190,7 +190,7 @@ def run_md():
     if mdx_skin != 0:
         raise NotImplementedError('--mdx_skin != 0, not supported yet!')
 
-    mdx_capacity_multiplier = args.mdx_capacity_multiplier
+    capacity_multiplier = args.capacity_multiplier
     mdx_scan_interval = args.mdx_scan_interval
 
     if args.mdx_dtype == 'x64':
@@ -342,11 +342,11 @@ def run_md():
     scales = read_json(os.path.join(ckpt_dir, 'scales.json'))
 
     if not use_mdx:
+        from mlff import mdx
 
-        calc = mlffCalculator(params=params,
-                              stack_net=net,
-                              scales=scales,
-                              n_interactions_max=n_interactions_max,
+        potential = mdx.MLFFPotential.create_from_ckpt_dir(ckpt_dir=ckpt_dir, dtype=_mdx_dtype)
+        calc = mlffCalculator(potential=potential,
+                              capacity_multiplier=capacity_multiplier,
                               F_to_eV_Ang=default_access(conversion_table, key=F_key, default=eV),
                               E_to_eV=default_access(conversion_table, key=E_key, default=eV),
                               mic=mic)
@@ -399,7 +399,7 @@ def run_md():
         from mlff import mdx
 
         MaxwellBoltzmannDistribution(molecule, temp=temperature_init)
-        print(_mdx_dtype)
+
         potential = mdx.MLFFPotential.create_from_ckpt_dir(ckpt_dir=ckpt_dir, dtype=_mdx_dtype)
 
         # initialize the atomsx object
@@ -408,7 +408,7 @@ def run_md():
         # initialize spatial partitioning for structure relaxation
         atomsx = atomsx.init_spatial_partitioning(cutoff=potential.cutoff,
                                                   skin=mdx_skin,
-                                                  capacity_multiplier=mdx_capacity_multiplier
+                                                  capacity_multiplier=capacity_multiplier
                                                   )
 
         if args.mdx_opt is not None:
@@ -433,7 +433,7 @@ def run_md():
 
         atomsx = atomsx.init_spatial_partitioning(cutoff=potential.cutoff,
                                                   skin=mdx_skin,
-                                                  capacity_multiplier=mdx_capacity_multiplier
+                                                  capacity_multiplier=capacity_multiplier
                                                   )
 
         # choose an integrator
