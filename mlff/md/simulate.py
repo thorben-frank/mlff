@@ -108,7 +108,7 @@ class Simulator:
             ekin = self.atoms.get_kinetic_energy()
             temp = ekin / (1.5 * units.kB * self.natoms)
 
-            if step % 100 == 0:
+            if step % self.save_frequency == 0:
                 bar.set_description(f"E_kin: {ekin:10.3f}, Temp: {temp:10.3f}, Time: {t:10.3f} (ps)", refresh=True)
 
             if temp < self.min_temp or temp > self.max_temp:
