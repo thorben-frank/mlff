@@ -124,6 +124,9 @@ def run_md():
     parser.add_argument('--capacity_multiplier', type=float, required=False, default=1.25,
                         help='Capacity multiplier for neighborhood calculation. Defaults to 1.25')
 
+    parser.add_argument('--mdx_capacity_multiplier', type=float, required=False, default=None,
+                        help='Capacity multiplier for neighborhood calculation. Defaults to 1.25')
+
     parser.add_argument('--mdx_scan_interval', type=int, required=False, default=1000.,
                         help='Scan interval for the number of MD steps. Defaults to 1000.')
 
@@ -189,6 +192,9 @@ def run_md():
     mdx_skin = args.mdx_skin
     if mdx_skin != 0:
         raise NotImplementedError('--mdx_skin != 0, not supported yet!')
+
+    if args.mdx_capacity_multiplier is not None:
+        raise DeprecationWarning('`--mdx_capacity_multiplier` is outdated. Use `--capacity_multiplier` instead.')
 
     capacity_multiplier = args.capacity_multiplier
     mdx_scan_interval = args.mdx_scan_interval
