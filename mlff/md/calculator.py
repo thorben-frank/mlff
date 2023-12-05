@@ -39,7 +39,7 @@ class mlffCalculator(Calculator):
                              *args,
                              **kwargs):
 
-        mlff_potential = MLFFPotential().create_from_ckpt_dir(ckpt_dir=ckpt_dir)
+        mlff_potential = MLFFPotential.create_from_ckpt_dir(ckpt_dir=ckpt_dir)
 
         return cls(potential=mlff_potential,
                    calculate_stress=calculate_stress,
