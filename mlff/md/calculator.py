@@ -35,6 +35,7 @@ class mlffCalculator(Calculator):
                              calculate_stress: bool = False,
                              E_to_eV: float = 1.,
                              F_to_eV_Ang: float = 1.,
+                             capacity_multiplier: float = 1.25,
                              dtype: np.dtype = np.float64,
                              *args,
                              **kwargs):
@@ -45,6 +46,7 @@ class mlffCalculator(Calculator):
                    calculate_stress=calculate_stress,
                    E_to_eV=E_to_eV,
                    F_to_eV_Ang=F_to_eV_Ang,
+                   capacity_multiplier=capacity_multiplier,
                    dtype=dtype,
                    *args,
                    **kwargs)
