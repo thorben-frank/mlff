@@ -11,6 +11,7 @@ setup(
         # "jax == 0.4.8",
         "flax",
         "jaxopt",
+        "jraph",
         "optax",
         "orbax-checkpoint",
         "portpicker",

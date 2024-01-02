@@ -270,7 +270,7 @@ def train_so3krates():
             data = dict(np.load(d))
         else:
             load_stress = pn.stress in targets
-            data_loader = AseDataLoader(d, load_stress=load_stress)
+            data_loader = AseDataLoader(d, load_stress=load_stress, neighbors_format='dense')
             data = data_loader.load_all()
 
         data = unit_convert_data(data, table=conversion_table)
