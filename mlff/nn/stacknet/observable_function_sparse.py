@@ -44,6 +44,8 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
                   atomic_numbers: jnp.ndarray,
                   idx_i: jnp.ndarray,
                   idx_j: jnp.ndarray,
+                  cell: jnp.ndarray = None,
+                  cell_offset: jnp.ndarray = None,
                   batch_segments: jnp.ndarray = None,
                   node_mask: jnp.ndarray = None,
                   graph_mask: jnp.ndarray = None):
@@ -59,6 +61,8 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
                       atomic_numbers=atomic_numbers,
                       idx_i=idx_i,
                       idx_j=idx_j,
+                      cell=cell,
+                      cell_offset=cell_offset,
                       batch_segments=batch_segments,
                       node_mask=node_mask,
                       graph_mask=graph_mask
@@ -73,6 +77,8 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
                             atomic_numbers: jnp.ndarray,
                             idx_i: jnp.ndarray,
                             idx_j: jnp.ndarray,
+                            cell: jnp.ndarray = None,
+                            cell_offset: jnp.ndarray = None,
                             batch_segments: jnp.ndarray = None,
                             node_mask: jnp.ndarray = None,
                             graph_mask: jnp.ndarray = None):
@@ -84,6 +90,8 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
                           atomic_numbers,
                           idx_i,
                           idx_j,
+                          cell,
+                          cell_offset,
                           batch_segments,
                           node_mask,
                           graph_mask
