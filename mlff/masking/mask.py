@@ -52,3 +52,8 @@ def safe_scale(x: jnp.ndarray, scale: jnp.ndarray, placeholder: float = 0):
     """
     scale_fn = lambda inputs: scale * inputs
     return safe_mask(mask=scale != 0, fn=scale_fn, operand=x, placeholder=placeholder)
+
+
+def safe_norm(x: jnp.ndarray, axis: int = 0, placeholder: float = 0.):
+    y = jnp.sum(jnp.square(x), axis=axis)
+    return safe_mask(mask=y > 0, fn=jnp.sqrt, operand=y, placeholder=placeholder)

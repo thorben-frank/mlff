@@ -23,14 +23,6 @@ def switching_fn(x, x_on, x_off):
     return sigma(1 - c) / (sigma(1 - c) + sigma(c))
 
 
-def get_observable_module(name, h):
-    if name == 'energy':
-        return Energy(**h)
-    else:
-        msg = "No observable module implemented for `module_name={}`".format(name)
-        raise ValueError(msg)
-
-
 class Energy(BaseSubModule):
     prop_keys: Dict
     per_atom_scale: Sequence[float] = None
