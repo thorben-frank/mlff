@@ -34,7 +34,7 @@ class CustomTrainState(struct.PyTreeNode):
     For more exotic usecases (e.g. multiple optimizers) it's probably best to
     fork the class and modify it.
 
-    Args:
+    Attributes:
         step: Counter starts at 0 and is incremented by every call to `.apply_gradients()`.
         apply_fn: Usually set to `model.apply()`. Kept in this dataclass for
             convenience to have a shorter params list for the `train_step()` function in your training loop.
