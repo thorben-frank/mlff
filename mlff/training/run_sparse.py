@@ -4,6 +4,8 @@ import jraph
 from mlff.utils import training_utils
 import numpy as np
 from orbax import checkpoint
+from pathlib import Path
+from typing import Dict
 import wandb
 
 
@@ -20,11 +22,12 @@ def run_training_sparse(
         num_epochs: int = 100,
         ckpt_dir: str = None,
         ckpt_manager_options: dict = None,
-        eval_every_t: int = None,
+        eval_every_t: int = 1,
         allow_restart=False,
         training_seed: int = 0,
         model_seed: int = 0,
-        use_wandb: bool = True
+        use_wandb: bool = True,
+        wandb_init_args: Dict = None
 ):
     """
     Run training.
@@ -47,12 +50,21 @@ def run_training_sparse(
         training_seed (int): Random seed for shuffling of training data.
         model_seed (int): Random seed for model initialization.
         use_wandb (bool): Log statistics to WeightsAndBias.
+        wandb_init_args (Dict): Arguments passed to `wandb.init()`.
 
     Returns:
 
     """
     numpy_rng = np.random.RandomState(seed=training_seed)
     jax_rng = jax.random.PRNGKey(seed=model_seed)
+
+    # Initialize weights and bias run.
+    if use_wandb:
+        wandb.init(**wandb_init_args) if wandb_init_args is not None else wandb.init()
+
+    # Create checkpoint directory.
+    ckpt_dir = Path(ckpt_dir).resolve().absolute()
+    ckpt_dir.mkdir(exist_ok=True)
 
     # Create orbax CheckpointManager.
     if ckpt_manager_options is None:
@@ -76,6 +88,10 @@ def run_training_sparse(
 
     processed_graphs = 0
     processed_nodes = 0
+    step = 0
+
+    params = None
+    opt_state = None
     for epoch in range(num_epochs):
         # Shuffle the training data.
         numpy_rng.shuffle(training_data)
@@ -88,9 +104,6 @@ def run_training_sparse(
             n_graph=batch_max_num_graphs
         )
 
-        params = None
-        opt_state = None
-        step = 0
         # Start iteration over batched graphs.
         for graph_batch_training in iterator_training:
             batch_training = graph_to_batch_fn(graph_batch_training)
@@ -98,8 +111,8 @@ def run_training_sparse(
             processed_nodes += batch_max_num_nodes - jraph.get_number_of_padding_with_graphs_nodes(graph_batch_training)
             batch_training = jax.tree_map(jnp.array, batch_training)
 
-            # In the first epoch, initialize the parameters or load from existing checkpoint.
-            if epoch == 0:
+            # In the first step, initialize the parameters or load from existing checkpoint.
+            if step == 0:
                 # Check if checkpoint already exists.
                 latest_step = ckpt_mngr.latest_step()
                 if latest_step is not None:
@@ -111,7 +124,7 @@ def run_training_sparse(
                         step += latest_step
                         print(f'Re-start training from {latest_step}.')
                     else:
-                        raise RuntimeError(f'{ckpt_dir} already exists at step {latest_step}. If you want to re-start'
+                        raise RuntimeError(f'{ckpt_dir} already exists at step {latest_step}. If you want to re-start '
                                            f'training, set `allow_restart=True`.')
                 else:
                     params = model.init(jax_rng, batch_training)
@@ -123,6 +136,7 @@ def run_training_sparse(
             assert opt_state is not None
 
             params, train_metrics = training_step_fn(params, opt_state, batch_training)
+            step += 1
             train_metrics_np = jax.device_get(train_metrics)
 
             # Log training metrics.

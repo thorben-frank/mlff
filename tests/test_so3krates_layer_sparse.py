@@ -5,7 +5,7 @@ import jax.numpy as jnp
 
 import numpy.testing as npt
 
-from mlff.nn import SO3kratesLayerSparse
+from mlff.nn.layer import SO3kratesLayerSparse
 from mlff.nn import GeometryEmbedSparse
 
 rng1, rng2 = jax.random.split(jax.random.PRNGKey(0), 2)

@@ -1,11 +1,8 @@
 import jax.numpy as jnp
 import jax
-import logging
 
 from typing import (Any, Callable, Dict, Sequence, Tuple)
 from flax.core.frozen_dict import FrozenDict
-
-# logging.basicConfig(level=logging.INFO)
 
 Array = Any
 StackNetSparse = Any
@@ -81,7 +78,9 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
                             cell_offset: jnp.ndarray = None,
                             batch_segments: jnp.ndarray = None,
                             node_mask: jnp.ndarray = None,
-                            graph_mask: jnp.ndarray = None):
+                            graph_mask: jnp.ndarray = None,
+                            *args,
+                            **kwargs):
         (_, energy), forces = jax.value_and_grad(
             energy_fn,
             argnums=1,

@@ -5,7 +5,7 @@ import jax.numpy as jnp
 import jraph
 
 from mlff.geometric import get_rotation_matrix
-from mlff.nn import StackNetSparse
+from mlff.nn.stacknet import StackNetSparse
 from mlff.nn.embed import GeometryEmbedSparse, AtomTypeEmbedSparse
 from mlff.nn.layer import SO3kratesLayerSparse
 from mlff.nn.observable import EnergySparse
