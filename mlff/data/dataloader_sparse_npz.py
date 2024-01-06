@@ -6,12 +6,11 @@ import jax.numpy as jnp
 import jraph
 import numpy as np
 
-
 @dataclass
 class NpzDataLoaderSparse:
     input_file: str
 
-    def load_all(self, cutoff: float) -> List:
+    def load_all(self, cutoff: float):
         print(f"Read data from {self.input_file} ...")
         np_data = np.load(self.input_file)
 
@@ -19,14 +18,20 @@ class NpzDataLoaderSparse:
         data_iterator = zip(*(np_data[k] for k in keys))
 
         loaded_data = []
+        max_num_of_nodes = 0
+        max_num_of_edges = 0
         for i, tup in enumerate(data_iterator):
             entry = {k: v for (k, v) in zip(keys, tup)}
             graph = entry_to_jraph(entry, cutoff=cutoff)
+            num_nodes = len(graph.nodes['atomic_numbers'])
+            num_edges = len(graph.receivers)
+            max_num_of_nodes = max_num_of_nodes if num_nodes <= max_num_of_nodes else num_nodes
+            max_num_of_edges = max_num_of_edges if num_edges <= max_num_of_edges else num_edges
             loaded_data.append(graph)
 
         print("... done!")
 
-        return loaded_data
+        return loaded_data, {'max_num_of_nodes': max_num_of_nodes, 'max_num_of_edges': max_num_of_edges}
 
 
 def entry_to_jraph(

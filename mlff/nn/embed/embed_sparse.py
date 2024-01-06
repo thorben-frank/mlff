@@ -9,9 +9,8 @@ import flax.linen as nn
 from mlff.nn.base.sub_module import BaseSubModule
 from mlff.masking.mask import safe_mask
 from mlff.masking.mask import safe_norm
-from mlff.basis_function.radial import get_rbf_fn
 from mlff.cutoff_function import add_cell_offsets_sparse
-from mlff.cutoff_function import get_cutoff_fn
+from mlff import utils
 from mlff.basis_function.spherical import init_sph_fn
 
 
@@ -28,12 +27,11 @@ class GeometryEmbedSparse(BaseSubModule):
     def setup(self):
         self.ylm_fns = [init_sph_fn(y) for y in self.degrees]
 
-        self.rbf_fn = get_rbf_fn(self.radial_basis_fn)(
-            n_rbf=self.num_radial_basis_fn,
-            r_cut=self.cutoff
-        )
+        self.rbf_fn = getattr(
+            utils.radial_basis_fn, self.radial_basis_fn
+        )(n_rbf=self.num_radial_basis_fn, r_cut=self.cutoff)
 
-        self.cut_fn = partial(get_cutoff_fn(self.cutoff_fn), r_cut=self.cutoff)
+        self.cut_fn = partial(getattr(utils.cutoff_fn, self.cutoff_fn), r_cut=self.cutoff)
 
     def __call__(self, inputs: Dict):
         """

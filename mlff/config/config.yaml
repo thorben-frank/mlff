@@ -1,0 +1,56 @@
+workdir: first_experiment
+data:
+  filepath: null
+  energy_unit: eV
+  length_unit: Angstrom
+  energy_shifts: null
+  split_seed: 0
+model:
+  num_layers: 2
+  num_features: 128
+  num_heads: 4
+  num_features_head: 32
+  degrees:
+    - 1
+    - 2
+    - 3
+    - 4
+  cutoff: 5.0
+  cutoff_fn: exponential
+  num_radial_basis_fn: 16
+  radial_basis_fn: bernstein
+  activation_fn: silu
+  qk_non_linearity: silu
+  residual_mlp_1: true
+  residual_mlp_2: true
+  layer_normalization_1: false
+  layer_normalization_2: false
+  layers_behave_like_identity_fn_at_init: false
+  output_is_zero_at_init: true
+  input_convention: positions
+optimizer:
+  name: adam
+  learning_rate: 0.001
+  learning_rate_schedule: exponential_decay
+  learning_rate_schedule_args:
+    decay_rate: 0.75
+    transition_steps: 125000
+  num_of_nans_to_ignore: 0
+training:
+  allow_restart: false
+  num_epochs: 100
+  num_train: 950
+  num_valid: 50
+  batch_max_num_nodes: null
+  batch_max_num_edges: null
+  batch_max_num_graphs: 6
+  eval_every_num_steps: 1000
+  loss_weights:
+    energy: 0.01
+    forces: 0.99
+  model_seed: 0
+  training_seed: 0
+  wandb_init_args:
+    name: first_training_run
+    project: mlff
+    group: null

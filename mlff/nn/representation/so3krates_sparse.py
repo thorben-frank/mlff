@@ -1,14 +1,9 @@
 import jax
-import jax.numpy as jnp
-import jraph
-
-from mlff.geometric import get_rotation_matrix
 from mlff.nn.stacknet import StackNetSparse
 from mlff.nn.embed import GeometryEmbedSparse, AtomTypeEmbedSparse
 from mlff.nn.layer import SO3kratesLayerSparse
 from mlff.nn.observable import EnergySparse
-from mlff.utils import jraph_utils
-from typing import Callable, Sequence
+from typing import Sequence
 
 
 def init_so3krates_sparse(
@@ -18,7 +13,7 @@ def init_so3krates_sparse(
         num_features_head: int = 32,
         radial_basis_fn: str = 'bernstein',
         num_radial_basis_fn: int = 16,
-        cutoff_fn: str = 'exponential_cutoff_fn',
+        cutoff_fn: str = 'exponential',
         cutoff: float = 5.,
         degrees: Sequence[int] = [1, 2, 3, 4],
         residual_mlp_1: bool = True,
@@ -50,12 +45,12 @@ def init_so3krates_sparse(
         use_spherical_filter=i > 0,
         num_heads=num_heads,
         num_features_head=num_features_head,
-        qk_non_linearity=getattr(jax.nn, qk_non_linearity),
+        qk_non_linearity=getattr(jax.nn, qk_non_linearity) if qk_non_linearity != 'identity' else lambda u: u,
         residual_mlp_1=residual_mlp_1,
         residual_mlp_2=residual_mlp_2,
         layer_normalization_1=layer_normalization_1,
         layer_normalization_2=layer_normalization_2,
-        activation_fn=getattr(jax.nn, activation_fn),
+        activation_fn=getattr(jax.nn, activation_fn) if activation_fn != 'identity' else lambda u: u,
         behave_like_identity_fn_at_init=layers_behave_like_identity_fn_at_init
     ) for i in range(num_layers)]
 

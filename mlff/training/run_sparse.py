@@ -9,7 +9,7 @@ from typing import Dict
 import wandb
 
 
-def run_training_sparse(
+def fit(
         model,
         optimizer,
         loss_fn,

@@ -16,6 +16,8 @@ def unit_conversion(
         g.globals['energy'] = g.globals.get('energy') * _energy_unit
         g.nodes['forces'] = g.nodes.get('forces') * _energy_unit / _length_unit
         g.nodes['positions'] = g.nodes.get('positions') * _length_unit
+        if g.globals.get('stress') is not None:
+            raise NotImplementedError('Unit conversion for stress not implemented yet.')
         yield g
 
 

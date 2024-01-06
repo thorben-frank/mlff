@@ -30,3 +30,21 @@ def batch_info_fn(batched_graph: jraph.GraphsTuple):
                 graph_mask=graph_mask,
                 batch_segments=batch_segments,
                 num_of_non_padded_graphs=num_of_non_padded_graphs)
+
+
+@jax.jit
+def graph_to_batch_fn(graph: jraph.GraphsTuple):
+    batch = dict(
+        positions=graph.nodes.get('positions'),
+        atomic_numbers=graph.nodes.get('atomic_numbers'),
+        idx_i=graph.receivers,
+        idx_j=graph.senders,
+        cell=graph.edges.get('cell'),
+        cell_offset=graph.edges.get('cell_offset'),
+        energy=graph.globals.get('energy'),
+        forces=graph.nodes.get('forces'),
+        stress=graph.globals.get('stress')
+    )
+    batch_info = batch_info_fn(graph)
+    batch.update(batch_info)
+    return batch

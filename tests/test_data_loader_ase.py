@@ -10,8 +10,9 @@ def test_data_load_no_pbc():
     f = pkg_resources.resource_filename(__name__, filename)
 
     loader = AseDataLoaderSparse(input_file=f)
-    all_data = loader.load_all(cutoff=4.)
+    all_data, data_stats = loader.load_all(cutoff=4.)
     npt.assert_equal(len(all_data), 100)
+    npt.assert_equal(data_stats['max_num_of_nodes'], 24)
 
     npt.assert_(isinstance(all_data[0], jraph.GraphsTuple))
 
@@ -56,8 +57,9 @@ def test_data_load_with_pbc():
     f = pkg_resources.resource_filename(__name__, filename)
 
     loader = AseDataLoaderSparse(input_file=f)
-    all_data = loader.load_all(cutoff=4.)
+    all_data, data_stats = loader.load_all(cutoff=4.)
     npt.assert_equal(len(all_data), 50)
+    npt.assert_equal(data_stats['max_num_of_nodes'], 192)
 
     npt.assert_(isinstance(all_data[0], jraph.GraphsTuple))
 

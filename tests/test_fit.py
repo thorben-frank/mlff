@@ -1,31 +1,31 @@
 from ase import units
 import jax
 from mlff.nn import SO3kratesSparse
-from mlff.training.run_sparse import run_training_sparse
-from mlff.utils import training_utils
+from mlff import training_utils
+from mlff import jraph_utils
 from mlff.nn.stacknet.observable_function_sparse import get_energy_and_force_fn_sparse
-from mlff.data import AseDataLoaderSparse
+from mlff.data import NpzDataLoaderSparse
 from mlff.data import transformations
 import numpy as np
 import optax
 from pathlib import Path
 import pkg_resources
-
 import portpicker
+import wandb
 
 
-def test_run_training_sparse():
+def test_fit():
     port = portpicker.pick_unused_port()
     jax.distributed.initialize(f'localhost:{port}', num_processes=1, process_id=0)
 
-    filename = 'test_data/data_set.xyz'
+    filename = 'test_data/ethanol.npz'
     f = pkg_resources.resource_filename(__name__, filename)
 
-    loader = AseDataLoaderSparse(input_file=f)
-    all_data = loader.load_all(cutoff=4.)
+    loader = NpzDataLoaderSparse(input_file=f)
+    all_data, data_stats = loader.load_all(cutoff=5.)
 
-    num_train = 30
-    num_valid = 20
+    num_train = 100
+    num_valid = 50
 
     energy_unit = units.kcal / units.mol
     length_unit = units.Angstrom
@@ -58,6 +58,7 @@ def test_run_training_sparse():
     opt = optax.adam(learning_rate=1e-3)
 
     so3k = SO3kratesSparse(
+        cutoff=5.,
         num_features=32,
         num_features_head=8,
         num_heads=2,
@@ -69,17 +70,19 @@ def test_run_training_sparse():
         weights={'energy': 0.001, 'forces': 0.999}
     )
 
-    workdir = Path('_test_run_training_sparse').resolve().absolute()
+    workdir = Path('_test_run_training_sparse').expanduser().absolute().resolve()
     workdir.mkdir(exist_ok=True)
 
-    run_training_sparse(
+    wandb.init()
+    training_utils.fit(
         model=so3k,
         optimizer=opt,
         loss_fn=loss_fn,
-        graph_to_batch_fn=training_utils.graph_to_batch_fn,
+        graph_to_batch_fn=jraph_utils.graph_to_batch_fn,
         batch_max_num_edges=500,
         batch_max_num_nodes=50,
         batch_max_num_graphs=2,
+        eval_every_num_steps=100,
         training_data=list(training_data),
         validation_data=list(validation_data),
         ckpt_dir=workdir / 'checkpoints',

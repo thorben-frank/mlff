@@ -111,7 +111,7 @@ def test_translation_invariance():
     geometry_embed = GeometryEmbedSparse(degrees=[1, 2],
                                          radial_basis_fn='bernstein',
                                          num_radial_basis_fn=16,
-                                         cutoff_fn='exponential_cutoff_fn',
+                                         cutoff_fn='exponential',
                                          cutoff=2.5,
                                          input_convention='positions',
                                          prop_keys=None)
@@ -225,7 +225,7 @@ def test_rotation_equivariance():
     geometry_embed = GeometryEmbedSparse(degrees=[1, 2],
                                          radial_basis_fn='bernstein',
                                          num_radial_basis_fn=16,
-                                         cutoff_fn='exponential_cutoff_fn',
+                                         cutoff_fn='exponential',
                                          cutoff=2.5,
                                          input_convention='positions',
                                          prop_keys=None)

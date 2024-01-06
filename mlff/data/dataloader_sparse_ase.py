@@ -14,15 +14,21 @@ import jraph
 class AseDataLoaderSparse:
     input_file: str
 
-    def load_all(self, cutoff: float) -> List:
+    def load_all(self, cutoff: float):
         print(f"Read data from {self.input_file} ...")
         loaded_data = []
+        max_num_of_nodes = 0
+        max_num_of_edges = 0
         for a in tqdm(iread(self.input_file)):
             graph = ASE_to_jraph(a, cutoff=cutoff)
+            num_nodes = len(graph.nodes['atomic_numbers'])
+            num_edges = len(graph.receivers)
+            max_num_of_nodes = max_num_of_nodes if num_nodes <= max_num_of_nodes else num_nodes
+            max_num_of_edges = max_num_of_edges if num_edges <= max_num_of_edges else num_edges
             loaded_data.append(graph)
         print("... done!")
 
-        return loaded_data
+        return loaded_data, {'max_num_of_nodes': max_num_of_nodes, 'max_num_of_edges': max_num_of_edges}
 
 
 def ASE_to_jraph(
