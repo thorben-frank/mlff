@@ -79,7 +79,7 @@ def fit(
 
     ckpt_mngr = checkpoint.CheckpointManager(
         ckpt_dir,
-        {'params': checkpoint.AsyncCheckpointer(checkpoint.PyTreeCheckpointHandler())},
+        {'params': checkpoint.PyTreeCheckpointer()},
         options=options
     )
 
@@ -119,7 +119,7 @@ def fit(
                     if allow_restart:
                         params = ckpt_mngr.restore(
                             latest_step,
-                            {'params': checkpoint.AsyncCheckpointer(checkpoint.PyTreeCheckpointHandler())}
+                            {'params': checkpoint.PyTreeCheckpointHandler()}
                         )['params']
                         step += latest_step
                         print(f'Re-start training from {latest_step}.')
@@ -189,4 +189,4 @@ def fit(
             # Finished validation process.
 
     # Wait until checkpoint manager completes all save operations.
-    ckpt_mngr.wait_until_finished()
+    # ckpt_mngr.wait_until_finished()

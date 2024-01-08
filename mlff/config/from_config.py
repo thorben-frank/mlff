@@ -1,5 +1,4 @@
 from ase.units import *
-import jax
 import json
 from mlff import nn
 from mlff import training_utils
@@ -11,7 +10,6 @@ from ml_collections import config_dict
 import numpy as np
 from orbax import checkpoint
 from pathlib import Path
-import portpicker
 from typing import Sequence
 import wandb
 import yaml
@@ -60,9 +58,6 @@ def make_optimizer_from_config(config: config_dict.ConfigDict = None):
 
 
 def run_training(config: config_dict.ConfigDict):
-    port = portpicker.pick_unused_port()
-    jax.distributed.initialize(f'localhost:{port}', num_processes=1, process_id=0)
-
     data_filepath = config.data.filepath
     data_filepath = Path(data_filepath).expanduser().absolute().resolve()
 
@@ -127,8 +122,8 @@ def run_training(config: config_dict.ConfigDict):
     if config.training.batch_max_num_nodes is None:
         assert config.training.batch_max_num_edges is None
 
-        batch_max_num_nodes = data_stats['max_num_of_nodes'] * config.training.batch_max_num_graphs
-        batch_max_num_edges = data_stats['max_num_of_edges'] * config.training.batch_max_num_graphs
+        batch_max_num_nodes = data_stats['max_num_of_nodes'] * config.training.batch_max_num_graphs + 1
+        batch_max_num_edges = data_stats['max_num_of_edges'] * config.training.batch_max_num_graphs + 1
 
         config.training.batch_max_num_nodes = batch_max_num_nodes
         config.training.batch_max_num_edges = batch_max_num_edges
@@ -163,9 +158,6 @@ def run_training(config: config_dict.ConfigDict):
 
 
 def run_evaluation(config, num_test: int = None, testing_targets: Sequence[str] = None):
-    port = portpicker.pick_unused_port()
-    jax.distributed.initialize(f'localhost:{port}', num_processes=1, process_id=0)
-
     data_filepath = config.data.filepath
     data_filepath = Path(data_filepath).expanduser().absolute().resolve()
 
@@ -213,14 +205,14 @@ def run_evaluation(config, num_test: int = None, testing_targets: Sequence[str] 
     ckpt_dir = ckpt_dir.expanduser().absolute().resolve()
     ckpt_mngr = checkpoint.CheckpointManager(
         ckpt_dir,
-        {'params': checkpoint.AsyncCheckpointer(checkpoint.PyTreeCheckpointHandler())},
+        {'params': checkpoint.PyTreeCheckpointer()},
         options=checkpoint.CheckpointManagerOptions(step_prefix='ckpt')
     )
     latest_step = ckpt_mngr.latest_step()
     if latest_step is not None:
         params = ckpt_mngr.restore(
             latest_step,
-            {'params': checkpoint.AsyncCheckpointer(checkpoint.PyTreeCheckpointHandler())}
+            items=None
         )['params']
     else:
         raise FileNotFoundError(f'No checkpoint found at {ckpt_dir}.')

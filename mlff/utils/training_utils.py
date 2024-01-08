@@ -182,7 +182,7 @@ def fit(
 
     ckpt_mngr = checkpoint.CheckpointManager(
         ckpt_dir,
-        {'params': checkpoint.AsyncCheckpointer(checkpoint.PyTreeCheckpointHandler())},
+        {'params': checkpoint.PyTreeCheckpointer()},
         options=options
     )
 
@@ -222,7 +222,7 @@ def fit(
                     if allow_restart:
                         params = ckpt_mngr.restore(
                             latest_step,
-                            {'params': checkpoint.AsyncCheckpointer(checkpoint.PyTreeCheckpointHandler())}
+                            {'params': checkpoint.PyTreeCheckpointer()}
                         )['params']
                         step += latest_step
                         print(f'Re-start training from {latest_step}.')
