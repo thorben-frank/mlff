@@ -1,10 +1,10 @@
 from ase.neighborlist import neighbor_list
 from ase import Atoms
 from dataclasses import dataclass
-from typing import List
 import jax.numpy as jnp
 import jraph
 import numpy as np
+
 
 @dataclass
 class NpzDataLoaderSparse:

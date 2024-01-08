@@ -1,3 +1,4 @@
+import flax.linen as nn
 import jax
 from mlff.nn.stacknet import StackNetSparse
 from mlff.nn.embed import GeometryEmbedSparse, AtomTypeEmbedSparse
@@ -45,12 +46,12 @@ def init_so3krates_sparse(
         use_spherical_filter=i > 0,
         num_heads=num_heads,
         num_features_head=num_features_head,
-        qk_non_linearity=getattr(jax.nn, qk_non_linearity) if qk_non_linearity != 'identity' else lambda u: u,
+        qk_non_linearity=getattr(nn.activation, qk_non_linearity) if qk_non_linearity != 'identity' else lambda u: u,
         residual_mlp_1=residual_mlp_1,
         residual_mlp_2=residual_mlp_2,
         layer_normalization_1=layer_normalization_1,
         layer_normalization_2=layer_normalization_2,
-        activation_fn=getattr(jax.nn, activation_fn) if activation_fn != 'identity' else lambda u: u,
+        activation_fn=getattr(nn.activation, activation_fn) if activation_fn != 'identity' else lambda u: u,
         behave_like_identity_fn_at_init=layers_behave_like_identity_fn_at_init
     ) for i in range(num_layers)]
 

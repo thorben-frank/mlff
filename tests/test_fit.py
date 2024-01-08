@@ -12,7 +12,9 @@ from pathlib import Path
 import pkg_resources
 import portpicker
 import wandb
+from jax.config import config
 
+config.update('jax_disable_jit', True)
 
 def test_fit():
     port = portpicker.pick_unused_port()

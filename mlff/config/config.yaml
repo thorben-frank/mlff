@@ -16,12 +16,12 @@ model:
     - 3
     - 4
   cutoff: 5.0  # Local cutoff to use.
-  cutoff_fn: phys  # Cutoff function to use.
+  cutoff_fn: cosine  # Cutoff function to use.
   num_radial_basis_fn: 32  # Number of radial basis functions.
   radial_basis_fn: physnet  # Radial basis function to use.
   activation_fn: silu  # Activation function used in the MLPs.
-  qk_non_linearity: silu  # Non-linearity to apply to the query and key vectors in the attention function.
-  residual_mlp_1: true  # Use residual MLP on the invariant features after the the attention update.
+  qk_non_linearity: identity  # Non-linearity to apply to the query and key vectors in the attention function.
+  residual_mlp_1: false  # Use residual MLP on the invariant features after the the attention update.
   residual_mlp_2: false  # Use residual MLP on the invariant features after the the exchange block.
   layer_normalization_1: false  # Use layer normalization after first residual mlp.
   layer_normalization_2: false  # Use layer normalization after the second residual mlp.

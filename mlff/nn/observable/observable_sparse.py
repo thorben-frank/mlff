@@ -55,7 +55,10 @@ class EnergySparse(BaseSubModule):
             (self.zmax + 1, )
         )[atomic_numbers]  # (num_nodes)
 
-        atomic_energy = nn.Dense(1, kernel_init=self.kernel_init)(x).squeeze(axis=-1)  # (num_nodes)
+        atomic_energy = nn.Dense(1, kernel_init=self.kernel_init, use_bias=False)(x).squeeze(axis=-1)  # (num_nodes)
+        # atomic_energy = nn.activation.silu(atomic_energy)  # (num_nodes)
+        # atomic_energy = nn.Dense(1)(atomic_energy).squeeze(axis=-1)  # (num_nodes)
+
         atomic_energy += energy_offset  # (num_nodes)
         atomic_energy = jnp.where(node_mask, atomic_energy, jnp.asarray(0., dtype=atomic_energy.dtype))  # (num_nodes)
 

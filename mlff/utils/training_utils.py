@@ -95,7 +95,7 @@ def make_training_step_fn(optimizer, loss_fn):
         updates, opt_state = optimizer.update(grads, opt_state)
         params = optax.apply_updates(params=params, updates=updates)
         metrics['gradients_norm'] = optax.global_norm(grads)
-        return params, metrics
+        return params, opt_state, metrics
     return training_step_fn
 
 
@@ -238,7 +238,7 @@ def fit(
             assert params is not None
             assert opt_state is not None
 
-            params, train_metrics = training_step_fn(params, opt_state, batch_training)
+            params, opt_state, train_metrics = training_step_fn(params, opt_state, batch_training)
             step += 1
             train_metrics_np = jax.device_get(train_metrics)
 

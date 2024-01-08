@@ -16,34 +16,47 @@ import yaml
 
 
 def make_so3krates_sparse_from_config(config: config_dict.ConfigDict = None):
-    if config is None:
-        return nn.SO3kratesSparse()
-    else:
-        model_config = config.model
+    """Make a SO3krates model from a config.
 
-        return nn.SO3kratesSparse(
-            num_layers=model_config.num_layers,
-            num_features=model_config.num_features,
-            num_heads=model_config.num_heads,
-            num_features_head=model_config.num_features_head,
-            radial_basis_fn=model_config.radial_basis_fn,
-            num_radial_basis_fn=model_config.num_radial_basis_fn,
-            cutoff_fn=model_config.cutoff_fn,
-            cutoff=model_config.cutoff,
-            degrees=model_config.degrees,
-            residual_mlp_1=model_config.residual_mlp_1,
-            residual_mlp_2=model_config.residual_mlp_2,
-            layer_normalization_1=model_config.layer_normalization_1,
-            layer_normalization_2=model_config.layer_normalization_2,
-            qk_non_linearity=model_config.qk_non_linearity,
-            activation_fn=model_config.activation_fn,
-            layers_behave_like_identity_fn_at_init=model_config.layers_behave_like_identity_fn_at_init,
-            output_is_zero_at_init=model_config.output_is_zero_at_init,
-            input_convention=model_config.input_convention
-        )
+    Args:
+        config (): The config.
+
+    Returns:
+        SO3krates flax model.
+    """
+    model_config = config.model
+
+    return nn.SO3kratesSparse(
+        num_layers=model_config.num_layers,
+        num_features=model_config.num_features,
+        num_heads=model_config.num_heads,
+        num_features_head=model_config.num_features_head,
+        radial_basis_fn=model_config.radial_basis_fn,
+        num_radial_basis_fn=model_config.num_radial_basis_fn,
+        cutoff_fn=model_config.cutoff_fn,
+        cutoff=model_config.cutoff,
+        degrees=model_config.degrees,
+        residual_mlp_1=model_config.residual_mlp_1,
+        residual_mlp_2=model_config.residual_mlp_2,
+        layer_normalization_1=model_config.layer_normalization_1,
+        layer_normalization_2=model_config.layer_normalization_2,
+        qk_non_linearity=model_config.qk_non_linearity,
+        activation_fn=model_config.activation_fn,
+        layers_behave_like_identity_fn_at_init=model_config.layers_behave_like_identity_fn_at_init,
+        output_is_zero_at_init=model_config.output_is_zero_at_init,
+        input_convention=model_config.input_convention
+    )
 
 
 def make_optimizer_from_config(config: config_dict.ConfigDict = None):
+    """Make optax optimizer from config.
+
+    Args:
+        config (): The config.
+
+    Returns:
+        optax.Optimizer.
+    """
     if config is None:
         return training_utils.make_optimizer()
     else:
@@ -58,6 +71,14 @@ def make_optimizer_from_config(config: config_dict.ConfigDict = None):
 
 
 def run_training(config: config_dict.ConfigDict):
+    """Run training given a config.
+
+    Args:
+        config (): The config.
+
+    Returns:
+
+    """
     data_filepath = config.data.filepath
     data_filepath = Path(data_filepath).expanduser().absolute().resolve()
 
@@ -158,6 +179,18 @@ def run_training(config: config_dict.ConfigDict):
 
 
 def run_evaluation(config, num_test: int = None, testing_targets: Sequence[str] = None):
+    """Run evaluation, given the config and additional args.
+
+    Args:
+        config (): The config file.
+        num_test (): Number of testing points. If not given, is determined from config using
+            num_test = num_data - num_train - num_valid.
+        testing_targets (): Targets used for computing metrics. Defaults to the ones found in
+            config.training.loss_weights.
+
+    Returns:
+        The metrics on `testing_targets`.
+    """
     data_filepath = config.data.filepath
     data_filepath = Path(data_filepath).expanduser().absolute().resolve()
 

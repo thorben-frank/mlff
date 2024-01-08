@@ -15,6 +15,22 @@ def evaluate(
         batch_max_num_edges,
         batch_max_num_graphs
 ):
+    """Evaluate a model given its params on the testing data.
+
+    Args:
+        model (): The FLAX model.
+        params (): The model parameters as PyTree.
+        graph_to_batch_fn (): Function that takes a `jraph.GraphsTuple` and returns the input to the
+            observable function.
+        testing_data (): The testing data as list of `jraph.GraphsTuple`.
+        testing_targets (): The targets for which the metrics should be calculated.
+        batch_max_num_nodes (): Maximal number of nodes per batch.
+        batch_max_num_edges (): Maximal number of edges per batch.
+        batch_max_num_graphs (): Maximal number of graphs oer batch.
+
+    Returns:
+        The metrics on testing data.
+    """
 
     obs_fn = jax.jit(
         get_energy_and_force_fn_sparse(model)
@@ -61,7 +77,7 @@ def evaluate(
 
     testing_metrics_np = jax.device_get(testing_metrics)
     testing_metrics_np = {
-        k: np.mean([m[k] for m in testing_metrics]) for k in testing_metrics_np[0]
+        k: np.mean([m[k] for m in testing_metrics_np]) for k in testing_metrics_np[0]
     }
     for t in testing_targets:
         testing_metrics_np[f'{t}_rmse'] = np.sqrt(testing_metrics_np[f'{t}_mse'])
