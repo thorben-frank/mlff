@@ -104,7 +104,7 @@ def run_training(config: config_dict.ConfigDict):
         raise ValueError(f"num_train + num_valid = {num_train + num_valid} exceeds the number of data points {num_data}"
                          f" in {data_filepath}.")
 
-    if config.data.energy_shifts is None:
+    if config.data.energy_shifts == 'mean':
         config.data.energy_shifts = config_dict.placeholder(dict)
         energy_mean = data.transformations.calculate_energy_mean(all_data[:num_train]) * energy_unit
         num_nodes = data.transformations.calculate_average_number_of_nodes(all_data[:num_train])
