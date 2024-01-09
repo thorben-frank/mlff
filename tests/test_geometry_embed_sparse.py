@@ -30,7 +30,7 @@ def test_init():
     geometry_embed = GeometryEmbedSparse(degrees=degrees,
                                          radial_basis_fn='bernstein',
                                          num_radial_basis_fn=16,
-                                         cutoff_fn='exponential_cutoff_fn',
+                                         cutoff_fn='exponential',
                                          cutoff=5.,
                                          input_convention='positions',
                                          prop_keys=None)
@@ -46,7 +46,7 @@ def test_apply(cutoff: float):
     geometry_embed = GeometryEmbedSparse(degrees=degrees,
                                          radial_basis_fn='bernstein',
                                          num_radial_basis_fn=16,
-                                         cutoff_fn='exponential_cutoff_fn',
+                                         cutoff_fn='exponential',
                                          cutoff=cutoff,
                                          input_convention='positions',
                                          prop_keys=None)

@@ -115,7 +115,7 @@ def test_init():
         degrees=[1, 2],
         radial_basis_fn='bernstein',
         num_radial_basis_fn=16,
-        cutoff_fn='exponential_cutoff_fn',
+        cutoff_fn='exponential',
         cutoff=2.5,
         input_convention='positions',
         prop_keys=None
@@ -156,7 +156,7 @@ def test_apply(output_is_zero_at_init: bool):
         degrees=[1, 2],
         radial_basis_fn='bernstein',
         num_radial_basis_fn=16,
-        cutoff_fn='exponential_cutoff_fn',
+        cutoff_fn='exponential',
         cutoff=2.5,
         input_convention='positions',
         prop_keys=None
@@ -211,7 +211,7 @@ def test_translation_symmetry():
         degrees=[1, 2],
         radial_basis_fn='bernstein',
         num_radial_basis_fn=16,
-        cutoff_fn='exponential_cutoff_fn',
+        cutoff_fn='exponential',
         cutoff=2.5,
         input_convention='positions',
         prop_keys=None
@@ -280,7 +280,7 @@ def test_rotation_symmetry():
         degrees=[1, 2],
         radial_basis_fn='bernstein',
         num_radial_basis_fn=16,
-        cutoff_fn='exponential_cutoff_fn',
+        cutoff_fn='exponential',
         cutoff=2.5,
         input_convention='positions',
         prop_keys=None
@@ -354,7 +354,7 @@ def test_batching(max_num_graphs: int):
         degrees=[1, 2],
         radial_basis_fn='bernstein',
         num_radial_basis_fn=16,
-        cutoff_fn='exponential_cutoff_fn',
+        cutoff_fn='exponential',
         cutoff=2.5,
         input_convention='positions',
         prop_keys=None
