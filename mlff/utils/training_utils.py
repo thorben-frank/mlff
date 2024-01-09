@@ -76,7 +76,7 @@ def make_loss_fn(obs_fn: Callable, weights: Dict, scales: Dict = None):
     return loss_fn
 
 
-def make_training_step_fn(optimizer, loss_fn):
+def make_training_step_fn(optimizer, loss_fn, log_gradient_values):
 
     @jax.jit
     def training_step_fn(params, opt_state, batch):
@@ -93,7 +93,8 @@ def make_training_step_fn(optimizer, loss_fn):
 
         """
         (loss, metrics), grads = jax.value_and_grad(loss_fn, has_aux=True)(params, batch)
-        metrics['gradient_norms'] = unfreeze(jax.tree_map(lambda x: jnp.linalg.norm(x.reshape(-1), axis=0), grads))
+        if log_gradient_values:
+            metrics['gradient_norms'] = unfreeze(jax.tree_map(lambda x: jnp.linalg.norm(x.reshape(-1), axis=0), grads))
         updates, opt_state = optimizer.update(grads, opt_state)
         params = optax.apply_updates(params=params, updates=updates)
         metrics['gradients_norm'] = optax.global_norm(grads)
@@ -139,6 +140,7 @@ def fit(
         training_seed: int = 0,
         model_seed: int = 0,
         use_wandb: bool = True,
+        log_gradient_values: bool = False
 ):
     """
     Fit model.
@@ -161,6 +163,7 @@ def fit(
         training_seed (int): Random seed for shuffling of training data.
         model_seed (int): Random seed for model initialization.
         use_wandb (bool): Log statistics to WeightsAndBias. If true, wandb.init() must be called before call to fit().
+        log_gradient_values (bool): Gradient values for each set of weights is logged.
     Returns:
 
     """
@@ -188,7 +191,7 @@ def fit(
         options=options
     )
 
-    training_step_fn = make_training_step_fn(optimizer, loss_fn)
+    training_step_fn = make_training_step_fn(optimizer, loss_fn, log_gradient_values)
     validation_step_fn = make_validation_step_fn(loss_fn)
 
     processed_graphs = 0

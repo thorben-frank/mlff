@@ -41,6 +41,8 @@ def test_default_config(suffix):
     npt.assert_equal(cfg_model.layer_normalization_2, False)
     npt.assert_equal(cfg_model.layers_behave_like_identity_fn_at_init, False)
     npt.assert_equal(cfg_model.output_is_zero_at_init, True)
+    npt.assert_equal(cfg_model.energy_regression_dim, 128)
+    npt.assert_equal(cfg_model.energy_activation_fn, 'identity')
     npt.assert_equal(cfg_model.input_convention, 'positions')
 
     npt.assert_equal(cfg_optimizer.name, 'adam')
@@ -62,3 +64,4 @@ def test_default_config(suffix):
     npt.assert_equal(cfg_training.loss_weights['forces'], 0.99)
     npt.assert_equal(cfg_training.model_seed, 0)
     npt.assert_equal(cfg_training.training_seed, 0)
+    npt.assert_equal(cfg_training.log_gradient_values, False)

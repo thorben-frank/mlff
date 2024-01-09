@@ -25,6 +25,8 @@ def init_so3krates_sparse(
         activation_fn: str = 'silu',
         layers_behave_like_identity_fn_at_init: bool = False,
         output_is_zero_at_init: bool = True,
+        energy_regression_dim: int = 128,
+        energy_activation_fn: str = 'identity',
         input_convention: str = 'positions'
 ):
     atom_type_embed = AtomTypeEmbedSparse(
@@ -57,7 +59,11 @@ def init_so3krates_sparse(
 
     energy = EnergySparse(
         prop_keys=None,
-        output_is_zero_at_init=output_is_zero_at_init
+        output_is_zero_at_init=output_is_zero_at_init,
+        regression_dim=energy_regression_dim,
+        activation_fn=getattr(
+            nn.activation, energy_activation_fn
+        ) if energy_activation_fn != 'identity' else lambda u: u,
     )
 
     return StackNetSparse(

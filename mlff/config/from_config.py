@@ -44,7 +44,9 @@ def make_so3krates_sparse_from_config(config: config_dict.ConfigDict = None):
         activation_fn=model_config.activation_fn,
         layers_behave_like_identity_fn_at_init=model_config.layers_behave_like_identity_fn_at_init,
         output_is_zero_at_init=model_config.output_is_zero_at_init,
-        input_convention=model_config.input_convention
+        input_convention=model_config.input_convention,
+        energy_regression_dim=model_config.energy_regression_dim,
+        energy_activation_fn=model_config.energy_activation_fn
     )
 
 
@@ -180,6 +182,7 @@ def run_training(config: config_dict.ConfigDict):
         num_epochs=config.training.num_epochs,
         training_seed=config.training.training_seed,
         model_seed=config.training.model_seed,
+        log_gradient_values=config.training.log_gradient_values
     )
 
 

@@ -28,6 +28,8 @@ model:
   layer_normalization_2: false  # Use layer normalization after the second residual mlp.
   layers_behave_like_identity_fn_at_init: false  # The message passing layers behave like the identity function at initialization.
   output_is_zero_at_init: true  # The output of the full network is zero at initialization.
+  energy_regression_dim: 128  # Dimension to which final features are projected, before atomic energies are calculated.
+  energy_activation_fn: identity  # Activation function to use on the energy_regression_dim before atomic energies are calculated.
   input_convention: positions  # Input convention.
 optimizer:
   name: adam  # Name of the optimizer. See https://optax.readthedocs.io/en/latest/api.html#common-optimizers for available ones.
@@ -55,6 +57,7 @@ training:
     forces: 0.99  # Loss weight for the forces.
   model_seed: 0  # Seed used for the initialization of the model parameters.
   training_seed: 0  # Seed used for shuffling the batches during training.
+  log_gradient_values: False  # Log the norm of the gradients for each set of weights.
   wandb_init_args:  # Arguments to wandb.init(). See https://docs.wandb.ai/ref/python/init. The config itself is passed as config to wandb.init().
     name: first_training_run
     project: mlff
