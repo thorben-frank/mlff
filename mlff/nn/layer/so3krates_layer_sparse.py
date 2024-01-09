@@ -293,7 +293,7 @@ class AttentionBlock(nn.Module):
 
         # Aggregation for Euclidean variables
         ev_att = segment_sum(
-            degree_repeat_fn(alpha2_ij) * (ylm_ij + ev_j),
+            degree_repeat_fn(alpha2_ij) * ylm_ij,
             segment_ids=idx_i,
             num_segments=x.shape[0]
         )  # (N, num_degrees)
@@ -334,12 +334,12 @@ class ExchangeBlock(nn.Module):
         degree_repeat_fn = make_degree_repeat_fn(self.degrees, axis=-1)
 
         y = jnp.concatenate([x, contraction_fn(ev)], axis=-1)  # shape: (N, num_features+num_degrees)
-        y = self.activation_fn(y)
-        y = nn.Dense(
-            features=num_features // 2,
-            name='mlp_layer_1'
-        )(y)  # (N, num_features // 2)
-        y = self.activation_fn(y)
+        # y = self.activation_fn(y)
+        # y = nn.Dense(
+        #     features=num_features // 2,
+        #     name='mlp_layer_1'
+        # )(y)  # (N, num_features // 2)
+        # y = self.activation_fn(y)
         y = nn.Dense(
             features=num_features + num_degrees,
             kernel_init=self.last_layer_kernel_init,
@@ -350,7 +350,7 @@ class ExchangeBlock(nn.Module):
             indices_or_sections=np.array([num_features]),
             axis=-1
         )  # (N, num_features) / (N, num_degrees)
-        return cx * x, degree_repeat_fn(cev) * ev
+        return cx, degree_repeat_fn(cev) * ev
 
 
 # class AttentionBlock(nn.Module):
