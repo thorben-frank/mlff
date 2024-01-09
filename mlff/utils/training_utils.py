@@ -8,6 +8,7 @@ from orbax import checkpoint
 from pathlib import Path
 from typing import Callable, Dict
 import wandb
+from flax.core import unfreeze
 
 
 property_to_mask = {
@@ -92,6 +93,7 @@ def make_training_step_fn(optimizer, loss_fn):
 
         """
         (loss, metrics), grads = jax.value_and_grad(loss_fn, has_aux=True)(params, batch)
+        metrics['gradient_norms'] = unfreeze(jax.tree_map(lambda x: jnp.linalg.norm(x.reshape(-1), axis=0), grads))
         updates, opt_state = optimizer.update(grads, opt_state)
         params = optax.apply_updates(params=params, updates=updates)
         metrics['gradients_norm'] = optax.global_norm(grads)
