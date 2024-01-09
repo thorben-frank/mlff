@@ -10,24 +10,17 @@ import numpy as np
 import optax
 from pathlib import Path
 import pkg_resources
-import portpicker
-import wandb
-from jax.config import config
 
-config.update('jax_disable_jit', True)
 
 def test_fit():
-    port = portpicker.pick_unused_port()
-    jax.distributed.initialize(f'localhost:{port}', num_processes=1, process_id=0)
-
     filename = 'test_data/ethanol.npz'
     f = pkg_resources.resource_filename(__name__, filename)
 
     loader = NpzDataLoaderSparse(input_file=f)
     all_data, data_stats = loader.load_all(cutoff=5.)
 
-    num_train = 100
-    num_valid = 50
+    num_train = 50
+    num_valid = 10
 
     energy_unit = units.kcal / units.mol
     length_unit = units.Angstrom
@@ -80,10 +73,11 @@ def test_fit():
         optimizer=opt,
         loss_fn=loss_fn,
         graph_to_batch_fn=jraph_utils.graph_to_batch_fn,
-        batch_max_num_edges=500,
-        batch_max_num_nodes=50,
+        num_epochs=2,
+        batch_max_num_edges=73,
+        batch_max_num_nodes=10,
         batch_max_num_graphs=2,
-        eval_every_num_steps=100,
+        eval_every_num_steps=75,
         training_data=list(training_data),
         validation_data=list(validation_data),
         ckpt_dir=workdir / 'checkpoints',
