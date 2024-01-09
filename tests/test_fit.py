@@ -75,7 +75,6 @@ def test_fit():
     workdir = Path('_test_run_training_sparse').expanduser().absolute().resolve()
     workdir.mkdir(exist_ok=True)
 
-    wandb.init()
     training_utils.fit(
         model=so3k,
         optimizer=opt,
@@ -88,7 +87,8 @@ def test_fit():
         training_data=list(training_data),
         validation_data=list(validation_data),
         ckpt_dir=workdir / 'checkpoints',
-        allow_restart=False
+        allow_restart=False,
+        use_wandb=False  # Otherwise the GitHub CI fails.
     )
 
 
