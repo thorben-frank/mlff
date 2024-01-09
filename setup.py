@@ -23,6 +23,7 @@ setup(
         "pyyaml",
         "pytest",
         "h5py",
+        "ml_collections"
     ],
     include_package_data=True,
     package_data={"": ["sph_ops/cgmatrix.npz",
