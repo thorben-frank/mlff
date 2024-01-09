@@ -71,7 +71,7 @@ def ASE_to_jraph(
         i, j, S = neighbor_list('ijS', mol, cutoff, self_interaction=self_interaction)
         cell = np.array(mol.get_cell())
         edge_features = {
-            "cell": jnp.array(cell),
+            "cell": jnp.repeat(jnp.array(cell)[None], repeats=len(S), axis=0),
             "cell_offset": jnp.array(S)
         }
     else:

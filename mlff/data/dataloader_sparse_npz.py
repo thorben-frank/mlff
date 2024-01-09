@@ -62,7 +62,7 @@ def entry_to_jraph(
     if mol.get_pbc().any():
         i, j, S = neighbor_list('ijS', mol, cutoff, self_interaction=self_interaction)
         edge_features = {
-            "cell": jnp.array(cell),
+            "cell": jnp.repeat(jnp.array(cell)[None], repeats=len(S), axis=0),
             "cell_offset": jnp.array(S)
         }
     else:
