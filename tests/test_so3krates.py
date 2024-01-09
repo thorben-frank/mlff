@@ -111,12 +111,12 @@ def test_so3krates_training():
 
     import mlff.properties.property_names as pn
 
-    data_path = 'test_data/ethanol.npz'
+    data_path = 'test_data/ethanol_dep.npz'
     save_path = '_test_train_so3krates'
     ckpt_dir = os.path.join(save_path, 'module')
     ckpt_dir = create_directory(ckpt_dir, exists_ok=False)
 
-    data = dict(load_data('ethanol.npz'))
+    data = dict(load_data('ethanol_dep.npz'))
 
     r_cut = 5
     data_set = DataSet(data=data, prop_keys=prop_keys)

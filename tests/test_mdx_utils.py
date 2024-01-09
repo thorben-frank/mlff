@@ -10,7 +10,7 @@ def test_zero_translation():
 
     from mlff import mdx
 
-    data = load_data('ethanol.npz')
+    data = load_data('ethanol_dep.npz')
     atoms = Atoms(positions=data['R'][100], numbers=data['z'])
     MaxwellBoltzmannDistribution(atoms, temperature_K=500)
 
@@ -38,7 +38,7 @@ def test_zero_rotation():
 
     from mlff import mdx
 
-    data = load_data('ethanol.npz')
+    data = load_data('ethanol_dep.npz')
     atoms = Atoms(positions=data['R'][100], numbers=data['z'])
     MaxwellBoltzmannDistribution(atoms, temperature_K=500)
 
@@ -66,7 +66,7 @@ def test_zero_rotation_and_zero_translation():
 
     from mlff import mdx
 
-    data = load_data('ethanol.npz')
+    data = load_data('ethanol_dep.npz')
     atoms = Atoms(positions=data['R'][100], numbers=data['z'])
     MaxwellBoltzmannDistribution(atoms, temperature_K=500)
 
@@ -102,7 +102,7 @@ def test_momenta_scaling():
 
     T0 = 500
 
-    data = load_data('ethanol.npz')
+    data = load_data('ethanol_dep.npz')
     atoms = Atoms(positions=data['R'][100], numbers=data['z'])
     MaxwellBoltzmannDistribution(atoms, temperature_K=T0)
 

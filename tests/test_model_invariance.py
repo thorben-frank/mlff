@@ -43,7 +43,7 @@ def test_SO3_invariance_so3kratace():
     from mlff.nn import So3kratACE
     from mlff.properties import md17_property_keys as prop_keys
 
-    data = dict(load_data('ethanol.npz'))
+    data = dict(load_data('ethanol_dep.npz'))
     net = So3kratACE(prop_keys=prop_keys,
                      F=32,
                      n_layer=2,
@@ -62,7 +62,7 @@ def test_padding_invariance_so3kratace():
     from mlff.nn import So3kratACE
     from mlff.properties import md17_property_keys as prop_keys
 
-    data = dict(load_data('ethanol.npz'))
+    data = dict(load_data('ethanol_dep.npz'))
     net = So3kratACE(prop_keys=prop_keys,
                      F=32,
                      n_layer=2,
@@ -92,7 +92,7 @@ def _test_SO3_invariance_model(net):
     obs_fn = jax.jit(jax.vmap(obs_fn, in_axes=(None, 0)))
 
     r_cut = 5
-    data = dict(load_data('ethanol.npz'))
+    data = dict(load_data('ethanol_dep.npz'))
     data_set = DataSet(data=data, prop_keys=prop_keys)
     data_set.random_split(n_train=2,
                           n_valid=1,
@@ -145,7 +145,7 @@ def _test_padding_invariance_model(net):
     obs_fn = jax.jit(jax.vmap(obs_fn, in_axes=(None, 0)))
 
     r_cut = 5
-    data = dict(load_data('ethanol.npz'))
+    data = dict(load_data('ethanol_dep.npz'))
     data_set = DataSet(data=data, prop_keys=prop_keys)
     data_set.random_split(n_train=2,
                           n_valid=1,
