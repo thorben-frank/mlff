@@ -20,6 +20,7 @@ def test_default_config(suffix):
     npt.assert_equal(cfg_data.filepath, None)
     npt.assert_equal(cfg_data.energy_unit, 'eV')
     npt.assert_equal(cfg_data.length_unit, 'Angstrom')
+    npt.assert_equal(cfg_data.shift_mode, None)
     npt.assert_equal(cfg_data.energy_shifts, None)
     npt.assert_equal(cfg_data.split_seed, 0)
 

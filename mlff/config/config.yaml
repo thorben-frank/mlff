@@ -3,6 +3,7 @@ data:
   filepath: null  # Path to the data file. Either ASE digestible or .npz with appropriate column names are supported.
   energy_unit: eV  # Energy unit.
   length_unit: Angstrom  # Length unit.
+  shift_mode: null  # Options are null, mean, custom.
   energy_shifts: null  # Energy shifts to subtract.
   split_seed: 0  # Seed using for splitting the data into training, validation and test.
 model:

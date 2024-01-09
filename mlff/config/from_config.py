@@ -104,12 +104,17 @@ def run_training(config: config_dict.ConfigDict):
         raise ValueError(f"num_train + num_valid = {num_train + num_valid} exceeds the number of data points {num_data}"
                          f" in {data_filepath}.")
 
-    if config.data.energy_shifts == 'mean':
+    if config.data.shift_mode == 'mean':
         config.data.energy_shifts = config_dict.placeholder(dict)
         energy_mean = data.transformations.calculate_energy_mean(all_data[:num_train]) * energy_unit
         num_nodes = data.transformations.calculate_average_number_of_nodes(all_data[:num_train])
-        energy_shifts = {a: float(energy_mean / num_nodes) for a in range(119)}
+        energy_shifts = {str(a): float(energy_mean / num_nodes) for a in range(119)}
         config.data.energy_shifts = energy_shifts
+    elif config.data.shift_mode == 'custom':
+        if config.data.energy_shifts is None:
+            raise ValueError('For config.data.shift_mode == custom config.data.energy_shifts must be given.')
+    else:
+        config.data.energy_shifts = {str(a): 0. for a in range(119)}
 
     training_data = data.transformations.subtract_atomic_energy_shifts(
         data.transformations.unit_conversion(
@@ -117,7 +122,7 @@ def run_training(config: config_dict.ConfigDict):
             energy_unit=energy_unit,
             length_unit=length_unit
         ),
-        atomic_energy_shifts=config.data.energy_shifts
+        atomic_energy_shifts={int(k): v for (k, v) in config.data.energy_shifts.items()}
     )
 
     validation_data = data.transformations.subtract_atomic_energy_shifts(
@@ -126,7 +131,7 @@ def run_training(config: config_dict.ConfigDict):
             energy_unit=energy_unit,
             length_unit=length_unit
         ),
-        atomic_energy_shifts=config.data.energy_shifts
+        atomic_energy_shifts={int(k): v for (k, v) in config.data.energy_shifts.items()}
     )
 
     opt = make_optimizer_from_config(config)
