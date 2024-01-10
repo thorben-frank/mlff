@@ -27,6 +27,7 @@ def init_so3krates_sparse(
         output_is_zero_at_init: bool = True,
         energy_regression_dim: int = 128,
         energy_activation_fn: str = 'identity',
+        energy_learn_atomic_type_scales: bool = False,
         input_convention: str = 'positions'
 ):
     atom_type_embed = AtomTypeEmbedSparse(
@@ -64,6 +65,7 @@ def init_so3krates_sparse(
         activation_fn=getattr(
             nn.activation, energy_activation_fn
         ) if energy_activation_fn != 'identity' else lambda u: u,
+        learn_atomic_type_scales=energy_learn_atomic_type_scales
     )
 
     return StackNetSparse(

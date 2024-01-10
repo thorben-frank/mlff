@@ -14,6 +14,7 @@ class EnergySparse(BaseSubModule):
     zmax: int = 118
     regression_dim: int = None
     activation_fn: Callable[[Any], Any] = lambda u: u
+    learn_atomic_type_scales: bool = False
     zbl_repulsion: bool = False
     zbl_repulsion_shift: float = 0.
     output_is_zero_at_init: bool = True
@@ -57,6 +58,15 @@ class EnergySparse(BaseSubModule):
             (self.zmax + 1, )
         )[atomic_numbers]  # (num_nodes)
 
+        if self.learn_atomic_type_scales:
+            atomic_scales = self.param(
+                'atomic_scales',
+                nn.initializers.ones_init(),
+                (self.zmax + 1,)
+            )[atomic_numbers]  # (num_nodes)
+        else:
+            atomic_scales = jnp.ones((1, ), dtype=x.dtype)
+
         if self.regression_dim is not None:
             y = nn.Dense(
                 self.regression_dim,
@@ -76,7 +86,9 @@ class EnergySparse(BaseSubModule):
                 name='energy_dense_final'
             )(x).squeeze(axis=-1)  # (num_nodes)
 
+        atomic_energy = atomic_energy * atomic_scales
         atomic_energy += energy_offset  # (num_nodes)
+
         atomic_energy = jnp.where(node_mask, atomic_energy, jnp.asarray(0., dtype=atomic_energy.dtype))  # (num_nodes)
 
         if self.zbl_repulsion:

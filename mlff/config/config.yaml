@@ -30,6 +30,7 @@ model:
   output_is_zero_at_init: true  # The output of the full network is zero at initialization.
   energy_regression_dim: 128  # Dimension to which final features are projected, before atomic energies are calculated.
   energy_activation_fn: identity  # Activation function to use on the energy_regression_dim before atomic energies are calculated.
+  energy_learn_atomic_type_scales: false
   input_convention: positions  # Input convention.
 optimizer:
   name: adam  # Name of the optimizer. See https://optax.readthedocs.io/en/latest/api.html#common-optimizers for available ones.

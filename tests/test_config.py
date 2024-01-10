@@ -43,6 +43,7 @@ def test_default_config(suffix):
     npt.assert_equal(cfg_model.output_is_zero_at_init, True)
     npt.assert_equal(cfg_model.energy_regression_dim, 128)
     npt.assert_equal(cfg_model.energy_activation_fn, 'identity')
+    npt.assert_equal(cfg_model.energy_learn_atomic_type_scales, False)
     npt.assert_equal(cfg_model.input_convention, 'positions')
 
     npt.assert_equal(cfg_optimizer.name, 'adam')
