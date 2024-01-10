@@ -15,6 +15,7 @@ class EnergySparse(BaseSubModule):
     regression_dim: int = None
     activation_fn: Callable[[Any], Any] = lambda u: u
     learn_atomic_type_scales: bool = False
+    learn_atomic_type_shifts: bool = False
     zbl_repulsion: bool = False
     zbl_repulsion_shift: float = 0.
     output_is_zero_at_init: bool = True
@@ -51,12 +52,14 @@ class EnergySparse(BaseSubModule):
         graph_mask = inputs['graph_mask']  # (num_graphs)
 
         num_graphs = len(graph_mask)
-
-        energy_offset = self.param(
-            'energy_offset',
-            nn.initializers.zeros_init(),
-            (self.zmax + 1, )
-        )[atomic_numbers]  # (num_nodes)
+        if self.learn_atomic_type_shifts:
+            energy_offset = self.param(
+                'energy_offset',
+                nn.initializers.zeros_init(),
+                (self.zmax + 1, )
+            )[atomic_numbers]  # (num_nodes)
+        else:
+            energy_offset = jnp.zeros((1,), dtype=x.dtype)
 
         if self.learn_atomic_type_scales:
             atomic_scales = self.param(
