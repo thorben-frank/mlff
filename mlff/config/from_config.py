@@ -151,8 +151,8 @@ def run_training(config: config_dict.ConfigDict):
     if config.training.batch_max_num_nodes is None:
         assert config.training.batch_max_num_edges is None
 
-        batch_max_num_nodes = data_stats['max_num_of_nodes'] * config.training.batch_max_num_graphs + 1
-        batch_max_num_edges = data_stats['max_num_of_edges'] * config.training.batch_max_num_graphs + 1
+        batch_max_num_nodes = data_stats['max_num_of_nodes'] * (config.training.batch_max_num_graphs - 1) + 1
+        batch_max_num_edges = data_stats['max_num_of_edges'] * (config.training.batch_max_num_graphs - 1) + 1
 
         config.training.batch_max_num_nodes = batch_max_num_nodes
         config.training.batch_max_num_edges = batch_max_num_edges
