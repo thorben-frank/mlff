@@ -326,4 +326,5 @@ def make_optimizer(
     lr_schedule = lr_schedule(learning_rate, **learning_rate_schedule_args)
     opt = opt(lr_schedule)
 
-    return optax.apply_if_finite(opt, max_consecutive_errors=num_of_nans_to_ignore)
+    # return optax.apply_if_finite(opt, max_consecutive_errors=num_of_nans_to_ignore)
+    return opt
