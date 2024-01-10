@@ -31,9 +31,10 @@ def scaled_safe_masked_mse_loss(y, y_true, scale, msk):
 
     """
     full_mask = ~jnp.isnan(y_true) & jnp.expand_dims(msk, [y_true.ndim - 1 - o for o in range(0, y_true.ndim - 1)])
-    v = safe_mask(full_mask, fn=lambda u: scale * (u - y)**2, operand=y_true)
+    diff = jnp.where(full_mask, y_true, 0.) - jnp.where(full_mask, y, 0.)
+    v = safe_mask(full_mask, fn=lambda u: scale * diff ** 2, operand=y_true)
     den = full_mask.reshape(-1).sum().astype(dtype=v.dtype)
-    return safe_mask(den > 0, lambda x: v.reshape(-1).sum() / x, den, 0)
+    return safe_mask(den > 0, lambda x: v.reshape(-1).sum() / x, den, 0.)
 
 
 def make_loss_fn(obs_fn: Callable, weights: Dict, scales: Dict = None):
