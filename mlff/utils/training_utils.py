@@ -306,6 +306,8 @@ def make_optimizer(
         learning_rate: float = 1e-3,
         learning_rate_schedule: str = 'constant_schedule',
         learning_rate_schedule_args: Dict = dict(),
+        gradient_clipping: str = 'identity',
+        gradient_clipping_args: Dict = dict(),
         num_of_nans_to_ignore: int = 0
 ):
     """Make optax optimizer.
@@ -317,7 +319,8 @@ def make_optimizer(
             held constant.
         learning_rate_schedule_args (dict): Arguments for the learning rate schedule.
         num_of_nans_to_ignore (int): Number of times NaNs are ignored during in the gradient step. Defaults to 0.
-
+        gradient_clipping (str): Gradient clipping to apply.
+        gradient_clipping_args (dict): Arguments to the gradient clipping to apply.
     Returns:
 
     """
@@ -327,7 +330,11 @@ def make_optimizer(
     lr_schedule = lr_schedule(learning_rate, **learning_rate_schedule_args)
     opt = opt(lr_schedule)
 
+    clip_transform = getattr(optax, gradient_clipping)
+    clip_transform = clip_transform(**gradient_clipping_args)
+
     return optax.chain(
+        clip_transform,
         optax.zero_nans(),
         opt
     )

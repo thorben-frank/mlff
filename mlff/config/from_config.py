@@ -69,8 +69,10 @@ def make_optimizer_from_config(config: config_dict.ConfigDict = None):
             name=opt_config.name,
             learning_rate_schedule=opt_config.learning_rate_schedule,
             learning_rate=opt_config.learning_rate,
-            learning_rate_schedule_args=opt_config.learning_rate_schedule_args,
-            num_of_nans_to_ignore=opt_config.num_of_nans_to_ignore
+            learning_rate_schedule_args=opt_config.learning_rate_schedule_args if opt_config.learning_rate_schedule_args is not None else dict(),
+            num_of_nans_to_ignore=opt_config.num_of_nans_to_ignore,
+            gradient_clipping=opt_config.gradient_clipping,
+            gradient_clipping_args=opt_config.gradient_clipping_args if opt_config.gradient_clipping_args is not None else dict()
         )
 
 

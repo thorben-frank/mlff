@@ -40,6 +40,8 @@ optimizer:
   learning_rate_schedule_args:  # Arguments passed to the learning rate schedule. See https://optax.readthedocs.io/en/latest/api.html#optimizer-schedules.
     decay_rate: 0.75
     transition_steps: 125000
+  gradient_clipping: identity
+  gradient_clipping_args: null
   num_of_nans_to_ignore: 0  # Number of repeated update/gradient steps that ignore NaNs before raising on error.
 training:
   allow_restart: false  # Re-starting from checkpoint is allowed. This will overwrite existing checkpoints so only use if this is desired.

@@ -53,6 +53,8 @@ def test_default_config(suffix):
     npt.assert_equal(cfg_optimizer.learning_rate_schedule_args['decay_rate'], 0.75)
     npt.assert_equal(cfg_optimizer.learning_rate_schedule_args['transition_steps'], 125_000)
     npt.assert_equal(cfg_optimizer.num_of_nans_to_ignore, 0)
+    npt.assert_equal(cfg_optimizer.gradient_clipping, 'identity')
+    npt.assert_equal(cfg_optimizer.gradient_clipping_args, None)
 
     npt.assert_equal(cfg_training.allow_restart, False)
     npt.assert_equal(cfg_training.num_epochs, 100)
