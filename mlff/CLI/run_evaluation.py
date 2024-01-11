@@ -9,6 +9,7 @@ def evaluate_so3krates_sparse():
     # Create the parser
     parser = argparse.ArgumentParser(description='Evaluate a SO3kratesSparse model.')
     parser.add_argument('--workdir', type=str, required=True, help='workdir')
+    parser.add_argument('--num_test', type=int, required=False, default=None, help='Number of test points to use.')
 
     args = parser.parse_args()
 
@@ -19,7 +20,7 @@ def evaluate_so3krates_sparse():
 
     cfg = config_dict.ConfigDict(x)
 
-    metrics = from_config.run_evaluation(config=cfg, num_test=100)
+    metrics = from_config.run_evaluation(config=cfg, num_test=args.num_test)
     print(metrics)
 
 
