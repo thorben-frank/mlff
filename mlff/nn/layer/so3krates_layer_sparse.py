@@ -342,11 +342,11 @@ class ExchangeBlock(nn.Module):
         #     name='mlp_layer_1'
         # )(y)  # (N, num_features)
         # y = self.activation_fn(y)
-        # y = nn.Dense(
-        #     features=num_features + num_degrees,
-        #     kernel_init=self.last_layer_kernel_init,
-        #     name='mlp_layer_2'
-        # )(y)  # (N, num_features + num_degrees)
+        y = nn.Dense(
+            features=num_features + num_degrees,
+            kernel_init=self.last_layer_kernel_init,
+            name='mlp_layer_2'
+        )(y)  # (N, num_features + num_degrees)
         cx, cev = jnp.split(
             y,
             indices_or_sections=np.array([num_features]),

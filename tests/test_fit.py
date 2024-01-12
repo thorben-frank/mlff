@@ -12,7 +12,7 @@ from pathlib import Path
 import pkg_resources
 
 
-def test_fit(disable_jit: bool = True):
+def test_fit(disable_jit: bool = False):
     if disable_jit:
         from jax.config import config
         config.update('jax_disable_jit', True)
