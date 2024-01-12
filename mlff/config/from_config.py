@@ -13,6 +13,13 @@ from pathlib import Path
 from typing import Sequence
 import wandb
 import yaml
+import logging
+from functools import partial, partialmethod
+
+logging.MLFF = 35
+logging.addLevelName(logging.MLFF, 'MLFF')
+logging.Logger.trace = partialmethod(logging.Logger.log, logging.MLFF)
+logging.mlff = partial(logging.log, logging.MLFF)
 
 
 def make_so3krates_sparse_from_config(config: config_dict.ConfigDict = None):
@@ -170,6 +177,7 @@ def run_training(config: config_dict.ConfigDict):
         yaml.dump(config.to_dict(), yaml_file, default_flow_style=False)
 
     wandb.init(config=config.to_dict(), **config.training.wandb_init_args)
+    logging.mlff('Training is starting!')
     training_utils.fit(
         model=so3k,
         optimizer=opt,
@@ -188,6 +196,7 @@ def run_training(config: config_dict.ConfigDict):
         model_seed=config.training.model_seed,
         log_gradient_values=config.training.log_gradient_values
     )
+    logging.mlff('Training has finished!')
 
 
 def run_evaluation(config, num_test: int = None, testing_targets: Sequence[str] = None):
@@ -226,6 +235,11 @@ def run_evaluation(config, num_test: int = None, testing_targets: Sequence[str] 
     num_train = config.training.num_train
     num_valid = config.training.num_valid
 
+    if (num_train + num_valid + num_test) > num_data:
+        raise ValueError(
+            f'num_train + num_valid + num_test = {num_train + num_valid + num_test} > num_data = {num_data}.'
+        )
+
     upper_bound = (num_train + num_valid + num_test) if num_test is not None else num_data
 
     testing_data = data.transformations.subtract_atomic_energy_shifts(
@@ -240,14 +254,15 @@ def run_evaluation(config, num_test: int = None, testing_targets: Sequence[str] 
     if config.training.batch_max_num_nodes is None:
         assert config.training.batch_max_num_edges is None
 
-        batch_max_num_nodes = data_stats['max_num_of_nodes'] * config.training.batch_max_num_graphs
-        batch_max_num_edges = data_stats['max_num_of_edges'] * config.training.batch_max_num_graphs
+        batch_max_num_nodes = data_stats['max_num_of_nodes'] * (config.training.batch_max_num_graphs - 1) + 1
+        batch_max_num_edges = data_stats['max_num_of_edges'] * (config.training.batch_max_num_graphs - 1) + 1
 
         config.training.batch_max_num_nodes = batch_max_num_nodes
         config.training.batch_max_num_edges = batch_max_num_edges
 
     ckpt_dir = Path(config.workdir) / 'checkpoints'
     ckpt_dir = ckpt_dir.expanduser().absolute().resolve()
+    logging.mlff(f'Restore parameters from {ckpt_dir} ...')
     ckpt_mngr = checkpoint.CheckpointManager(
         ckpt_dir,
         {'params': checkpoint.PyTreeCheckpointer()},
@@ -261,9 +276,10 @@ def run_evaluation(config, num_test: int = None, testing_targets: Sequence[str] 
         )['params']
     else:
         raise FileNotFoundError(f'No checkpoint found at {ckpt_dir}.')
+    logging.mlff(f'... done.')
 
     so3k = make_so3krates_sparse_from_config(config)
-    print(f'Evaluate on {data_filepath} for targets {targets}.')
+    logging.mlff(f'Evaluate on {data_filepath} for targets {targets}.')
     return evaluation_utils.evaluate(
         model=so3k,
         params=params,

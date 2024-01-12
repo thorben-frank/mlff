@@ -2,6 +2,7 @@ import jax
 import jax.numpy as jnp
 import jraph
 import numpy as np
+from tqdm import tqdm
 from mlff.nn.stacknet.observable_function_sparse import get_energy_and_force_fn_sparse
 
 
@@ -45,7 +46,7 @@ def evaluate(
 
     # Start iteration over validation batches.
     testing_metrics = []
-    for graph_batch_testing in iterator_testing:
+    for graph_batch_testing in tqdm(iterator_testing):
         batch_testing = graph_to_batch_fn(graph_batch_testing)
         batch_testing = jax.tree_map(jnp.array, batch_testing)
 

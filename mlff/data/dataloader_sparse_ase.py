@@ -3,11 +3,19 @@ from ase.io import iread
 from ase.neighborlist import neighbor_list
 from ase import Atoms
 from dataclasses import dataclass
-from typing import List
 from tqdm import tqdm
 import jax.numpy as jnp
 import numpy as np
 import jraph
+
+import logging
+
+from functools import partial, partialmethod
+
+logging.MLFF = 35
+logging.addLevelName(logging.MLFF, 'MLFF')
+logging.Logger.trace = partialmethod(logging.Logger.log, logging.MLFF)
+logging.mlff = partial(logging.log, logging.MLFF)
 
 
 @dataclass
@@ -15,7 +23,9 @@ class AseDataLoaderSparse:
     input_file: str
 
     def load_all(self, cutoff: float):
-        print(f"Read data from {self.input_file} ...")
+        logging.mlff(
+            f"Load data from {self.input_file} and calculate neighbors within cutoff={cutoff} Ang ..."
+        )
         loaded_data = []
         max_num_of_nodes = 0
         max_num_of_edges = 0
@@ -26,7 +36,7 @@ class AseDataLoaderSparse:
             max_num_of_nodes = max_num_of_nodes if num_nodes <= max_num_of_nodes else num_nodes
             max_num_of_edges = max_num_of_edges if num_edges <= max_num_of_edges else num_edges
             loaded_data.append(graph)
-        print("... done!")
+        logging.mlff("... done!")
 
         return loaded_data, {'max_num_of_nodes': max_num_of_nodes, 'max_num_of_edges': max_num_of_edges}
 

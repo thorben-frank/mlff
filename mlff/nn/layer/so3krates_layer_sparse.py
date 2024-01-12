@@ -90,9 +90,7 @@ class SO3kratesLayerSparse(BaseSubModule):
                                     idx_i=idx_i,
                                     idx_j=idx_j)  # (num_nodes, num_features), (num_nodes, num_orders)
 
-        x = nn.silu(
-            nn.Dense(num_features)(x) + nn.Dense(num_features)(x_att)
-        )  # (num_nodes, num_features)
+        x = x + x_att  # (num_nodes, num_features)
         ev = ev + ev_att  # (num_nodes, num_orders)
 
         if self.layer_normalization_1:
@@ -157,7 +155,7 @@ class SO3kratesLayerSparse(BaseSubModule):
                 }
 
 
-class AttentionBlock(nn.Module):
+class AttentionBlock_(nn.Module):
     degrees: Sequence[int]
     num_heads: int = 4
     num_features_head: int = 32
@@ -338,17 +336,17 @@ class ExchangeBlock(nn.Module):
         degree_repeat_fn = make_degree_repeat_fn(self.degrees, axis=-1)
 
         y = jnp.concatenate([x, contraction_fn(ev)], axis=-1)  # shape: (N, num_features+num_degrees)
-        y = self.activation_fn(y)
-        y = nn.Dense(
-            features=num_features,
-            name='mlp_layer_1'
-        )(y)  # (N, num_features)
-        y = self.activation_fn(y)
-        y = nn.Dense(
-            features=num_features + num_degrees,
-            kernel_init=self.last_layer_kernel_init,
-            name='mlp_layer_2'
-        )(y)  # (N, num_features + num_degrees)
+        # y = self.activation_fn(y)
+        # y = nn.Dense(
+        #     features=num_features,
+        #     name='mlp_layer_1'
+        # )(y)  # (N, num_features)
+        # y = self.activation_fn(y)
+        # y = nn.Dense(
+        #     features=num_features + num_degrees,
+        #     kernel_init=self.last_layer_kernel_init,
+        #     name='mlp_layer_2'
+        # )(y)  # (N, num_features + num_degrees)
         cx, cev = jnp.split(
             y,
             indices_or_sections=np.array([num_features]),
@@ -357,7 +355,7 @@ class ExchangeBlock(nn.Module):
         return cx, degree_repeat_fn(cev) * ev
 
 
-class AttentionBlock_(nn.Module):
+class AttentionBlock(nn.Module):
     degrees: Sequence[int]
     num_heads: int = 4
     num_features_head: int = 32

@@ -10,7 +10,6 @@ from typing import Callable, Dict
 import wandb
 from flax.core import unfreeze
 
-
 property_to_mask = {
     'energy': 'graph_mask',
     'stress': 'graph_mask',
@@ -18,23 +17,37 @@ property_to_mask = {
 }
 
 
-def scaled_safe_masked_mse_loss(y, y_true, scale, msk):
-    """
+# def scaled_safe_masked_mse_loss(y, y_true, scale, msk):
+#     """
+#
+#     Args:
+#         y (): shape: (B,d1, *, dN)
+#         y_true (): (B,d1, *, dN)
+#         scale (): (d1, *, dN) or everything broadcast-able to (B, d1, *, dN)
+#         msk (): shape: (B)
+#
+#     Returns:
+#
+#     """
+#     full_mask = ~jnp.isnan(y_true) & jnp.expand_dims(msk, [y_true.ndim - 1 - o for o in range(0, y_true.ndim - 1)])
+#     diff = jnp.where(full_mask, y_true, 0.) - jnp.where(full_mask, y, 0.)
+#     v = safe_mask(full_mask, fn=lambda u: scale * u ** 2, operand=diff)
+#     den = full_mask.reshape(-1).sum().astype(dtype=v.dtype)
+#     return safe_mask(den > 0, lambda x: v.reshape(-1).sum() / x, den, 0.)
 
-    Args:
-        y (): shape: (B,d1, *, dN)
-        y_true (): (B,d1, *, dN)
-        scale (): (d1, *, dN) or everything broadcast-able to (B, d1, *, dN)
-        msk (): shape: (B)
-
-    Returns:
-
-    """
-    full_mask = ~jnp.isnan(y_true) & jnp.expand_dims(msk, [y_true.ndim - 1 - o for o in range(0, y_true.ndim - 1)])
-    diff = jnp.where(full_mask, y_true, 0.) - jnp.where(full_mask, y, 0.)
-    v = safe_mask(full_mask, fn=lambda u: scale * diff ** 2, operand=y_true)
-    den = full_mask.reshape(-1).sum().astype(dtype=v.dtype)
-    return safe_mask(den > 0, lambda x: v.reshape(-1).sum() / x, den, 0.)
+def scaled_mse_loss(y, y_label, scale, mask):
+    full_mask = ~jnp.isnan(y_label) & jnp.expand_dims(mask, [y_label.ndim - 1 - o for o in range(0, y_label.ndim - 1)])
+    denominator = full_mask.sum().astype(y.dtype)
+    mse = (
+            jnp.sum(
+                2 * scale * optax.l2_loss(
+                    jnp.where(full_mask, y, 0).reshape(-1),
+                    jnp.where(full_mask, y_label, 0).reshape(-1),
+                )
+            )
+            / denominator
+    )
+    return mse
 
 
 def make_loss_fn(obs_fn: Callable, weights: Dict, scales: Dict = None):
@@ -60,11 +73,12 @@ def make_loss_fn(obs_fn: Callable, weights: Dict, scales: Dict = None):
         metrics = {}
         # Iterate over the targets, calculate loss and multiply with loss weights and scales.
         for target in targets:
-            _l = scaled_safe_masked_mse_loss(y=outputs_predict[target],
-                                             y_true=outputs_true[target],
-                                             scale=_scales[target],
-                                             msk=inputs[property_to_mask[target]]
-                                             )
+            _l = scaled_mse_loss(
+                y=outputs_predict[target],
+                y_label=outputs_true[target],
+                scale=_scales[target],
+                mask=inputs[property_to_mask[target]]
+            )
 
             loss += weights[target] * _l
             metrics.update({target: _l / _scales[target].mean()})
@@ -78,7 +92,6 @@ def make_loss_fn(obs_fn: Callable, weights: Dict, scales: Dict = None):
 
 
 def make_training_step_fn(optimizer, loss_fn, log_gradient_values):
-
     @jax.jit
     def training_step_fn(params, opt_state, batch):
         """
@@ -100,11 +113,11 @@ def make_training_step_fn(optimizer, loss_fn, log_gradient_values):
         params = optax.apply_updates(params=params, updates=updates)
         metrics['gradients_norm'] = optax.global_norm(grads)
         return params, opt_state, metrics
+
     return training_step_fn
 
 
 def make_validation_step_fn(metric_fn):
-
     @jax.jit
     def validation_step_fn(params, batch) -> Dict[str, jnp.ndarray]:
         """

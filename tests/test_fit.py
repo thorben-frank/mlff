@@ -12,7 +12,11 @@ from pathlib import Path
 import pkg_resources
 
 
-def test_fit():
+def test_fit(disable_jit: bool = True):
+    if disable_jit:
+        from jax.config import config
+        config.update('jax_disable_jit', True)
+
     filename = 'test_data/ethanol.npz'
     f = pkg_resources.resource_filename(__name__, filename)
 
@@ -74,9 +78,9 @@ def test_fit():
         loss_fn=loss_fn,
         graph_to_batch_fn=jraph_utils.graph_to_batch_fn,
         num_epochs=2,
-        batch_max_num_edges=73,
-        batch_max_num_nodes=10,
-        batch_max_num_graphs=2,
+        batch_max_num_edges=72+72+1,
+        batch_max_num_nodes=9+9+1,
+        batch_max_num_graphs=3,
         eval_every_num_steps=75,
         training_data=list(training_data),
         validation_data=list(validation_data),
