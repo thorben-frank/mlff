@@ -9,6 +9,7 @@ from typing import (Any, Callable, Dict, Sequence)
 
 from mlff.nn.base.sub_module import BaseSubModule
 from mlff.sph_ops import make_l0_contraction_fn
+from mlff.masking import mask
 
 
 def split_in_heads(x: jnp.ndarray, num_heads: int) -> (Callable, jnp.ndarray):
@@ -501,11 +502,11 @@ class AttentionBlock(nn.Module):
         k2_j = self.qk_non_linearity(jnp.einsum('Hij, NHj -> NHi', Wk2, x2_h))[idx_j]
         # (num_pairs, tot_num_heads, num_features_head)
 
-        alpha1_ij = (q1_i * w1_ij * k1_j).sum(axis=-1) / jnp.sqrt(q1_i.shape[-1]).astype(x.dtype) * jnp.expand_dims(cut,
-                                                                                                               axis=-1)
+        alpha1_ij = (q1_i * w1_ij * k1_j).sum(axis=-1) / jnp.sqrt(q1_i.shape[-1]).astype(x.dtype)
+        alpha1_ij = mask.safe_scale(alpha1_ij, jnp.expand_dims(cut, axis=-1))
         # (num_pairs, num_heads)
-        alpha2_ij = (q2_i * w2_ij * k2_j).sum(axis=-1) / jnp.sqrt(q2_i.shape[-1]).astype(x.dtype) * jnp.expand_dims(cut,
-                                                                                                                    axis=-1)
+        alpha2_ij = (q2_i * w2_ij * k2_j).sum(axis=-1) / jnp.sqrt(q2_i.shape[-1]).astype(x.dtype)
+        alpha2_ij = mask.safe_scale(alpha2_ij, jnp.expand_dims(cut, axis=-1))
         # (num_pairs, num_degrees)
 
         # Aggregation for invariant features
