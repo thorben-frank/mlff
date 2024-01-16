@@ -110,9 +110,10 @@ def test_so3krates_training():
     from mlff.properties import md17_property_keys as prop_keys
 
     import mlff.properties.property_names as pn
+    import pathlib
 
     data_path = 'test_data/ethanol.npz'
-    save_path = '_test_train_so3krates'
+    save_path = pathlib.Path('_test_train_so3krates').expanduser().absolute().resolve()
     ckpt_dir = os.path.join(save_path, 'module')
     ckpt_dir = create_directory(ckpt_dir, exists_ok=False)
 
