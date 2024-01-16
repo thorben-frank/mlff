@@ -1,4 +1,5 @@
 import jax.numpy as jnp
+import numpy as np
 import os
 
 from typing import Callable, Type
@@ -47,6 +48,14 @@ class MLFFPotential(MachineLearningPotential):
         Returns:
 
         """
+
+        if add_shift is True and (dtype == np.float32 or dtype == jnp.float32):
+            import logging
+            logging.warning('Energy shift is enabled but float32 precision is used.'
+                            ' For large absolute energy values, this can lead to floating point errors in the energies.'
+                            ' If you do not need the absolute energy values since only relative ones are important, we'
+                            ' suggest to disable the energy shift since increasing the precision slows down'
+                            ' computation.')
 
         net = init_stack_net(read_json(os.path.join(ckpt_dir, 'hyperparameters.json')))
         scales = read_json(os.path.join(ckpt_dir, 'scales.json'))
