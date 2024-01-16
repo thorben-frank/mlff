@@ -4,7 +4,7 @@ setup(
     name="mlff",
     version="0.3.0",
     description="Build Neural Networks for Force Fields with JAX",
-    python_requires=">=3.8",
+    python_requires=">=3.9",
     packages=find_packages(),
     install_requires=[
         "numpy",
@@ -12,7 +12,7 @@ setup(
         "flax",
         "jaxopt",
         "jraph",
-        "optax == 0.1.7",
+        "optax",
         "orbax-checkpoint",
         "portpicker",
         # 'tensorflow',
