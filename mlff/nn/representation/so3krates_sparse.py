@@ -47,7 +47,7 @@ def init_so3krates_sparse(
 
     layers = [SO3kratesLayerSparse(
         degrees=degrees,
-        use_spherical_filter=True,
+        use_spherical_filter=i > 0,
         num_heads=num_heads,
         num_features_head=num_features_head,
         qk_non_linearity=getattr(nn.activation, qk_non_linearity) if qk_non_linearity != 'identity' else lambda u: u,
