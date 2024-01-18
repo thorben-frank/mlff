@@ -92,8 +92,6 @@ class SO3kratesLayerSparse(BaseSubModule):
 
         x = x + x_att  # (num_nodes, num_features)
         ev = ev + ev_att  # (num_nodes, num_orders)
-        if not self.use_spherical_filter:
-            ev = ev * 100
 
         if self.layer_normalization_1:
             x = nn.LayerNorm(name='layer_normalization_1')(x)  # (num_nodes, num_features)

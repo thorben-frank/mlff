@@ -4,7 +4,7 @@ setup(
     name="mlff",
     version="1.0",
     description="Build Neural Networks for Force Fields with JAX",
-    python_requires=">=3.8",
+    python_requires=">=3.9",
     packages=find_packages(),
     install_requires=[
         "numpy",
