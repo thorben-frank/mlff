@@ -97,6 +97,13 @@ def run_training(config: config_dict.ConfigDict):
 
     if data_filepath.suffix == '.npz':
         loader = data.NpzDataLoaderSparse(input_file=data_filepath)
+    elif data_filepath.stem[:5].lower() == 'spice':
+        logging.mlff(f'Found SPICE dataset at {data_filepath}.')
+        if data_filepath.suffix != '.hdf5':
+            raise ValueError(
+                f'Loader assumes that SPICE is in hdf5 format. Found {data_filepath.suffix} as'
+                f'suffix.')
+        loader = data.SpiceDataLoaderSparse(input_file=data_filepath)
     else:
         loader = data.AseDataLoaderSparse(input_file=data_filepath)
 

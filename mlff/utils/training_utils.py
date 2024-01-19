@@ -1,7 +1,6 @@
 import jraph
 import jax
 import jax.numpy as jnp
-from mlff.masking.mask import safe_mask
 import numpy as np
 import optax
 from orbax import checkpoint
@@ -185,7 +184,7 @@ def fit(
     jax_rng = jax.random.PRNGKey(seed=model_seed)
 
     # Create checkpoint directory.
-    ckpt_dir = Path(ckpt_dir).resolve().absolute()
+    ckpt_dir = Path(ckpt_dir).expanduser().resolve()
     ckpt_dir.mkdir(exist_ok=True)
 
     # Create orbax CheckpointManager.
@@ -201,7 +200,7 @@ def fit(
 
     ckpt_mngr = checkpoint.CheckpointManager(
         ckpt_dir,
-        {'params': checkpoint.PyTreeCheckpointer()},
+        item_names=('params', ),
         options=options
     )
 
@@ -241,7 +240,7 @@ def fit(
                     if allow_restart:
                         params = ckpt_mngr.restore(
                             latest_step,
-                            {'params': checkpoint.PyTreeCheckpointer()}
+                            args=checkpoint.args.Composite(params=checkpoint.args.StandardRestore())
                         )['params']
                         step += latest_step
                         print(f'Re-start training from {latest_step}.')
@@ -298,7 +297,7 @@ def fit(
                 # Save checkpoint.
                 ckpt_mngr.save(
                     step,
-                    {'params': params},
+                    args=checkpoint.args.Composite(params=checkpoint.args.StandardSave(params)),
                     metrics={'loss': validation_metrics_np['loss'].item()}
                 )
 
