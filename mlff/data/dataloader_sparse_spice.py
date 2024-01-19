@@ -63,17 +63,17 @@ class SpiceDataLoaderSparse:
                 senders, receivers = compute_senders_and_receivers_np(conformations[n], cutoff=cutoff)
 
                 g = jraph.GraphsTuple(
-                    n_node=jnp.array([len(atomic_numbers)]),
-                    n_edge=jnp.array([len(receivers)]),
-                    globals=dict(energy=jnp.array(energy[n]).reshape(-1)),
+                    n_node=np.array([len(atomic_numbers)]),
+                    n_edge=np.array([len(receivers)]),
+                    globals=dict(energy=np.array(energy[n]).reshape(-1)),
                     nodes=dict(
-                        atomic_numbers=jnp.array(atomic_numbers).astype(jnp.int16),
-                        positions=jnp.array(conformations[n]),
-                        forces=jnp.array(forces[n])
+                        atomic_numbers=np.array(atomic_numbers).astype(np.int16),
+                        positions=np.array(conformations[n]),
+                        forces=np.array(forces[n])
                     ),
                     edges=None,
-                    receivers=jnp.array(senders),  # opposite convention in mlff
-                    senders=jnp.array(receivers)
+                    receivers=np.array(senders),  # opposite convention in mlff
+                    senders=np.array(receivers)
                 )
                 loaded_data += [g]
                 num_nodes = len(g.nodes['atomic_numbers'])

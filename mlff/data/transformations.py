@@ -62,3 +62,17 @@ def calculate_average_number_of_nodes(x: Sequence[jraph.GraphsTuple]):
             rolling_mean = ((rolling_mean + num_nodes / (count - 1)) / count * (count - 1))
 
     return rolling_mean
+
+
+def calculate_average_number_of_neighbors(x: Sequence[jraph.GraphsTuple]):
+    rolling_mean = jnp.asarray(0, dtype=jnp.int32)
+    for n, g in enumerate(x):
+        count = n + 1
+        num_edges = float(len(g.receivers))
+        num_nodes = float(len(g.nodes.get('atomic_numbers')))
+        if count == 1:
+            rolling_mean = (rolling_mean + (num_edges / num_nodes) / count)
+        else:
+            rolling_mean = ((rolling_mean + (num_edges / num_nodes) / (count - 1)) / count * (count - 1))
+
+    return rolling_mean

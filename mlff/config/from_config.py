@@ -154,6 +154,11 @@ def run_training(config: config_dict.ConfigDict):
         atomic_energy_shifts={int(k): v for (k, v) in config.data.energy_shifts.items()}
     )
 
+    # if config.model.normalization == 'avg_num_neighbors':
+    #     config.data.avg_num_neighbors = config_dict.placeholder(float)
+    #     avg_num_neighbors = data.transformations.calculate_average_number_of_neighbors(all_data[:num_train])
+    #     config.data.avg_num_neighbors = avg_num_neighbors
+
     opt = make_optimizer_from_config(config)
     so3k = make_so3krates_sparse_from_config(config)
 
