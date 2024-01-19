@@ -21,6 +21,8 @@ def init_so3krates_sparse(
         residual_mlp_2: bool = True,
         layer_normalization_1: bool = False,
         layer_normalization_2: bool = False,
+        message_normalization: str = 'sqrt_num_features',
+        avg_num_neighbors: float = None,
         qk_non_linearity: str = 'silu',
         activation_fn: str = 'silu',
         layers_behave_like_identity_fn_at_init: bool = False,
@@ -55,6 +57,8 @@ def init_so3krates_sparse(
         residual_mlp_2=residual_mlp_2,
         layer_normalization_1=layer_normalization_1,
         layer_normalization_2=layer_normalization_2,
+        message_normalization=message_normalization,
+        avg_num_neighbors=avg_num_neighbors,
         activation_fn=getattr(nn.activation, activation_fn) if activation_fn != 'identity' else lambda u: u,
         behave_like_identity_fn_at_init=layers_behave_like_identity_fn_at_init
     ) for i in range(num_layers)]

@@ -35,6 +35,8 @@ class SO3kratesLayerSparse(BaseSubModule):
     residual_mlp_2: bool = False
     layer_normalization_1: bool = False
     layer_normalization_2: bool = False
+    message_normalization: str = 'sqrt_num_features'
+    avg_num_neighbors: float = None
     activation_fn: Callable = jax.nn.silu
     behave_like_identity_fn_at_init: bool = False
     module_name: str = 'so3krates_layer_sparse'
@@ -44,6 +46,12 @@ class SO3kratesLayerSparse(BaseSubModule):
             self.last_layer_kernel_init = jax.nn.initializers.zeros
         else:
             self.last_layer_kernel_init = jax.nn.initializers.lecun_normal()
+        if self.message_normalization == 'avg_num_neighbors':
+            if self.avg_num_neighbors is None:
+                raise ValueError(
+                    '`avg_num_neighbors` must be set for `SO3kratesLayerSparse` if using '
+                    '`message_normalization=avg_num_neighbors`.'
+                )
 
     @nn.compact
     def __call__(self,
@@ -82,13 +90,16 @@ class SO3kratesLayerSparse(BaseSubModule):
             use_spherical_filter=self.use_spherical_filter,
             output_is_zero_at_init=self.behave_like_identity_fn_at_init,
             activation_fn=self.activation_fn,
+            normalization=self.message_normalization,
+            avg_num_neighbors=self.avg_num_neighbors,
             name='attention_block')(x=x,
                                     ev=ev,
                                     rbf_ij=rbf_ij,
                                     ylm_ij=ylm_ij,
                                     cut=cut,
                                     idx_i=idx_i,
-                                    idx_j=idx_j)  # (num_nodes, num_features), (num_nodes, num_orders)
+                                    idx_j=idx_j,
+                                    avg_num_neighbors=self.avg_num_neighbors)  # (num_nodes, num_features), (num_nodes, num_orders)
 
         x = x + x_att  # (num_nodes, num_features)
         ev = ev + ev_att  # (num_nodes, num_orders)
@@ -359,6 +370,8 @@ class AttentionBlock(nn.Module):
     degrees: Sequence[int]
     num_heads: int = 4
     num_features_head: int = 32
+    normalization: str = 'sqrt_num_features'
+    avg_num_neighbors: float = None
     qk_non_linearity: Callable = jax.nn.silu
     activation_fn: Callable = jax.nn.silu
     output_is_zero_at_init: bool = False
@@ -503,10 +516,25 @@ class AttentionBlock(nn.Module):
         k2_j = self.qk_non_linearity(jnp.einsum('Hij, NHj -> NHi', Wk2, x2_h))[idx_j]
         # (num_pairs, tot_num_heads, num_features_head)
 
-        alpha1_ij = (q1_i * w1_ij * k1_j).sum(axis=-1) / jnp.sqrt(q1_i.shape[-1]).astype(x.dtype)
+        if self.normalization == 'identity':
+            nc1 = jnp.array([1.])
+            nc2 = jnp.array([1.])
+        elif self.normalization == 'sqrt_num_features':
+            nc1 = jnp.sqrt(q1_i.shape[-1])
+            nc2 = jnp.sqrt(q2_i.shape[-1])
+        elif self.normalization == 'avg_num_neighbors':
+            nc1 = jnp.asarray(self.avg_num_neighbors)
+            nc2 = jnp.asarray(self.avg_num_neighbors)
+        else:
+            raise ValueError(f'{self.normalization} is not supported.')
+
+        nc1 = nc1.astype(x.dtype)
+        nc2 = nc2.astype(x.dtype)
+
+        alpha1_ij = (q1_i * w1_ij * k1_j).sum(axis=-1) / nc1
         alpha1_ij = mask.safe_scale(alpha1_ij, jnp.expand_dims(cut, axis=-1))
         # (num_pairs, num_heads)
-        alpha2_ij = (q2_i * w2_ij * k2_j).sum(axis=-1) / jnp.sqrt(q2_i.shape[-1]).astype(x.dtype)
+        alpha2_ij = (q2_i * w2_ij * k2_j).sum(axis=-1) / nc2
         alpha2_ij = mask.safe_scale(alpha2_ij, jnp.expand_dims(cut, axis=-1))
         # (num_pairs, num_degrees)
 

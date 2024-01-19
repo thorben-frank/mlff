@@ -71,7 +71,7 @@ class SpiceDataLoaderSparse:
                         positions=np.array(conformations[n]),
                         forces=np.array(forces[n])
                     ),
-                    edges=None,
+                    edges=dict(cell=None, cell_offsets=None),
                     receivers=np.array(senders),  # opposite convention in mlff
                     senders=np.array(receivers)
                 )

@@ -47,6 +47,8 @@ def make_so3krates_sparse_from_config(config: config_dict.ConfigDict = None):
         residual_mlp_2=model_config.residual_mlp_2,
         layer_normalization_1=model_config.layer_normalization_1,
         layer_normalization_2=model_config.layer_normalization_2,
+        message_normalization=config.model.message_normalization,
+        avg_num_neighbors=config.data.avg_num_neighbors if config.model.message_normalization == 'avg_num_neighbors' else None,
         qk_non_linearity=model_config.qk_non_linearity,
         activation_fn=model_config.activation_fn,
         layers_behave_like_identity_fn_at_init=model_config.layers_behave_like_identity_fn_at_init,
@@ -154,10 +156,12 @@ def run_training(config: config_dict.ConfigDict):
         atomic_energy_shifts={int(k): v for (k, v) in config.data.energy_shifts.items()}
     )
 
-    # if config.model.normalization == 'avg_num_neighbors':
-    #     config.data.avg_num_neighbors = config_dict.placeholder(float)
-    #     avg_num_neighbors = data.transformations.calculate_average_number_of_neighbors(all_data[:num_train])
-    #     config.data.avg_num_neighbors = avg_num_neighbors
+    # If messages are normalized by the average number of neighbors, we need to calculate this quantity from the
+    # training data.
+    if config.model.message_normalization == 'avg_num_neighbors':
+        config.data.avg_num_neighbors = config_dict.placeholder(float)
+        avg_num_neighbors = data.transformations.calculate_average_number_of_neighbors(all_data[:num_train])
+        config.data.avg_num_neighbors = np.array(avg_num_neighbors).item()
 
     opt = make_optimizer_from_config(config)
     so3k = make_so3krates_sparse_from_config(config)

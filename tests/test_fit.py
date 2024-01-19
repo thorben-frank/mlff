@@ -62,6 +62,8 @@ def test_fit(disable_jit: bool = False):
         num_features_head=8,
         num_heads=2,
         degrees=[1, 2],
+        message_normalization='avg_num_neighbors',
+        avg_num_neighbors=8.
     )
 
     loss_fn = training_utils.make_loss_fn(
