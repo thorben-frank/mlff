@@ -109,11 +109,12 @@ def run_training(config: config_dict.ConfigDict):
     else:
         loader = data.AseDataLoaderSparse(input_file=data_filepath)
 
-    all_data, data_stats = loader.load_all(cutoff=config.model.cutoff)
-    num_data = len(all_data)
-
     energy_unit = eval(config.data.energy_unit)
     length_unit = eval(config.data.length_unit)
+
+    # Cutoff is in Angstrom, so we have to divide the cutoff by the length unit.
+    all_data, data_stats = loader.load_all(cutoff=config.model.cutoff / length_unit)
+    num_data = len(all_data)
 
     split_seed = config.data.split_seed
     numpy_rng = np.random.RandomState(split_seed)
