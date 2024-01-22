@@ -1,9 +1,20 @@
+from clu import metrics
+import flax.struct as flax_struct
 import jax
 import jax.numpy as jnp
 import jraph
 import numpy as np
 from tqdm import tqdm
+from typing import Any
 from mlff.nn.stacknet.observable_function_sparse import get_energy_and_force_fn_sparse
+
+
+@flax_struct.dataclass
+class MetricsTesting(metrics.Collection):
+    energy_mse: metrics.Average.from_output('energy_mse')
+    forces_mse: metrics.Average.from_output('forces_mse')
+    energy_mae: metrics.Average.from_output('energy_mae')
+    forces_mae: metrics.Average.from_output('forces_mae')
 
 
 def evaluate(
@@ -46,6 +57,7 @@ def evaluate(
 
     # Start iteration over validation batches.
     testing_metrics = []
+    test_metrics: Any = None
     for graph_batch_testing in tqdm(iterator_testing):
         batch_testing = graph_to_batch_fn(graph_batch_testing)
         batch_testing = jax.tree_map(jnp.array, batch_testing)
@@ -74,15 +86,25 @@ def evaluate(
                 y_predicted=output_prediction[t], y_true=batch_testing[t], msk=msk
             ),
 
-            testing_metrics += [metrics_dict]
+        test_metrics = (
+            MetricsTesting.single_from_model_output(**metrics_dict)
+            if test_metrics is None
+            else test_metrics.merge(MetricsTesting.single_from_model_output(**metrics_dict))
+        )
+    test_metrics = test_metrics.compute()
 
-    testing_metrics_np = jax.device_get(testing_metrics)
-    testing_metrics_np = {
-        k: np.mean([m[k] for m in testing_metrics_np]) for k in testing_metrics_np[0]
+    # testing_metrics_np = jax.device_get(testing_metrics)
+    # testing_metrics_np = {
+    #     k: np.mean([m[k] for m in testing_metrics_np]) for k in testing_metrics_np[0]
+    # }
+
+    test_metrics = {
+        f'test_{k}': float(v) for k, v in test_metrics.items()
     }
+
     for t in testing_targets:
-        testing_metrics_np[f'{t}_rmse'] = np.sqrt(testing_metrics_np[f'{t}_mse'])
-    return testing_metrics_np
+        test_metrics[f'test_{t}_rmse'] = np.sqrt(test_metrics[f'test_{t}_mse'])
+    return test_metrics
 
 
 def calculate_mse(y_predicted, y_true, msk):

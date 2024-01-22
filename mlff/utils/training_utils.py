@@ -1,3 +1,4 @@
+from clu import metrics
 import jraph
 import jax
 import jax.numpy as jnp
@@ -5,9 +6,10 @@ import numpy as np
 import optax
 from orbax import checkpoint
 from pathlib import Path
-from typing import Callable, Dict
+from typing import Any, Callable, Dict
 import wandb
 from flax.core import unfreeze
+from flax import struct as flax_struct
 
 property_to_mask = {
     'energy': 'graph_mask',
@@ -16,23 +18,20 @@ property_to_mask = {
 }
 
 
-# def scaled_safe_masked_mse_loss(y, y_true, scale, msk):
-#     """
-#
-#     Args:
-#         y (): shape: (B,d1, *, dN)
-#         y_true (): (B,d1, *, dN)
-#         scale (): (d1, *, dN) or everything broadcast-able to (B, d1, *, dN)
-#         msk (): shape: (B)
-#
-#     Returns:
-#
-#     """
-#     full_mask = ~jnp.isnan(y_true) & jnp.expand_dims(msk, [y_true.ndim - 1 - o for o in range(0, y_true.ndim - 1)])
-#     diff = jnp.where(full_mask, y_true, 0.) - jnp.where(full_mask, y, 0.)
-#     v = safe_mask(full_mask, fn=lambda u: scale * u ** 2, operand=diff)
-#     den = full_mask.reshape(-1).sum().astype(dtype=v.dtype)
-#     return safe_mask(den > 0, lambda x: v.reshape(-1).sum() / x, den, 0.)
+@flax_struct.dataclass
+class MetricsTraining(metrics.Collection):
+    loss: metrics.Average.from_output('loss')
+    grad_norm: metrics.Average.from_output('grad_norm')
+    energy_mse: metrics.Average.from_output('energy_mse')
+    forces_mse: metrics.Average.from_output('forces_mse')
+
+
+@flax_struct.dataclass
+class MetricsEvaluation(metrics.Collection):
+    loss: metrics.Average.from_output('loss')
+    energy_mse: metrics.Average.from_output('energy_mse')
+    forces_mse: metrics.Average.from_output('forces_mse')
+
 
 def scaled_mse_loss(y, y_label, scale, mask):
     full_mask = ~jnp.isnan(y_label) & jnp.expand_dims(mask, [y_label.ndim - 1 - o for o in range(0, y_label.ndim - 1)])
@@ -80,7 +79,7 @@ def make_loss_fn(obs_fn: Callable, weights: Dict, scales: Dict = None):
             )
 
             loss += weights[target] * _l
-            metrics.update({target: _l / _scales[target].mean()})
+            metrics.update({f'{target}_mse': _l / _scales[target].mean()})
 
         loss = jnp.reshape(loss, ())
         metrics.update({'loss': loss})
@@ -106,11 +105,11 @@ def make_training_step_fn(optimizer, loss_fn, log_gradient_values):
 
         """
         (loss, metrics), grads = jax.value_and_grad(loss_fn, has_aux=True)(params, batch)
-        if log_gradient_values:
-            metrics['gradient_norms'] = unfreeze(jax.tree_map(lambda x: jnp.linalg.norm(x.reshape(-1), axis=0), grads))
+        # if log_gradient_values:
+        #     metrics['grad_norm'] = unfreeze(jax.tree_map(lambda x: jnp.linalg.norm(x.reshape(-1), axis=0), grads))
         updates, opt_state = optimizer.update(grads, opt_state, params)
         params = optax.apply_updates(params=params, updates=updates)
-        metrics['gradients_norm'] = optax.global_norm(grads)
+        metrics['grad_norm'] = optax.global_norm(grads)
         return params, opt_state, metrics
 
     return training_step_fn
@@ -263,7 +262,7 @@ def fit(
             # Log training metrics.
             if use_wandb:
                 wandb.log(
-                    {'Training {}'.format(k): v for (k, v) in train_metrics_np.items()},
+                    {f'train_{k}': v for (k, v) in train_metrics_np.items()},
                     step=step
                 )
 
@@ -277,34 +276,40 @@ def fit(
                 )
 
                 # Start iteration over validation batches.
-                validation_metrics = []
+                eval_metrics: Any = None
                 for graph_batch_validation in iterator_validation:
                     batch_validation = graph_to_batch_fn(graph_batch_validation)
                     batch_validation = jax.tree_map(jnp.array, batch_validation)
 
-                    validation_metrics += [
-                        validation_step_fn(
-                            params,
-                            batch_validation
-                        )
-                    ]
+                    eval_out = validation_step_fn(
+                        params,
+                        batch_validation
+                    )
 
-                validation_metrics_np = jax.device_get(validation_metrics)
-                validation_metrics_np = {
-                    k: np.mean([metrics[k] for metrics in validation_metrics]) for k in validation_metrics_np[0]
+                    eval_metrics = (
+                        MetricsEvaluation.single_from_model_output(**eval_out)
+                        if eval_metrics is None
+                        else eval_metrics.merge(MetricsEvaluation.single_from_model_output(**eval_out))
+                    )
+
+                eval_metrics = eval_metrics.compute()
+
+                # Convert to dict to log with weights and bias.
+                eval_metrics = {
+                    f'eval_{k}': float(v) for k, v in eval_metrics.items()
                 }
 
                 # Save checkpoint.
                 ckpt_mngr.save(
                     step,
                     args=checkpoint.args.Composite(params=checkpoint.args.StandardSave(params)),
-                    metrics={'loss': validation_metrics_np['loss'].item()}
+                    metrics={'loss': eval_metrics['eval_loss']}
                 )
 
                 # Log to weights and bias.
                 if use_wandb:
-                    wandb.log({
-                        f'Validation {k}': v for (k, v) in validation_metrics_np.items()},
+                    wandb.log(
+                        eval_metrics,
                         step=step
                     )
             # Finished validation process.

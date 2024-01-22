@@ -252,12 +252,11 @@ def run_evaluation(config, num_test: int = None, testing_targets: Sequence[str] 
     num_train = config.training.num_train
     num_valid = config.training.num_valid
 
-    if (num_train + num_valid + num_test) > num_data:
+    upper_bound = (num_train + num_valid + num_test) if num_test is not None else num_data
+    if upper_bound > num_data:
         raise ValueError(
             f'num_train + num_valid + num_test = {num_train + num_valid + num_test} > num_data = {num_data}.'
         )
-
-    upper_bound = (num_train + num_valid + num_test) if num_test is not None else num_data
 
     testing_data = data.transformations.subtract_atomic_energy_shifts(
         data.transformations.unit_conversion(

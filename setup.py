@@ -8,6 +8,7 @@ setup(
     packages=find_packages(),
     install_requires=[
         "numpy",
+        "clu",
         # "jax == 0.4.8",
         "flax",
         "jaxopt",
