@@ -1,4 +1,5 @@
 import jax.numpy as jnp
+import numpy as np
 import jraph
 import numpy.testing as npt
 from mlff.data import AseDataLoaderSparse
@@ -27,18 +28,18 @@ def test_data_load_no_pbc():
         cell_offset = all_data[i].edges['cell_offset']
         stress = all_data[i].globals['stress']
 
-        npt.assert_(isinstance(forces, jnp.ndarray))
-        npt.assert_(isinstance(energy, jnp.ndarray))
-        npt.assert_(isinstance(atomic_numbers, jnp.ndarray))
-        npt.assert_(isinstance(senders, jnp.ndarray))
-        npt.assert_(isinstance(receivers, jnp.ndarray))
+        npt.assert_(isinstance(forces, np.ndarray))
+        npt.assert_(isinstance(energy, np.ndarray))
+        npt.assert_(isinstance(atomic_numbers, np.ndarray))
+        npt.assert_(isinstance(senders, np.ndarray))
+        npt.assert_(isinstance(receivers, np.ndarray))
 
-        npt.assert_equal(forces.dtype, jnp.float32)
-        npt.assert_equal(energy.dtype, jnp.float32)
-        npt.assert_equal(positions.dtype, jnp.float32)
-        npt.assert_equal(atomic_numbers.dtype, jnp.int32)
-        npt.assert_equal(senders.dtype, jnp.int32)
-        npt.assert_equal(receivers.dtype, jnp.int32)
+        npt.assert_equal(forces.dtype, np.float64)
+        npt.assert_equal(energy.dtype, np.float64)
+        npt.assert_equal(positions.dtype, np.float64)
+        npt.assert_equal(atomic_numbers.dtype, np.int64)
+        npt.assert_equal(senders.dtype, np.int64)
+        npt.assert_equal(receivers.dtype, np.int64)
 
         npt.assert_equal(cell, None)
         npt.assert_equal(cell_offset, None)
@@ -74,22 +75,22 @@ def test_data_load_with_pbc():
         forces = all_data[i].nodes.get('forces')
         stress = all_data[i].globals['stress']
 
-        npt.assert_(isinstance(energy, jnp.ndarray))
-        npt.assert_(isinstance(forces, jnp.ndarray))
-        npt.assert_(isinstance(cell, jnp.ndarray))
-        npt.assert_(isinstance(cell_offset, jnp.ndarray))
-        npt.assert_(isinstance(atomic_numbers, jnp.ndarray))
-        npt.assert_(isinstance(senders, jnp.ndarray))
-        npt.assert_(isinstance(receivers, jnp.ndarray))
+        npt.assert_(isinstance(energy, np.ndarray))
+        npt.assert_(isinstance(forces, np.ndarray))
+        npt.assert_(isinstance(cell, np.ndarray))
+        npt.assert_(isinstance(cell_offset, np.ndarray))
+        npt.assert_(isinstance(atomic_numbers, np.ndarray))
+        npt.assert_(isinstance(senders, np.ndarray))
+        npt.assert_(isinstance(receivers, np.ndarray))
 
-        npt.assert_equal(positions.dtype, jnp.float32)
-        npt.assert_equal(atomic_numbers.dtype, jnp.int32)
-        npt.assert_equal(energy.dtype, jnp.float32)
-        npt.assert_equal(forces.dtype, jnp.float32)
-        npt.assert_equal(senders.dtype, jnp.int32)
-        npt.assert_equal(receivers.dtype, jnp.int32)
-        npt.assert_equal(cell.dtype, jnp.float32)
-        npt.assert_equal(cell_offset.dtype, jnp.int32)
+        npt.assert_equal(positions.dtype, np.float64)
+        npt.assert_equal(atomic_numbers.dtype, np.int64)
+        npt.assert_equal(energy.dtype, np.float64)
+        npt.assert_equal(forces.dtype, np.float64)
+        npt.assert_equal(senders.dtype, np.int64)
+        npt.assert_equal(receivers.dtype, np.int64)
+        npt.assert_equal(cell.dtype, np.float64)
+        npt.assert_equal(cell_offset.dtype, jnp.int64)
 
         npt.assert_equal(stress, None)
 

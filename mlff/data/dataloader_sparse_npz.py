@@ -1,7 +1,6 @@
 from ase.neighborlist import neighbor_list
 from ase import Atoms
 from dataclasses import dataclass
-import jax.numpy as jnp
 import jraph
 import numpy as np
 from tqdm import tqdm
@@ -74,8 +73,8 @@ def entry_to_jraph(
     if mol.get_pbc().any():
         i, j, S = neighbor_list('ijS', mol, cutoff, self_interaction=self_interaction)
         edge_features = {
-            "cell": jnp.repeat(jnp.array(cell)[None], repeats=len(S), axis=0),
-            "cell_offset": jnp.array(S)
+            "cell": np.repeat(np.array(cell)[None], repeats=len(S), axis=0),
+            "cell_offset": np.array(S)
         }
     else:
         i, j = neighbor_list('ij', mol, cutoff, self_interaction=self_interaction)
@@ -85,20 +84,20 @@ def entry_to_jraph(
         }
 
     node_features = {
-        "positions": jnp.array(positions),
-        "atomic_numbers": jnp.array(atomic_numbers, dtype=jnp.int32),
-        "forces": jnp.array(forces),
+        "positions": np.array(positions),
+        "atomic_numbers": np.array(atomic_numbers, dtype=np.int64),
+        "forces": np.array(forces),
             }
 
-    senders = jnp.array(j)
-    receivers = jnp.array(i)
+    senders = np.array(j)
+    receivers = np.array(i)
 
-    n_node = jnp.array([mol.get_global_number_of_atoms()])
-    n_edge = jnp.array([len(i)])
+    n_node = np.array([mol.get_global_number_of_atoms()])
+    n_edge = np.array([len(i)])
 
     global_context = {
-        "energy": jnp.array(energy) if energy is not None else None,
-        "stress": jnp.array(stress) if stress is not None else None
+        "energy": np.array(energy) if energy is not None else None,
+        "stress": np.array(stress) if stress is not None else None
     }
 
     return jraph.GraphsTuple(
