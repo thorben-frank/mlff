@@ -1,5 +1,5 @@
-from clu import metrics
-import flax.struct as flax_struct
+import clu.metrics as clu_metrics
+import itertools as it
 import jax
 import jax.numpy as jnp
 import jraph
@@ -7,14 +7,6 @@ import numpy as np
 from tqdm import tqdm
 from typing import Any
 from mlff.nn.stacknet.observable_function_sparse import get_energy_and_force_fn_sparse
-
-
-@flax_struct.dataclass
-class MetricsTesting(metrics.Collection):
-    energy_mse: metrics.Average.from_output('energy_mse')
-    forces_mse: metrics.Average.from_output('forces_mse')
-    energy_mae: metrics.Average.from_output('energy_mae')
-    forces_mae: metrics.Average.from_output('forces_mae')
 
 
 def evaluate(
@@ -55,6 +47,10 @@ def evaluate(
         n_graph=batch_max_num_graphs
     )
 
+    # Create a collections object for the test targets.
+    test_collection = clu_metrics.Collection.create(
+        **{f'{t}_{m}': clu_metrics.Average.from_output(f'{t}_{m}') for (t, m) in it.product(testing_targets, ('mae', 'mse'))})
+
     # Start iteration over validation batches.
     testing_metrics = []
     test_metrics: Any = None
@@ -87,9 +83,9 @@ def evaluate(
             ),
 
         test_metrics = (
-            MetricsTesting.single_from_model_output(**metrics_dict)
+            test_collection.single_from_model_output(**metrics_dict)
             if test_metrics is None
-            else test_metrics.merge(MetricsTesting.single_from_model_output(**metrics_dict))
+            else test_metrics.merge(test_collection.single_from_model_output(**metrics_dict))
         )
     test_metrics = test_metrics.compute()
 

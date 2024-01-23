@@ -1,4 +1,4 @@
-from clu import metrics
+import clu.metrics as clu_metrics
 import jraph
 import jax
 import jax.numpy as jnp
@@ -8,29 +8,12 @@ from orbax import checkpoint
 from pathlib import Path
 from typing import Any, Callable, Dict
 import wandb
-from flax.core import unfreeze
-from flax import struct as flax_struct
 
 property_to_mask = {
     'energy': 'graph_mask',
     'stress': 'graph_mask',
     'forces': 'node_mask',
 }
-
-
-@flax_struct.dataclass
-class MetricsTraining(metrics.Collection):
-    loss: metrics.Average.from_output('loss')
-    grad_norm: metrics.Average.from_output('grad_norm')
-    energy_mse: metrics.Average.from_output('energy_mse')
-    forces_mse: metrics.Average.from_output('forces_mse')
-
-
-@flax_struct.dataclass
-class MetricsEvaluation(metrics.Collection):
-    loss: metrics.Average.from_output('loss')
-    energy_mse: metrics.Average.from_output('energy_mse')
-    forces_mse: metrics.Average.from_output('forces_mse')
 
 
 def scaled_mse_loss(y, y_label, scale, mask):
@@ -277,6 +260,7 @@ def fit(
 
                 # Start iteration over validation batches.
                 eval_metrics: Any = None
+                eval_collection: Any = None
                 for graph_batch_validation in iterator_validation:
                     batch_validation = graph_to_batch_fn(graph_batch_validation)
                     batch_validation = jax.tree_map(jnp.array, batch_validation)
@@ -285,11 +269,16 @@ def fit(
                         params,
                         batch_validation
                     )
+                    # The metrics are created dynamically during the first evaluation batch, since we aim to support
+                    # all kinds of targets beyond energies and forces at some point.
+                    if eval_collection is None:
+                        eval_collection = clu_metrics.Collection.create(
+                            **{k: clu_metrics.Average.from_output(f'{k}') for k in eval_out.keys()})
 
                     eval_metrics = (
-                        MetricsEvaluation.single_from_model_output(**eval_out)
+                        eval_collection.single_from_model_output(**eval_out)
                         if eval_metrics is None
-                        else eval_metrics.merge(MetricsEvaluation.single_from_model_output(**eval_out))
+                        else eval_metrics.merge(eval_collection.single_from_model_output(**eval_out))
                     )
 
                 eval_metrics = eval_metrics.compute()
