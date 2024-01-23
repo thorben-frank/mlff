@@ -1,5 +1,4 @@
 from ase import units
-import jax.numpy as jnp
 import jraph
 import numpy as np
 from typing import Dict, Sequence
@@ -10,8 +9,8 @@ def unit_conversion(
         energy_unit: float = units.eV,
         length_unit: float = units.Angstrom
 ):
-    _energy_unit = jnp.asarray(energy_unit)
-    _length_unit = jnp.asarray(length_unit)
+    _energy_unit = np.asarray(energy_unit)
+    _length_unit = np.asarray(length_unit)
     for g in x:
         g.globals['energy'] = g.globals.get('energy') * _energy_unit
         g.nodes['forces'] = g.nodes.get('forces') * _energy_unit / _length_unit
@@ -29,17 +28,17 @@ def subtract_atomic_energy_shifts(x: Sequence[jraph.GraphsTuple], atomic_energy_
     for key, value in atomic_energy_shifts.items():
         result_array[key] = value
 
-    # Convert to JAX Array.
-    atomic_energy_shifts_arr = jnp.array(result_array)
+    # Convert to numpy array.
+    atomic_energy_shifts_arr = np.array(result_array)
 
     for g in x:
         atomic_numbers = g.nodes.get('atomic_numbers')
-        g.globals['energy'] = g.globals.get('energy') - jnp.take(atomic_energy_shifts_arr, atomic_numbers).sum()
+        g.globals['energy'] = g.globals.get('energy') - np.take(atomic_energy_shifts_arr, atomic_numbers).sum()
         yield g
 
 
 def calculate_energy_mean(x: Sequence[jraph.GraphsTuple]):
-    rolling_mean = jnp.asarray(0.)
+    rolling_mean = np.asarray(0.)
     for n, g in enumerate(x):
         count = n + 1
         energy = g.globals.get('energy')
@@ -52,7 +51,7 @@ def calculate_energy_mean(x: Sequence[jraph.GraphsTuple]):
 
 
 def calculate_average_number_of_nodes(x: Sequence[jraph.GraphsTuple]):
-    rolling_mean = jnp.asarray(0, dtype=jnp.int32)
+    rolling_mean = np.asarray(0.)
     for n, g in enumerate(x):
         count = n + 1
         num_nodes = len(g.nodes.get('atomic_numbers'))
@@ -65,7 +64,7 @@ def calculate_average_number_of_nodes(x: Sequence[jraph.GraphsTuple]):
 
 
 def calculate_average_number_of_neighbors(x: Sequence[jraph.GraphsTuple]):
-    rolling_mean = jnp.asarray(0, dtype=jnp.int32)
+    rolling_mean = np.asarray(0.)
     for n, g in enumerate(x):
         count = n + 1
         num_edges = float(len(g.receivers))
