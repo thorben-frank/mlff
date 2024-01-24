@@ -49,8 +49,8 @@ class GeometryEmbedSparse(BaseSubModule):
         """
         idx_i = inputs['idx_i']  # shape: (num_pairs)
         idx_j = inputs['idx_j']  # shape: (num_pairs)
-        cell = inputs['cell']  # shape: (num_graphs, 3, 3)
-        cell_offsets = inputs['cell_offset']  # shape: (num_pairs, 3)
+        cell = inputs.get('cell')  # shape: (num_graphs, 3, 3)
+        cell_offsets = inputs.get('cell_offset')  # shape: (num_pairs, 3)
 
         if self.input_convention == 'positions':
             positions = inputs['positions']  # (N, 3)
@@ -68,6 +68,7 @@ class GeometryEmbedSparse(BaseSubModule):
                     cell_offsets=cell_offsets
                 )  # shape: (num_pairs,3)
 
+        # Here it is assumed that PBC (if present) have already been respected in displacement calculation.
         elif self.input_convention == 'displacements':
             positions = None
             r_ij = inputs['displacements']
@@ -101,7 +102,7 @@ class GeometryEmbedSparse(BaseSubModule):
                           'rbf_ij': rbf_ij,
                           'cut': cut,
                           'ylm_ij': ylm_ij,
-                          'ev': jnp.zeros((len(positions), ylm_ij.shape[-1]), dtype=positions.dtype)
+                          'ev': jnp.zeros((len(inputs['atomic_numbers']), ylm_ij.shape[-1]), dtype=r_ij.dtype)
                           }
 
         return geometric_data
