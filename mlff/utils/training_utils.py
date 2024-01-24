@@ -212,6 +212,7 @@ def fit(
             batch_training = graph_to_batch_fn(graph_batch_training)
             processed_graphs += batch_training['num_of_non_padded_graphs']
             processed_nodes += batch_max_num_nodes - jraph.get_number_of_padding_with_graphs_nodes(graph_batch_training)
+            # Training data is numpy arrays so we now transform them to jax.numpy arrays.
             batch_training = jax.tree_map(jnp.array, batch_training)
 
             # In the first step, initialize the parameters or load from existing checkpoint.
@@ -287,7 +288,7 @@ def fit(
                 eval_metrics = {
                     f'eval_{k}': float(v) for k, v in eval_metrics.items()
                 }
-
+                print(eval_metrics)
                 # Save checkpoint.
                 ckpt_mngr.save(
                     step,

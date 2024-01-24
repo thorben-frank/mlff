@@ -236,14 +236,21 @@ def run_evaluation(config, num_test: int = None, testing_targets: Sequence[str] 
 
     if data_filepath.suffix == '.npz':
         loader = data.NpzDataLoaderSparse(input_file=data_filepath)
+    elif data_filepath.stem[:5].lower() == 'spice':
+        logging.mlff(f'Found SPICE dataset at {data_filepath}.')
+        if data_filepath.suffix != '.hdf5':
+            raise ValueError(
+                f'Loader assumes that SPICE is in hdf5 format. Found {data_filepath.suffix} as'
+                f'suffix.')
+        loader = data.SpiceDataLoaderSparse(input_file=data_filepath)
     else:
         loader = data.AseDataLoaderSparse(input_file=data_filepath)
 
-    all_data, data_stats = loader.load_all(cutoff=config.model.cutoff)
-    num_data = len(all_data)
-
     energy_unit = eval(config.data.energy_unit)
     length_unit = eval(config.data.length_unit)
+
+    all_data, data_stats = loader.load_all(cutoff=config.model.cutoff / length_unit)
+    num_data = len(all_data)
 
     split_seed = config.data.split_seed
     numpy_rng = np.random.RandomState(split_seed)
