@@ -270,10 +270,11 @@ def run_evaluation(
     Args:
         config (): The config file.
         num_test (): Number of testing points. If not given, is determined from config using
-            num_test = num_data - num_train - num_valid.
+            num_test = num_data - num_train - num_valid. Note that still the whole data set is loaded. If one wants to
+            only load subparts of the data, one has to use pick_idx.
         testing_targets (): Targets used for computing metrics. Defaults to the ones found in
             config.training.loss_weights.
-        pick_idx (): Indices to evaluate the model on.
+        pick_idx (): Indices to evaluate the model on. Loads only the data at the given indices.
 
     Returns:
         The metrics on `testing_targets`.
@@ -307,12 +308,13 @@ def run_evaluation(
         if num_test > num_data:
             raise RuntimeError(f'num_test = {num_test} > num_data = {num_data} in data set {data_filepath}.')
 
-    numpy_rng = np.random.RandomState(0)
-    numpy_rng.shuffle(eval_data)
+        # Only shuffle when num_test is not None, since one is then evaluating on a subset of the data.
+        numpy_rng = np.random.RandomState(0)
+        numpy_rng.shuffle(eval_data)
 
     testing_data = data.transformations.subtract_atomic_energy_shifts(
         data.transformations.unit_conversion(
-            eval_data,
+            eval_data[:num_test],
             energy_unit=energy_unit,
             length_unit=length_unit
         ),
