@@ -45,7 +45,21 @@ def compute_senders_and_receivers_np(
 class SpiceDataLoaderSparse:
     input_file: str
 
-    def load_all(self, cutoff: float):
+    def cardinality(self):
+        data = h5py.File(self.input_file)
+        n = 0
+        for i in data:
+            n += len(data[i]['conformations'])
+        return n
+
+    def load(self, cutoff: float, pick_idx: np.ndarray = None):
+        if pick_idx is None:
+            def keep(idx: int):
+                return True
+        else:
+            def keep(idx: int):
+                return idx in pick_idx
+
         data = h5py.File(self.input_file)
 
         max_num_of_nodes = 0
@@ -54,32 +68,43 @@ class SpiceDataLoaderSparse:
             f"Load data from {self.input_file} and calculate neighbors within cutoff={cutoff} Ang ..."
         )
         loaded_data = []
-        for i in tqdm(data):
-            conformations = data[i]['conformations']
-            atomic_numbers = data[i]['atomic_numbers']
-            forces = data[i]['dft_total_gradient']
-            energy = data[i]['dft_total_energy']
+        i = 0
+        for k in tqdm(data):
+            conformations = data[k]['conformations']
+            atomic_numbers = data[k]['atomic_numbers']
+            forces = data[k]['dft_total_gradient']
+            energy = data[k]['dft_total_energy']
             for n in range(len(conformations)):
-                senders, receivers = compute_senders_and_receivers_np(conformations[n], cutoff=cutoff)
+                if keep(i):
+                    senders, receivers = compute_senders_and_receivers_np(conformations[n], cutoff=cutoff)
 
-                g = jraph.GraphsTuple(
-                    n_node=np.array([len(atomic_numbers)]),
-                    n_edge=np.array([len(receivers)]),
-                    globals=dict(energy=np.array(energy[n]).reshape(-1)),
-                    nodes=dict(
-                        atomic_numbers=np.array(atomic_numbers).astype(np.int16),
-                        positions=np.array(conformations[n]),
-                        forces=np.array(forces[n])
-                    ),
-                    edges=dict(cell=None, cell_offsets=None),
-                    receivers=np.array(senders),  # opposite convention in mlff
-                    senders=np.array(receivers)
+                    g = jraph.GraphsTuple(
+                        n_node=np.array([len(atomic_numbers)]),
+                        n_edge=np.array([len(receivers)]),
+                        globals=dict(energy=np.array(energy[n]).reshape(-1)),
+                        nodes=dict(
+                            atomic_numbers=np.array(atomic_numbers).astype(np.int16),
+                            positions=np.array(conformations[n]),
+                            forces=np.array(forces[n])
+                        ),
+                        edges=dict(cell=None, cell_offsets=None),
+                        receivers=np.array(senders),  # opposite convention in mlff
+                        senders=np.array(receivers)
+                    )
+                    loaded_data += [g]
+                    num_nodes = len(g.nodes['atomic_numbers'])
+                    num_edges = len(g.receivers)
+                    max_num_of_nodes = max_num_of_nodes if num_nodes <= max_num_of_nodes else num_nodes
+                    max_num_of_edges = max_num_of_edges if num_edges <= max_num_of_edges else num_edges
+                else:
+                    pass
+                i += 1
+
+        if pick_idx is not None:
+            if max(pick_idx) >= i:
+                raise RuntimeError(
+                    f'`max(pick_idx) = {max(pick_idx)} >= cardinality = {i} of the dataset`.'
                 )
-                loaded_data += [g]
-                num_nodes = len(g.nodes['atomic_numbers'])
-                num_edges = len(g.receivers)
-                max_num_of_nodes = max_num_of_nodes if num_nodes <= max_num_of_nodes else num_nodes
-                max_num_of_edges = max_num_of_edges if num_edges <= max_num_of_edges else num_edges
 
         logging.mlff("... done!")
 

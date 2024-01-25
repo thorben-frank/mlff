@@ -19,7 +19,17 @@ logging.mlff = partial(logging.log, logging.MLFF)
 class NpzDataLoaderSparse:
     input_file: str
 
-    def load_all(self, cutoff: float):
+    def cardinality(self):
+        return len(np.load(self.input_file)['positions'])
+
+    def load(self, cutoff: float, pick_idx: np.ndarray = None):
+        if pick_idx is None:
+            def keep(idx: int):
+                return True
+        else:
+            def keep(idx: int):
+                return idx in pick_idx
+
         np_data = np.load(self.input_file)
 
         keys = list(np_data.keys())
@@ -31,15 +41,25 @@ class NpzDataLoaderSparse:
         logging.mlff(
             f"Load data from {self.input_file} and calculate neighbors within cutoff={cutoff} Ang ..."
         )
-        for i, tup in tqdm(enumerate(data_iterator)):
-            entry = {k: v for (k, v) in zip(keys, tup)}
-            graph = entry_to_jraph(entry, cutoff=cutoff)
-            num_nodes = len(graph.nodes['atomic_numbers'])
-            num_edges = len(graph.receivers)
-            max_num_of_nodes = max_num_of_nodes if num_nodes <= max_num_of_nodes else num_nodes
-            max_num_of_edges = max_num_of_edges if num_edges <= max_num_of_edges else num_edges
-            loaded_data.append(graph)
+        i = 0
+        for tup in tqdm(data_iterator):
+            if keep(i):
+                entry = {k: v for (k, v) in zip(keys, tup)}
+                graph = entry_to_jraph(entry, cutoff=cutoff)
+                num_nodes = len(graph.nodes['atomic_numbers'])
+                num_edges = len(graph.receivers)
+                max_num_of_nodes = max_num_of_nodes if num_nodes <= max_num_of_nodes else num_nodes
+                max_num_of_edges = max_num_of_edges if num_edges <= max_num_of_edges else num_edges
+                loaded_data.append(graph)
+            else:
+                pass
+            i += 1
 
+        if pick_idx is not None:
+            if max(pick_idx) >= i:
+                raise RuntimeError(
+                    f'`max(pick_idx) = {max(pick_idx)} >= cardinality = {i} of the dataset`.'
+                )
         logging.mlff("... done!")
 
         return loaded_data, {'max_num_of_nodes': max_num_of_nodes, 'max_num_of_edges': max_num_of_edges}

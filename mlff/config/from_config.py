@@ -1,5 +1,6 @@
 from ase.units import *
 import json
+import jraph
 from mlff import nn
 from mlff import training_utils
 from mlff import evaluation_utils
@@ -94,8 +95,11 @@ def run_training(config: config_dict.ConfigDict):
     Returns:
 
     """
+    energy_unit = eval(config.data.energy_unit)
+    length_unit = eval(config.data.length_unit)
+
     data_filepath = config.data.filepath
-    data_filepath = Path(data_filepath).expanduser().absolute().resolve()
+    data_filepath = Path(data_filepath).expanduser().resolve()
 
     if data_filepath.suffix == '.npz':
         loader = data.NpzDataLoaderSparse(input_file=data_filepath)
@@ -109,17 +113,8 @@ def run_training(config: config_dict.ConfigDict):
     else:
         loader = data.AseDataLoaderSparse(input_file=data_filepath)
 
-    energy_unit = eval(config.data.energy_unit)
-    length_unit = eval(config.data.length_unit)
-
-    # Cutoff is in Angstrom, so we have to divide the cutoff by the length unit.
-    all_data, data_stats = loader.load_all(cutoff=config.model.cutoff / length_unit)
-    num_data = len(all_data)
-
-    split_seed = config.data.split_seed
-    numpy_rng = np.random.RandomState(split_seed)
-    numpy_rng.shuffle(all_data)
-
+    # Get the total number of data points
+    num_data = loader.cardinality()
     num_train = config.training.num_train
     num_valid = config.training.num_valid
 
@@ -127,10 +122,41 @@ def run_training(config: config_dict.ConfigDict):
         raise ValueError(f"num_train + num_valid = {num_train + num_valid} exceeds the number of data points {num_data}"
                          f" in {data_filepath}.")
 
+    split_seed = config.data.split_seed
+    numpy_rng = np.random.RandomState(split_seed)
+
+    # Choose the data points that are used training (training + validation data).
+    all_indices = np.arange(num_data)
+    numpy_rng.shuffle(all_indices)
+    # We sort the indices after extracting them from the shuffled list, since we iteratively load the data with the
+    # data loader.
+    training_and_validation_indices = np.sort(all_indices[:(num_train+num_valid)])
+    test_indices = np.sort(all_indices[(num_train+num_valid):])
+
+    # Cutoff is in Angstrom, so we have to divide the cutoff by the length unit.
+    training_and_validation_data, data_stats = loader.load(
+        cutoff=config.model.cutoff / length_unit,
+        pick_idx=training_and_validation_indices
+    )
+    # Since the training and validation indices are sorted, the index i at the n-th entry in
+    # training_and_validation_indices corresponds to the n-th entry in training_and_validation_data which is the i-th
+    # data entry in the loaded data.
+    split_indices = np.arange(num_train + num_valid)
+    numpy_rng.shuffle(split_indices)
+    internal_train_indices = split_indices[:num_train]
+    internal_validation_indices = split_indices[num_train:]
+
+    training_data = [training_and_validation_data[i_train] for i_train in internal_train_indices]
+    validation_data = [training_and_validation_data[i_val] for i_val in internal_validation_indices]
+    del training_and_validation_data
+
+    assert len(internal_train_indices) == num_train
+    assert len(internal_validation_indices) == num_valid
+
     if config.data.shift_mode == 'mean':
         config.data.energy_shifts = config_dict.placeholder(dict)
-        energy_mean = data.transformations.calculate_energy_mean(all_data[:num_train]) * energy_unit
-        num_nodes = data.transformations.calculate_average_number_of_nodes(all_data[:num_train])
+        energy_mean = data.transformations.calculate_energy_mean(training_data) * energy_unit
+        num_nodes = data.transformations.calculate_average_number_of_nodes(training_data)
         energy_shifts = {str(a): float(energy_mean / num_nodes) for a in range(119)}
         config.data.energy_shifts = energy_shifts
     elif config.data.shift_mode == 'custom':
@@ -139,30 +165,30 @@ def run_training(config: config_dict.ConfigDict):
     else:
         config.data.energy_shifts = {str(a): 0. for a in range(119)}
 
-    training_data = data.transformations.subtract_atomic_energy_shifts(
-        data.transformations.unit_conversion(
-            all_data[:num_train],
-            energy_unit=energy_unit,
-            length_unit=length_unit
-        ),
-        atomic_energy_shifts={int(k): v for (k, v) in config.data.energy_shifts.items()}
-    )
-
-    validation_data = data.transformations.subtract_atomic_energy_shifts(
-        data.transformations.unit_conversion(
-            all_data[num_train:(num_train + num_valid)],
-            energy_unit=energy_unit,
-            length_unit=length_unit
-        ),
-        atomic_energy_shifts={int(k): v for (k, v) in config.data.energy_shifts.items()}
-    )
-
     # If messages are normalized by the average number of neighbors, we need to calculate this quantity from the
     # training data.
     if config.model.message_normalization == 'avg_num_neighbors':
         config.data.avg_num_neighbors = config_dict.placeholder(float)
-        avg_num_neighbors = data.transformations.calculate_average_number_of_neighbors(all_data[:num_train])
+        avg_num_neighbors = data.transformations.calculate_average_number_of_neighbors(training_data)
         config.data.avg_num_neighbors = np.array(avg_num_neighbors).item()
+
+    training_data = list(data.transformations.subtract_atomic_energy_shifts(
+        data.transformations.unit_conversion(
+            training_data,
+            energy_unit=energy_unit,
+            length_unit=length_unit
+        ),
+        atomic_energy_shifts={int(k): v for (k, v) in config.data.energy_shifts.items()}
+    ))
+
+    validation_data = list(data.transformations.subtract_atomic_energy_shifts(
+        data.transformations.unit_conversion(
+            validation_data,
+            energy_unit=energy_unit,
+            length_unit=length_unit
+        ),
+        atomic_energy_shifts={int(k): v for (k, v) in config.data.energy_shifts.items()}
+    ))
 
     opt = make_optimizer_from_config(config)
     so3k = make_so3krates_sparse_from_config(config)
@@ -172,7 +198,7 @@ def run_training(config: config_dict.ConfigDict):
         weights=config.training.loss_weights
     )
 
-    workdir = Path(config.workdir).expanduser().absolute().resolve()
+    workdir = Path(config.workdir).expanduser().resolve()
     workdir.mkdir(exist_ok=config.training.allow_restart)
 
     if config.training.batch_max_num_nodes is None:
@@ -183,6 +209,23 @@ def run_training(config: config_dict.ConfigDict):
 
         config.training.batch_max_num_nodes = batch_max_num_nodes
         config.training.batch_max_num_edges = batch_max_num_edges
+
+    # internal_*_indices only run from [0, num_train+num_valid]. To get their original position in the full data set
+    # we collect them from training_and_validation_indices. Since we will load training and validation data as
+    # training_and_validation_data[internal_*_indices], we need to make sure that training_and_validation_indices
+    # and training_and_validation_data have the same order in the sense of referencing indices. This is achieved by
+    # sorting the indices as described above.
+    train_indices = training_and_validation_indices[internal_train_indices]
+    validation_indices = training_and_validation_indices[internal_validation_indices]
+    assert len(train_indices) == num_train
+    assert len(validation_indices) == num_valid
+    with open(workdir / 'data_splits.json', 'w') as fp:
+        j = dict(
+            training=train_indices.tolist(),
+            validation=validation_indices.tolist(),
+            test=test_indices.tolist()
+        )
+        json.dump(j, fp)
 
     with open(workdir / 'hyperparameters.json', 'w') as fp:
         # json_config = config.to_dict()
@@ -203,8 +246,8 @@ def run_training(config: config_dict.ConfigDict):
         batch_max_num_edges=config.training.batch_max_num_edges,
         batch_max_num_nodes=config.training.batch_max_num_nodes,
         batch_max_num_graphs=config.training.batch_max_num_graphs,
-        training_data=list(training_data),
-        validation_data=list(validation_data),
+        training_data=training_data,
+        validation_data=validation_data,
         ckpt_dir=workdir / 'checkpoints',
         eval_every_num_steps=config.training.eval_every_num_steps,
         allow_restart=config.training.allow_restart,
@@ -216,7 +259,12 @@ def run_training(config: config_dict.ConfigDict):
     logging.mlff('Training has finished!')
 
 
-def run_evaluation(config, num_test: int = None, testing_targets: Sequence[str] = None):
+def run_evaluation(
+        config,
+        num_test: int = None,
+        testing_targets: Sequence[str] = None,
+        pick_idx: np.ndarray = None
+):
     """Run evaluation, given the config and additional args.
 
     Args:
@@ -225,6 +273,7 @@ def run_evaluation(config, num_test: int = None, testing_targets: Sequence[str] 
             num_test = num_data - num_train - num_valid.
         testing_targets (): Targets used for computing metrics. Defaults to the ones found in
             config.training.loss_weights.
+        pick_idx (): Indices to evaluate the model on.
 
     Returns:
         The metrics on `testing_targets`.
@@ -249,25 +298,21 @@ def run_evaluation(config, num_test: int = None, testing_targets: Sequence[str] 
     energy_unit = eval(config.data.energy_unit)
     length_unit = eval(config.data.length_unit)
 
-    all_data, data_stats = loader.load_all(cutoff=config.model.cutoff / length_unit)
-    num_data = len(all_data)
+    eval_data, data_stats = loader.load(
+        cutoff=config.model.cutoff / length_unit, pick_idx=pick_idx
+    )
 
-    split_seed = config.data.split_seed
-    numpy_rng = np.random.RandomState(split_seed)
-    numpy_rng.shuffle(all_data)
+    num_data = len(eval_data)
+    if num_test is not None:
+        if num_test > num_data:
+            raise RuntimeError(f'num_test = {num_test} > num_data = {num_data} in data set {data_filepath}.')
 
-    num_train = config.training.num_train
-    num_valid = config.training.num_valid
-
-    upper_bound = (num_train + num_valid + num_test) if num_test is not None else num_data
-    if upper_bound > num_data:
-        raise ValueError(
-            f'num_train + num_valid + num_test = {num_train + num_valid + num_test} > num_data = {num_data}.'
-        )
+    numpy_rng = np.random.RandomState(0)
+    numpy_rng.shuffle(eval_data)
 
     testing_data = data.transformations.subtract_atomic_energy_shifts(
         data.transformations.unit_conversion(
-            all_data[(num_train + num_valid):upper_bound],
+            eval_data,
             energy_unit=energy_unit,
             length_unit=length_unit
         ),
@@ -284,7 +329,7 @@ def run_evaluation(config, num_test: int = None, testing_targets: Sequence[str] 
         config.training.batch_max_num_edges = batch_max_num_edges
 
     ckpt_dir = Path(config.workdir) / 'checkpoints'
-    ckpt_dir = ckpt_dir.expanduser().absolute().resolve()
+    ckpt_dir = ckpt_dir.expanduser().resolve()
     logging.mlff(f'Restore parameters from {ckpt_dir} ...')
     ckpt_mngr = checkpoint.CheckpointManager(
         ckpt_dir,

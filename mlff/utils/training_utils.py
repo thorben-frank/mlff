@@ -288,7 +288,7 @@ def fit(
                 eval_metrics = {
                     f'eval_{k}': float(v) for k, v in eval_metrics.items()
                 }
-                print(eval_metrics)
+
                 # Save checkpoint.
                 ckpt_mngr.save(
                     step,
