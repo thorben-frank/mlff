@@ -263,7 +263,8 @@ def run_evaluation(
         config,
         num_test: int = None,
         testing_targets: Sequence[str] = None,
-        pick_idx: np.ndarray = None
+        pick_idx: np.ndarray = None,
+        write_batch_metrics_to: str = None
 ):
     """Run evaluation, given the config and additional args.
 
@@ -275,6 +276,10 @@ def run_evaluation(
         testing_targets (): Targets used for computing metrics. Defaults to the ones found in
             config.training.loss_weights.
         pick_idx (): Indices to evaluate the model on. Loads only the data at the given indices.
+        write_batch_metrics_to (str): Path to file where metrics per batch should be written to. If not given,
+            batch metrics are not written to a file. Note, that the metrics are written per batch, so one-to-one
+            correspondence to the original data set can only be achieved when `batch_max_num_nodes = 2` which allows
+            one graph per batch, following the `jraph` logic that one graph in used as padding graph.
 
     Returns:
         The metrics on `testing_targets`.
@@ -359,4 +364,5 @@ def run_evaluation(
         batch_max_num_nodes=config.training.batch_max_num_nodes,
         batch_max_num_edges=config.training.batch_max_num_edges,
         batch_max_num_graphs=config.training.batch_max_num_graphs,
+        write_batch_metrics_to=write_batch_metrics_to
     )

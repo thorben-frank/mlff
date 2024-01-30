@@ -3,6 +3,13 @@ import json
 from mlff.config import from_config
 from ml_collections import config_dict
 import pathlib
+import logging
+from functools import partial, partialmethod
+
+logging.MLFF = 35
+logging.addLevelName(logging.MLFF, 'MLFF')
+logging.Logger.trace = partialmethod(logging.Logger.log, logging.MLFF)
+logging.mlff = partial(logging.log, logging.MLFF)
 
 
 def evaluate_so3krates_sparse_on():
@@ -58,8 +65,25 @@ def evaluate_so3krates_sparse_on():
         default=None,
         help='Number of test points to use. If given, the first num_test points in the dataset are used for evaluation.'
     )
-
+    parser.add_argument('--write_batch_metrics_to',
+                        type=str,
+                        required=False,
+                        default=None,
+                        help='Path to csv file where metrics per batch should be written to. If not given, '
+                             'batch metrics are not written to a file. Note, that the metrics are written per batch, '
+                             'so one-to-one correspondence to the original data set can only be achieved when '
+                             '`batch_max_num_nodes = 2` which allows one graph per batch, following the `jraph` logic '
+                             'that one graph in used as padding graph.'
+                        )
     args = parser.parse_args()
+
+    if args.num_test is not None and args.write_batch_metrics_to is not None:
+        raise ValueError(
+            f'--num_test={args.num_test} is not `None` such that data is randomly sub-sampled from {args.filepath}. '
+            f'At the same time `--write_batch_metrics_to={args.write_batch_metrics_to}` is specified. Due to the '
+            f'random subsampling of data, there is no one-to-one correspondence between the lines in the file the '
+            f'metrics are written to and the indices of the data point, so we raise an error here for security.'
+        )
 
     workdir = pathlib.Path(args.workdir).expanduser().resolve()
 
@@ -77,7 +101,22 @@ def evaluate_so3krates_sparse_on():
     cfg.training.batch_max_num_edges = args.max_num_edges
     cfg.training.batch_max_num_nodes = args.max_num_nodes
 
-    metrics = from_config.run_evaluation(config=cfg, num_test=args.num_test, pick_idx=None)
+    # Expand and resolve path for writing metrics.
+    write_batch_metrics_to = pathlib.Path(
+        args.write_batch_metrics_to
+    ).expanduser().resolve() if args.write_batch_metrics_to is not None else None
+
+    if write_batch_metrics_to.suffix == '.csv':
+        pass
+    else:
+        write_batch_metrics_to = f'{write_batch_metrics_to}.csv'
+
+    metrics = from_config.run_evaluation(
+        config=cfg,
+        num_test=args.num_test,
+        pick_idx=None,
+        write_batch_metrics_to=write_batch_metrics_to
+    )
     print(metrics)
 
 

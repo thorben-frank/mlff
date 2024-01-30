@@ -16,6 +16,7 @@ setup(
         "optax",
         "orbax-checkpoint",
         "portpicker",
+        "pandas",
         # 'tensorflow',
         "scikit-learn",
         "ase",

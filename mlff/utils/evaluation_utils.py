@@ -4,6 +4,7 @@ import jax
 import jax.numpy as jnp
 import jraph
 import numpy as np
+import pandas as pd
 from tqdm import tqdm
 from typing import Any
 from mlff.nn.stacknet.observable_function_sparse import get_energy_and_force_fn_sparse
@@ -17,7 +18,8 @@ def evaluate(
         testing_targets,
         batch_max_num_nodes,
         batch_max_num_edges,
-        batch_max_num_graphs
+        batch_max_num_graphs,
+        write_batch_metrics_to: str = None
 ):
     """Evaluate a model given its params on the testing data.
 
@@ -31,6 +33,10 @@ def evaluate(
         batch_max_num_nodes (): Maximal number of nodes per batch.
         batch_max_num_edges (): Maximal number of edges per batch.
         batch_max_num_graphs (): Maximal number of graphs oer batch.
+        write_batch_metrics_to (str): Path to file where metrics per batch should be written to. If not given,
+            batch metrics are not written to a file. Note, that the metrics are written per batch, so one-to-one
+            correspondence to the original data set can only be achieved when `batch_max_num_nodes = 2` which allows
+            one graph per batch, following the `jraph` logic that one graph in used as padding graph.
 
     Returns:
         The metrics on testing data.
@@ -52,7 +58,7 @@ def evaluate(
         **{f'{t}_{m}': clu_metrics.Average.from_output(f'{t}_{m}') for (t, m) in it.product(testing_targets, ('mae', 'mse'))})
 
     # Start iteration over validation batches.
-    testing_metrics = []
+    row_metrics = []
     test_metrics: Any = None
     for graph_batch_testing in tqdm(iterator_testing):
         batch_testing = graph_to_batch_fn(graph_batch_testing)
@@ -73,14 +79,20 @@ def evaluate(
             elif t == 'stress':
                 msk = graph_mask
             else:
-                raise ValueError(f"Evaluate not implemented for target={t}.")
+                raise ValueError(
+                    f"Evaluate not implemented for target={t}."
+                )
 
             metrics_dict[f"{t}_mae"] = calculate_mae(
                 y_predicted=output_prediction[t], y_true=batch_testing[t], msk=msk
-            ),
+            )
             metrics_dict[f"{t}_mse"] = calculate_mse(
                 y_predicted=output_prediction[t], y_true=batch_testing[t], msk=msk
-            ),
+            )
+
+            # Track the metrics per batch if they are written to file.
+            if write_batch_metrics_to is not None:
+                row_metrics += [jax.device_get(metrics_dict)]
 
         test_metrics = (
             test_collection.single_from_model_output(**metrics_dict)
@@ -89,10 +101,10 @@ def evaluate(
         )
     test_metrics = test_metrics.compute()
 
-    # testing_metrics_np = jax.device_get(testing_metrics)
-    # testing_metrics_np = {
-    #     k: np.mean([m[k] for m in testing_metrics_np]) for k in testing_metrics_np[0]
-    # }
+    if write_batch_metrics_to:
+        df = pd.DataFrame(row_metrics)
+        with open(write_batch_metrics_to, mode='w') as fp:
+            df.to_csv(fp)
 
     test_metrics = {
         f'test_{k}': float(v) for k, v in test_metrics.items()
