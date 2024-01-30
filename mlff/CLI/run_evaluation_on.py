@@ -3,13 +3,6 @@ import json
 from mlff.config import from_config
 from ml_collections import config_dict
 import pathlib
-import logging
-from functools import partial, partialmethod
-
-logging.MLFF = 35
-logging.addLevelName(logging.MLFF, 'MLFF')
-logging.Logger.trace = partialmethod(logging.Logger.log, logging.MLFF)
-logging.mlff = partial(logging.log, logging.MLFF)
 
 
 def evaluate_so3krates_sparse_on():
@@ -49,14 +42,16 @@ def evaluate_so3krates_sparse_on():
         type=int,
         default=None,
         required=False,
-        help='How many nodes to put in a batch.'
+        help='How many nodes to put in a batch. If not set is determined from max_num_graphs and max_num_nodes in '
+             '--datafile.'
     )
     parser.add_argument(
         "--max_num_edges",
         type=int,
         default=None,
         required=False,
-        help='How many edges to put in a batch.'
+        help='How many edges to put in a batch. If not set is determined from max_num_graphs and max_num_edges in '
+             '--datafile.'
     )
     parser.add_argument(
         '--num_test',
@@ -100,6 +95,14 @@ def evaluate_so3krates_sparse_on():
     cfg.training.batch_max_num_graphs = args.max_num_graphs
     cfg.training.batch_max_num_edges = args.max_num_edges
     cfg.training.batch_max_num_nodes = args.max_num_nodes
+
+    if args.write_batch_metrics_to is not None and cfg.training.batch_max_num_graphs > 2:
+        raise ValueError(
+            f'--write_batch_metrics_to={args.write_batch_metrics_to} is not None and `batch_max_num_graphs != 2.` '
+            'Note, that the metrics are written per batch, so one-to-one correspondence to the original data set can '
+            'only be achieved when `batch_max_num_nodes = 2` which allows one graph per batch, following the `jraph` '
+            'logic that one graph in used as padding graph. Raising error for security here.'
+        )
 
     # Expand and resolve path for writing metrics.
     write_batch_metrics_to = pathlib.Path(

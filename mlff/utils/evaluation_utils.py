@@ -90,9 +90,9 @@ def evaluate(
                 y_predicted=output_prediction[t], y_true=batch_testing[t], msk=msk
             )
 
-            # Track the metrics per batch if they are written to file.
-            if write_batch_metrics_to is not None:
-                row_metrics += [jax.device_get(metrics_dict)]
+        # Track the metrics per batch if they are written to file.
+        if write_batch_metrics_to is not None:
+            row_metrics += [jax.device_get(metrics_dict)]
 
         test_metrics = (
             test_collection.single_from_model_output(**metrics_dict)
