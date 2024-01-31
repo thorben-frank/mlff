@@ -393,6 +393,10 @@ def run_fine_tuning(
         raise ValueError(
             f'Trying to start fine tuning from {start_from_workdir} but directory does not exist.'
         )
+
+    with open(workdir / 'fine_tuning.json', mode='w') as fp:
+        json.dump({'start_from_workdir': start_from_workdir.as_posix()}, fp=fp)
+
     params = load_params_from_workdir(start_from_workdir)
 
     data_filepath = config.data.filepath
