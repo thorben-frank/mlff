@@ -127,11 +127,12 @@ def fit(
         batch_max_num_nodes,
         batch_max_num_edges,
         batch_max_num_graphs,
+        params=None,
         num_epochs: int = 100,
         ckpt_dir: str = None,
         ckpt_manager_options: dict = None,
         eval_every_num_steps: int = 1000,
-        allow_restart=False,
+        allow_restart: bool = False,
         training_seed: int = 0,
         model_seed: int = 0,
         use_wandb: bool = True,
@@ -150,6 +151,8 @@ def fit(
         batch_max_num_nodes (int): Maximal number of nodes per batch.
         batch_max_num_edges (int): Maximal number of edges per batch.
         batch_max_num_graphs (int): Maximal number of graphs per batch.
+        params: Parameters to start from during training. If not given, either new parameters are initialized randomly
+            or loaded from ckpt_dir if the checkpoint already exists and `allow_restart=True`.
         num_epochs (int): Number of training epochs.
         ckpt_dir (str): Checkpoint path.
         ckpt_manager_options (dict): Checkpoint manager options.
@@ -193,7 +196,6 @@ def fit(
     processed_nodes = 0
     step = 0
 
-    params = None
     opt_state = None
     for epoch in range(num_epochs):
         # Shuffle the training data.
@@ -215,8 +217,8 @@ def fit(
             # Training data is numpy arrays so we now transform them to jax.numpy arrays.
             batch_training = jax.tree_map(jnp.array, batch_training)
 
-            # In the first step, initialize the parameters or load from existing checkpoint.
-            if step == 0:
+            # If params are None (in the first step), initialize the parameters or load from existing checkpoint.
+            if params is None:
                 # Check if checkpoint already exists.
                 latest_step = ckpt_mngr.latest_step()
                 if latest_step is not None:
@@ -233,6 +235,8 @@ def fit(
                 else:
                     params = model.init(jax_rng, batch_training)
 
+            # If optimizer state is None (in the first step), initialize from the parameter pyTree.
+            if opt_state is None:
                 opt_state = optimizer.init(params)
 
             # Make sure parameters and opt_state are set.
