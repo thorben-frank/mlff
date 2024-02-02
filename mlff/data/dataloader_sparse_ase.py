@@ -124,10 +124,15 @@ def ASE_to_jraph(
             stress = mol.get_stress()
         except PropertyNotImplementedError:
             stress = None
+        try:
+            dipole_moment = mol.get_dipole_moment()
+        except PropertyNotImplementedError:
+            stress = None
     else:
         energy = None
         forces = None
         stress = None
+        dipole = None
 
     total_charge = mol.info.get('total_charge')
     multiplicity = mol.info.get('multiplicity')

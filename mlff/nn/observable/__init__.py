@@ -5,5 +5,5 @@ from .observable import (Energy,
                          )
 
 from .observable_sparse import EnergySparse
-from .observable_sparse import PartialChargeSpares
+from .observable_sparse import DipoleSparse
 

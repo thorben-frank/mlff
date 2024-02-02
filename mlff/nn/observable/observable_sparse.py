@@ -124,7 +124,7 @@ class EnergySparse(BaseSubModule):
                                    'prop_keys': self.prop_keys}
                 }
 
-class PartialChargeSparse(BaseSubModule):
+class DipoleSparse(BaseSubModule):
     prop_keys: Dict
     regression_dim: int = None
     activation_fn: Callable[[Any], Any] = lambda u: u
@@ -170,7 +170,8 @@ class PartialChargeSparse(BaseSubModule):
         node_mask = inputs['node_mask']  # (num_nodes)
         graph_mask = inputs['graph_mask']  # (num_graphs)
         # total_charge = inputs[self.total_charge_key]
-        total_charges = inputs['total_charges']
+        positions = inputs['positions'] #should be (num_nodes, 3)
+        total_charges = inputs['total_charges'] # should be (num_graphs)
 
         num_graphs = len(graph_mask)
         num_nodes = len(node_mask)
@@ -200,13 +201,33 @@ class PartialChargeSparse(BaseSubModule):
                 name='charge_dense_final'
             )(x).squeeze(axis=-1)  # (num_nodes)
 
+# def compute_fixed_charge_dipole(
+#     charges: torch.Tensor,
+#     positions: torch.Tensor,
+#     batch: torch.Tensor,
+#     num_graphs: int,
+# ) -> torch.Tensor:
+#     mu = positions * charges.unsqueeze(-1) / (1e-11 / c / e)  # [N_atoms,3]
+#     return scatter_sum(
+#         src=mu, index=batch.unsqueeze(-1), dim=0, dim_size=num_graphs
+#     )  # [N_graphs,3]
+
         # x_q = safe_scale(x_ + q_, scale=point_mask)  # shape: (n)
         x_q = jnp.where(node_mask, x_ + q_, 
                                   jnp.asarray(0., dtype=x_q.dtype))  # (num_nodes)
 
         # partial_charges = x_q + (1 / n) * (total_charges - x_q.sum(axis=-1))  # shape: (n)
         partial_charges = x_q + (1 / num_nodes) * (total_charges - x_q.sum(axis=-1))  # shape: (num_nodes)
-        return dict(partial_charges=partial_charges)
+        mu_i = positions * partial_charges
+
+        dipole = segment_sum(
+            mu_i,
+            segment_ids=batch_segments,
+            num_segments=num_graphs
+        )  # (num_graphs)
+        dipole = jnp.where(graph_mask, dipole, jnp.asarray(0., dtype=dipole.dtype))
+
+        return dict(dipole=dipole)
     
         # if self.output_convention == 'per_structure':
         #     energy = segment_sum(
