@@ -391,10 +391,10 @@ def run_fine_tuning(
         trainable_subset_keys = ['observables_0']
     elif strategy == 'last_layer':
         # Only the last MP layer is refined.
-        trainable_subset_keys = [f'layers_{config.model.num_layers - 1}', 'observables_0']
+        trainable_subset_keys = [f'layers_{config.model.num_layers - 1}']
     elif strategy == 'last_layer_and_final_mlp':
         # Only the last layer and the final MLP are refined.
-        trainable_subset_keys = [f'layers_{config.model.num_layers - 1}']
+        trainable_subset_keys = [f'layers_{config.model.num_layers - 1}', 'observables_0']
     elif strategy == 'first_layer':
         # Only the first layer is refined.
         trainable_subset_keys = ['layers_0']
