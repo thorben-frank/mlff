@@ -369,23 +369,48 @@ def run_evaluation(
 
 def run_fine_tuning(
         config: config_dict.ConfigDict,
-        start_from_workdir: str
+        start_from_workdir: str,
+        strategy: str
 ):
     """Run training given a config.
 
         Args:
             config (): The config.
             start_from_workdir (str): The workdir of the model that should be fine tuned.
+            strategy (str): Fine tuning strategy.
 
         Returns:
 
-        """
-    workdir = Path(config.workdir).expanduser().resolve()
-    if workdir.exists():
+    """
+
+    if strategy == 'full':
+        # All parameters are re-fined.
+        trainable_subset_keys = None
+    elif strategy == 'final_mlp':
+        # Only the final MLP is refined
+        trainable_subset_keys = ['observables_0']
+    elif strategy == 'last_layer':
+        # Only the last MP layer is refined.
+        trainable_subset_keys = [f'layers_{config.model.num_layers - 1}', 'observables_0']
+    elif strategy == 'last_layer_and_final_mlp':
+        # Only the last layer and the final MLP are refined.
+        trainable_subset_keys = [f'layers_{config.model.num_layers - 1}']
+    elif strategy == 'first_layer':
+        # Only the first layer is refined.
+        trainable_subset_keys = ['layers_0']
+    elif strategy == 'first_layer_and_last_layer':
+        # Only the first and layer MP layer are refined.
+        trainable_subset_keys = ['layers_0', f'layers_{config.model.num_layers - 1}']
+    else:
         raise ValueError(
-            f'Please specify new workdir for fine tuning. Workdir {workdir} already exists.'
+            f'--strategy {strategy} is unknown. Select one of '
+            f'(`full`, '
+            f'`final_mlp`, '
+            f'`last_layer`, '
+            f'`last_layer_and_final_mlp`, '
+            f'`first_layer`, '
+            f'`first_layer_and_last_layer`)'
         )
-    workdir.mkdir(exist_ok=False)
 
     start_from_workdir = Path(start_from_workdir).expanduser().resolve()
     if not start_from_workdir.exists():
@@ -393,8 +418,21 @@ def run_fine_tuning(
             f'Trying to start fine tuning from {start_from_workdir} but directory does not exist.'
         )
 
+    workdir = Path(config.workdir).expanduser().resolve()
+    if workdir.exists():
+        raise ValueError(
+            f'Please specify new workdir for fine tuning. Workdir {workdir} already exists.'
+        )
+    workdir.mkdir(exist_ok=False)
+
     with open(workdir / 'fine_tuning.json', mode='w') as fp:
-        json.dump({'start_from_workdir': start_from_workdir.as_posix()}, fp=fp)
+        json.dump(
+            {
+                'start_from_workdir': start_from_workdir.as_posix(),
+                'strategy': strategy
+            },
+            fp=fp
+        )
 
     params = load_params_from_workdir(start_from_workdir)
 
@@ -495,6 +533,13 @@ def run_fine_tuning(
     ))
 
     opt = make_optimizer_from_config(config)
+
+    # Freeze all parameters arrays except the ones that lie under trainable_subset_keys.
+    if trainable_subset_keys is not None:
+        opt = training_utils.freeze_parameters(
+            optimizer=opt,
+            trainable_subset_keys=trainable_subset_keys
+        )
 
     # TODO: One could load the model from the original workdir itself, but this would mean to either have a specific
     #  fine_tuning_config or to silently ignore the model config in the config file. For now one has to make sure to

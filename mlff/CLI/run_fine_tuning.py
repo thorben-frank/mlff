@@ -22,6 +22,13 @@ def fine_tune_so3krates_sparse():
         help='Path to workdir from which fine tuning should be started.'
     )
 
+    parser.add_argument(
+        '--strategy',
+        type=str,
+        required=True,
+        help='Path to workdir from which fine tuning should be started.'
+    )
+
     args = parser.parse_args()
 
     config = pathlib.Path(args.config).expanduser().absolute().resolve()
@@ -32,7 +39,11 @@ def fine_tune_so3krates_sparse():
         with open(config, mode='r') as fp:
             cfg = config_dict.ConfigDict(yaml.load(fp, Loader=yaml.FullLoader))
 
-    from_config.run_fine_tuning(cfg, start_from_workdir=args.start_from_workdir)
+    from_config.run_fine_tuning(
+        cfg,
+        start_from_workdir=args.start_from_workdir,
+        strategy=args.strategy
+    )
 
 
 if __name__ == '__main__':

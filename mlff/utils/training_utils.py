@@ -1,4 +1,5 @@
 import clu.metrics as clu_metrics
+from flax import traverse_util
 import jraph
 import jax
 import jax.numpy as jnp
@@ -6,7 +7,7 @@ import numpy as np
 import optax
 from orbax import checkpoint
 from pathlib import Path
-from typing import Any, Callable, Dict
+from typing import Any, Callable, Dict, Sequence
 import wandb
 
 property_to_mask = {
@@ -350,5 +351,40 @@ def make_optimizer(
         opt
     )
 
-    # return optax.apply_if_finite(opt, max_consecutive_errors=num_of_nans_to_ignore)
-    # return opt
+
+def freeze_parameters(optimizer, trainable_subset_keys):
+    """Freeze parameters by giving keys for trainable subsets. Thus, all parameters that are NOT in
+    `trainable_subset_keys` are frozen.
+
+    Args:
+        optimizer (): optax.GradientTransformation.
+        trainable_subset_keys (Sequence): Keys which belong to entries in the PyTree that are trainable. Note that
+        for a pyTree like {'a': {'b': *, 'c': *}, 'd': *} and trainable_subset_keys = ['a'] one gets the following
+        {'a': {'b': 'trainable', 'c': 'trainable'}, 'd': 'frozen'}. If 'c' and 'd' should be trainable one has to
+        pass trainable_subset_keys = ['c', 'd'].
+
+    Returns:
+
+    """
+
+    return optax.multi_transform(
+        {'trainable': optimizer, 'frozen': zero_grads()},
+        param_labels=make_annotation_fn(trainable_subset_keys)
+    )
+
+
+def make_annotation_fn(keys):
+    return lambda params: traverse_util.path_aware_map(
+        lambda path, v: 'trainable' if len(set(keys) & set(path)) > 0 else 'frozen', params
+    )
+
+
+def zero_grads():
+
+    def init_fn(_):
+        return ()
+
+    def update_fn(updates, state, params=None):
+        return jax.tree_map(jnp.zeros_like, updates), ()
+
+    return optax.GradientTransformation(init_fn, update_fn)
