@@ -5,6 +5,7 @@ from mlff.nn.embed import GeometryEmbedSparse, AtomTypeEmbedSparse, ChargeEmbedS
 from mlff.nn.layer import SO3kratesLayerSparse
 from mlff.nn.observable import EnergySparse, PartialChargeSparse
 from .representation_utils import make_embedding_modules
+from mlff.nn.observable import EnergySparse, DipoleSparse
 from typing import Sequence
 
 
