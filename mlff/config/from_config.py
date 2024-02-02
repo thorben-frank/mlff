@@ -1,5 +1,4 @@
 from ase.units import *
-from flax.core.frozen_dict import FrozenDict
 import json
 from mlff import nn
 from mlff import training_utils
@@ -611,4 +610,4 @@ def load_params_from_workdir(workdir):
 
     del loaded_mngr
 
-    return FrozenDict(params)
+    return params
