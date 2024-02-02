@@ -5,5 +5,5 @@ from .observable import (Energy,
                          )
 
 from .observable_sparse import EnergySparse
-from .aim_properties import PartialCharge
+from .observable_sparse import PartialChargeSpares
 
