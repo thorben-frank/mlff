@@ -125,13 +125,18 @@ def ASE_to_jraph(
         except PropertyNotImplementedError:
             stress = None
         try:
-            dipole_moment = mol.get_dipole_moment()
+            hirsh_ratios = mol.info['hirsh_ratios']
         except PropertyNotImplementedError:
-            stress = None
+            hirsh_ratios = None
+        try:
+            dipole = mol.info['dipole']
+        except PropertyNotImplementedError:
+            dipole = None
     else:
         energy = None
         forces = None
         stress = None
+        hirsh_ratios = None
         dipole = None
 
     total_charge = mol.info.get('total_charge')
@@ -171,6 +176,7 @@ def ASE_to_jraph(
             "positions": np.array(positions),
             "atomic_numbers": np.array(atomic_numbers),
             "forces": np.array(forces) if forces is not None else None,
+            "hirsh_ratios": np.array(hirsh_ratios) if hirsh_ratios is not None else None
             }
 
     n_node = np.array([mol.get_global_number_of_atoms()])
@@ -179,8 +185,7 @@ def ASE_to_jraph(
     global_context = {
         "energy": np.array([energy]).reshape(-1) if energy is not None else None,
         "stress": np.array(stress) if stress is not None else None,
-        "total_charge": np.array([total_charge]) if total_charge is not None else None,
-        "num_unpaired_electrons": np.array([multiplicity]) - 1 if multiplicity is not None else None,
+        "dipole": np.array(dipole) if dipole is not None else None
     }
 
     return jraph.GraphsTuple(

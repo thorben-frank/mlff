@@ -3,6 +3,7 @@ import flax.linen as nn
 from jax.ops import segment_sum
 from typing import Any, Callable, Dict
 from mlff.nn.base.sub_module import BaseSubModule
+import sys
 
 Array = Any
 
@@ -172,16 +173,24 @@ class DipoleSparse(BaseSubModule):
         # total_charge = inputs[self.total_charge_key]
         positions = inputs['positions'] #should be (num_nodes, 3)
         total_charges = inputs['total_charges'] # should be (num_graphs)
+        print('WASSAP GOOD MORNING')
+        print('x.shape', x.shape)
+        print('atomic_numbers.shape', atomic_numbers.shape)
+        print('graph_mask.shape', graph_mask.shape)
+        print('node_mask.shape', node_mask.shape)
+        print('positions.shape', positions.shape)
+        print('total_charges.shape', total_charges.shape)
 
         num_graphs = len(graph_mask)
         num_nodes = len(node_mask)
+
         # n = (point_mask != 0).sum()  # shape: (1)
 
         #q_ - element-dependent bias
         q_ = nn.Embed(num_embeddings=100, features=1)(atomic_numbers).squeeze(axis=-1)  # shape: (n)
         # x_ = MLP(features=[x.shape[-1], 1],
         #          activation_fn=silu)(x).squeeze(axis=-1)  # shape: (n)
-        
+        print('q_.shape', q_.shape)
         if self.regression_dim is not None:
             y = nn.Dense(
                 self.regression_dim,
@@ -211,22 +220,30 @@ class DipoleSparse(BaseSubModule):
 #     return scatter_sum(
 #         src=mu, index=batch.unsqueeze(-1), dim=0, dim_size=num_graphs
 #     )  # [N_graphs,3]
-
+        print('x_.shape', x_.shape)
         # x_q = safe_scale(x_ + q_, scale=point_mask)  # shape: (n)
         x_q = jnp.where(node_mask, x_ + q_, 
                                   jnp.asarray(0., dtype=x_q.dtype))  # (num_nodes)
-
+        
+        print('x_q.shape', x_q.shape)
         # partial_charges = x_q + (1 / n) * (total_charges - x_q.sum(axis=-1))  # shape: (n)
         partial_charges = x_q + (1 / num_nodes) * (total_charges - x_q.sum(axis=-1))  # shape: (num_nodes)
         mu_i = positions * partial_charges
+        print('total_charges', total_charges)
+        print('partial_charges.shape', partial_charges.shape)
+        print('partial_charges', partial_charges)
+        print('mu_i.shape', mu_i.shape)
 
         dipole = segment_sum(
             mu_i,
             segment_ids=batch_segments,
             num_segments=num_graphs
         )  # (num_graphs)
+        print('dipole.shape before where', dipole.shape)
         dipole = jnp.where(graph_mask, dipole, jnp.asarray(0., dtype=dipole.dtype))
-
+        print('dipole.shape after', dipole.shape)
+        print('dipole', dipole)
+        sys.exit()
         return dict(dipole=dipole)
     
         # if self.output_convention == 'per_structure':
