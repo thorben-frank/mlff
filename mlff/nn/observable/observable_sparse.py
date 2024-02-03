@@ -214,6 +214,7 @@ class DipoleSparse(BaseSubModule):
 
         #mu = positions * charges / (1e-11 / c / e)  # [num_nodes, 3]
         mu_i = positions * partial_charges[:, None] #(512,3) * (512,)
+        #TODO: center molecule for charged molecules
 
         dipole = segment_sum(
             mu_i,
