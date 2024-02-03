@@ -29,7 +29,7 @@ class EnergySparse(BaseSubModule):
     @nn.compact
     def __call__(self, inputs: Dict, *args, **kwargs):
         """
-
+        #TODO: Update docstring
         Args:
             inputs (Dict):
                 x (Array): Node features, (num_nodes, num_features)
@@ -148,6 +148,7 @@ class DipoleSparse(BaseSubModule):
                  *args,
                  **kwargs) -> Dict[str, jnp.ndarray]:
         """
+        #TODO: Update docstring
         Predict partial charges, from atom-wise features `x`, atomic types `atomic_numbers` and the total charge of the system `total_charge`.
 
         Args:
@@ -238,7 +239,7 @@ class DipoleSparse(BaseSubModule):
                                 #    'zbl_repulsion_shift': self.zbl_repulsion_shift,           
                 }    
     
-class HirshfeldVolumeRatio(BaseSubModule):
+class HirshfeldSparse(BaseSubModule):
     prop_keys: Dict
     regression_dim: int = None
     activation_fn: Callable[[Any], Any] = lambda u: u
@@ -260,17 +261,17 @@ class HirshfeldVolumeRatio(BaseSubModule):
                  *args,
                  **kwargs) -> Dict[str, jnp.ndarray]:
         """
+        #TODO: Update docstring
         Predict Hirshfeld volumes from atom-wise features `x` and atomic types `z`.
 
         Args:
             inputs (Dict):
                 x (Array): Atomic features, shape: (n,F)
                 z (Array): Atomic types, shape: (n)
-                point_mask (Array): Mask for atom-wise operations, shape: (n)
             *args ():
             **kwargs ():
 
-        Returns: Dictionary of form {'v_eff': Array}, where Array are the predicted Hirshfeld volumes, shape: (n,1)
+        Returns: Dictionary of form {'v_eff': Array}, where Array are the predicted Hirshfeld ratios
 
         """
         # point_mask = inputs['point_mask']
@@ -279,15 +280,11 @@ class HirshfeldVolumeRatio(BaseSubModule):
         graph_mask = inputs['graph_mask']  # (num_graphs)
         atomic_numbers = inputs['atomic_numbers']  # (num_nodes)
 
-        # num_graphs = len(graph_mask)
-        # num_nodes = len(node_mask)
         F = x.shape[-1]
 
         v_shift = nn.Embed(num_embeddings=100, features=1)(atomic_numbers).squeeze(axis=-1)  # shape: (num_nodes)
         q = nn.Embed(num_embeddings=100, features=int(F/2))(atomic_numbers)  # shape: (n,F/2)
-        k = MLP(features=[x.shape[-1], int(F / 2)],
-                activation_fn=silu)(x)  # shape: (n,F/2)
-
+        
         if self.regression_dim is not None:
             y = nn.Dense(
                 self.regression_dim,
@@ -296,20 +293,21 @@ class HirshfeldVolumeRatio(BaseSubModule):
             )(x)  # (num_nodes, regression_dim)
             y = self.activation_fn(y)  # (num_nodes, regression_dim)
             k = nn.Dense(
-                1,
+                int(F/2),
                 kernel_init=self.kernel_init,
                 name='hirshfeld_ratios_dense_final'
-            )(y).squeeze(axis=-1)  # (num_nodes)
+            )(y) # (num_nodes)
         else:
             k = nn.Dense(
-                1,
+                int(F/2),
                 kernel_init=self.kernel_init,
                 name='hirshfeld_ratios_dense_final'
-            )(x).squeeze(axis=-1)  # (num_nodes)
+            )(x) # (num_nodes)
 
-        q_x_k = jnp.where(node_mask, (q * k / jnp.sqrt(k.shape[-1])).sum(axis=-1), jnp.asarray(0., dtype=k.dtype))
+        qk = (q * k / jnp.sqrt(k.shape[-1])).sum(axis=-1) 
+        q_x_k = jnp.where(node_mask, qk, jnp.asarray(0., dtype=k.dtype))
+
         v_eff = v_shift + q_x_k  # shape: (n)
-        v_eff = jnp.where(graph_mask, v_eff, jnp.asarray(0., dtype=v_eff.dtype))
-        print(v_eff.shape)
+        v_eff = jnp.where(node_mask, v_eff, jnp.asarray(0., dtype=v_eff.dtype))
+
         return dict(hirshfeld_ratios=v_eff)
-        # return {self.hirshfeld_volume_ratio_key: safe_scale(v_eff, scale=point_mask)[:, None]}  # shape: (n,1)
