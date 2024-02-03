@@ -125,9 +125,9 @@ def ASE_to_jraph(
         except PropertyNotImplementedError:
             stress = None
         try:
-            hirsh_ratios = mol.arrays['hirsh_ratios']
+            hirshfeld_ratios = mol.arrays['hirsh_ratios']
         except PropertyNotImplementedError:
-            hirsh_ratios = None
+            hirshfeld_ratios = None
         try:
             dipole = mol.info['dipole']
         except PropertyNotImplementedError:
@@ -140,7 +140,7 @@ def ASE_to_jraph(
         energy = None
         forces = None
         stress = None
-        hirsh_ratios = None
+        hirshfeld_ratios = None
         dipole = None
         total_charge = None
 
@@ -181,7 +181,7 @@ def ASE_to_jraph(
             "positions": np.array(positions),
             "atomic_numbers": np.array(atomic_numbers),
             "forces": np.array(forces) if forces is not None else None,
-            "hirsh_ratios": np.array(hirsh_ratios) if hirsh_ratios is not None else None
+            "hirshfeld_ratios": np.array(hirshfeld_ratios) if hirshfeld_ratios is not None else None
             }
 
     n_node = np.array([mol.get_global_number_of_atoms()])
