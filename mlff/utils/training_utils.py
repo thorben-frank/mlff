@@ -17,6 +17,12 @@ property_to_mask = {
     'dipole': 'graph_mask',
 }
 
+def print_metrics(epoch, eval_metrics):
+    formatted_output = f"{epoch}: "
+    for key in list(eval_metrics.keys()):
+        formatted_output += f"{key}={eval_metrics[key]:.4f}, "
+    formatted_output = formatted_output.rstrip(", ")
+    return formatted_output
 
 def scaled_mse_loss(y, y_label, scale, mask):
     full_mask = ~jnp.isnan(y_label) & jnp.expand_dims(mask, [y_label.ndim - 1 - o for o in range(0, y_label.ndim - 1)])
@@ -329,6 +335,9 @@ def fit(
                     step=step
                 )
 
+            # Print train metrics
+            # print(print_metrics(f"train_{epoch}_{step}:", train_metrics_np))
+
             # Start validation process.
             if step % eval_every_num_steps == 0:
                 iterator_validation = jraph.dynamically_batch(
@@ -367,6 +376,9 @@ def fit(
                 eval_metrics = {
                     f'eval_{k}': float(v) for k, v in eval_metrics.items()
                 }
+
+                # Print eval_metrics
+                print(print_metrics(f"val_{epoch}_{step}:", eval_metrics))
 
                 # Save checkpoint.
                 ckpt_mngr.save(
