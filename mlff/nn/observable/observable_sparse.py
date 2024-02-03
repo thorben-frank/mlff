@@ -130,7 +130,7 @@ class DipoleSparse(BaseSubModule):
     regression_dim: int = None
     activation_fn: Callable[[Any], Any] = lambda u: u
     output_is_zero_at_init: bool = True
-    module_name: str = 'partial_charge'
+    module_name: str = 'dipole'
 
     def setup(self):
         # self.partial_charge_key = self.prop_keys.get('partial_charge')
@@ -167,30 +167,17 @@ class DipoleSparse(BaseSubModule):
         x = inputs['x']  # (num_nodes, num_features)
         atomic_numbers = inputs['atomic_numbers']  # (num_nodes)
         batch_segments = inputs['batch_segments']  # (num_nodes)
-        #        point_mask = inputs['point_mask']
         node_mask = inputs['node_mask']  # (num_nodes)
         graph_mask = inputs['graph_mask']  # (num_graphs)
-        # total_charge = inputs[self.total_charge_key]
-        positions = inputs['positions'] #should be (num_nodes, 3)
-        total_charges = inputs['total_charges'] # should be (num_graphs)
-        print('WASSAP GOOD MORNING')
-        print('x.shape', x.shape)
-        print('atomic_numbers.shape', atomic_numbers.shape)
-        print('graph_mask.shape', graph_mask.shape)
-        print('node_mask.shape', node_mask.shape)
-        print('positions.shape', positions.shape)
-        print('total_charges.shape', total_charges.shape)
+        positions = inputs['positions'] # (num_nodes, 3)
+        # total_charge = inputs['total_charge'] # (num_graphs) #TODO: read total_charge from loaded graph
+        total_charge = jnp.zeros_like(graph_mask)
 
         num_graphs = len(graph_mask)
         num_nodes = len(node_mask)
 
-        # n = (point_mask != 0).sum()  # shape: (1)
-
         #q_ - element-dependent bias
-        q_ = nn.Embed(num_embeddings=100, features=1)(atomic_numbers).squeeze(axis=-1)  # shape: (n)
-        # x_ = MLP(features=[x.shape[-1], 1],
-        #          activation_fn=silu)(x).squeeze(axis=-1)  # shape: (n)
-        print('q_.shape', q_.shape)
+        q_ = nn.Embed(num_embeddings=100, features=1)(atomic_numbers).squeeze(axis=-1)  # shape: (num_nodes)
         if self.regression_dim is not None:
             y = nn.Dense(
                 self.regression_dim,
@@ -210,65 +197,42 @@ class DipoleSparse(BaseSubModule):
                 name='charge_dense_final'
             )(x).squeeze(axis=-1)  # (num_nodes)
 
-# def compute_fixed_charge_dipole(
-#     charges: torch.Tensor,
-#     positions: torch.Tensor,
-#     batch: torch.Tensor,
-#     num_graphs: int,
-# ) -> torch.Tensor:
-#     mu = positions * charges.unsqueeze(-1) / (1e-11 / c / e)  # [N_atoms,3]
-#     return scatter_sum(
-#         src=mu, index=batch.unsqueeze(-1), dim=0, dim_size=num_graphs
-#     )  # [N_graphs,3]
-        print('x_.shape', x_.shape)
+        #mask x_q from padding graph
+        x_q = jnp.where(node_mask, x_ + q_, jnp.asarray(0., dtype=x_.dtype))  # (num_nodes)
         # x_q = safe_scale(x_ + q_, scale=point_mask)  # shape: (n)
-        x_q = jnp.where(node_mask, x_ + q_, 
-                                  jnp.asarray(0., dtype=x_q.dtype))  # (num_nodes)
-        
-        print('x_q.shape', x_q.shape)
-        # partial_charges = x_q + (1 / n) * (total_charges - x_q.sum(axis=-1))  # shape: (n)
-        partial_charges = x_q + (1 / num_nodes) * (total_charges - x_q.sum(axis=-1))  # shape: (num_nodes)
-        mu_i = positions * partial_charges
-        print('total_charges', total_charges)
-        print('partial_charges.shape', partial_charges.shape)
-        print('partial_charges', partial_charges)
-        print('mu_i.shape', mu_i.shape)
+
+        total_charge_predicted = segment_sum(
+            x_q,
+            segment_ids=batch_segments,
+            num_segments=num_graphs
+        )  # (num_graphs)
+
+        _, number_of_atoms_in_molecule = jnp.unique(batch_segments, return_counts = True, size=num_graphs)
+
+        charge_conservation = (1 / number_of_atoms_in_molecule) * (total_charge - total_charge_predicted)
+        partial_charges = x_q + jnp.repeat(charge_conservation, number_of_atoms_in_molecule, total_repeat_length = num_nodes)   # shape: (num_nodes)
+
+        #mu = positions * charges / (1e-11 / c / e)  # [num_nodes, 3]
+        mu_i = positions * partial_charges[:, None] #(512,3) * (512,)
 
         dipole = segment_sum(
             mu_i,
             segment_ids=batch_segments,
             num_segments=num_graphs
-        )  # (num_graphs)
-        print('dipole.shape before where', dipole.shape)
+        )  # (num_graphs, 3)
+        dipole = jnp.linalg.norm(dipole, axis = 1)  # (num_graphs)
         dipole = jnp.where(graph_mask, dipole, jnp.asarray(0., dtype=dipole.dtype))
-        print('dipole.shape after', dipole.shape)
-        print('dipole', dipole)
-        sys.exit()
+
         return dict(dipole=dipole)
     
-        # if self.output_convention == 'per_structure':
-        #     energy = segment_sum(
-        #         atomic_energy,
-        #         segment_ids=batch_segments,
-        #         num_segments=num_graphs
-        #     )  # (num_graphs)
-        #     energy = jnp.where(graph_mask, energy, jnp.asarray(0., dtype=energy.dtype))
+    # def reset_output_convention(self, output_convention):
+    #     self.output_convention = output_convention
 
-        #     return dict(energy=energy)
-        # elif self.output_convention == 'per_atom':
-        #     energy = atomic_energy  # (num_nodes)
-
-        #     return dict(energy=energy)
-        # else:
-        #     raise ValueError(
-        #         f'{self.output_convention} is invalid argument for attribute `output_convention`.'
-        #     )
-        # return {self.partial_charge_key: safe_scale(partial_charges, scale=point_mask)[:, None]}  # shape: (n,1)
-
-    # @staticmethod
-    # def reset_output_convention(self, *args, **kwargs):
-    #     logging.warning('Can not reset `output_convention` for `PartialCharge` module, since partial charges are '
-    #                     'only defined per atom.')
-
-    # def __dict_repr__(self) -> Dict[str, Dict[str, Any]]:
-    #     return {self.module_name: {'prop_keys': self.prop_keys}}
+    def __dict_repr__(self) -> Dict[str, Dict[str, Any]]:
+        return {self.module_name: {'output_is_zero_at_init': self.output_is_zero_at_init,
+                                   'prop_keys': self.prop_keys}
+                                   #'zmax': self.zmax,
+                                #    'output_convention': self.output_convention,
+                                #    'zbl_repulsion': self.zbl_repulsion,
+                                #    'zbl_repulsion_shift': self.zbl_repulsion_shift,                 
+                }    

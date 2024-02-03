@@ -45,7 +45,9 @@ def graph_to_batch_fn(graph: jraph.GraphsTuple):
         cell_offset=graph.edges.get('cell_offset'),
         energy=graph.globals.get('energy'),
         forces=graph.nodes.get('forces'),
-        stress=graph.globals.get('stress')
+        stress=graph.globals.get('stress'),
+        total_charge=graph.globals.get('total_charge'),
+        dipole=graph.globals.get('dipole'),
     )
     batch_info = batch_info_fn(graph)
     batch.update(batch_info)
