@@ -234,5 +234,5 @@ class DipoleSparse(BaseSubModule):
                                    #'zmax': self.zmax,
                                 #    'output_convention': self.output_convention,
                                 #    'zbl_repulsion': self.zbl_repulsion,
-                                #    'zbl_repulsion_shift': self.zbl_repulsion_shift,                 
+                                #    'zbl_repulsion_shift': self.zbl_repulsion_shift,           
                 }    

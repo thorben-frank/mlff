@@ -1,3 +1,4 @@
+from mlff.masking.mask import safe_scale
 
 class PartialCharge(BaseSubModule):
     prop_keys: Dict
