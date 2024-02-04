@@ -191,6 +191,7 @@ def ASE_to_jraph(
         "energy": np.array([energy]).reshape(-1) if energy is not None else None,
         "stress": np.array(stress) if stress is not None else None,
         "dipole": np.array([np.linalg.norm(dipole)]) if dipole is not None else None,
+        "dipole_vec": np.array(dipole) if dipole is not None else None,
         "total_charge": np.array([total_charge]) if total_charge is not None else None,
     }
 
