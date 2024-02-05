@@ -135,7 +135,7 @@ def ASE_to_jraph(
         try:
             total_charge = mol.info['total_charge']
         except:
-            total_charge = None
+            total_charge = 0.
     else:
         energy = None
         forces = None

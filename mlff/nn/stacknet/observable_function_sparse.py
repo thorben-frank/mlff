@@ -119,7 +119,8 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
                   cell_offset: jnp.ndarray = None,
                   batch_segments: jnp.ndarray = None,
                   node_mask: jnp.ndarray = None,
-                  graph_mask: jnp.ndarray = None):
+                  graph_mask: jnp.ndarray = None,
+                  total_charge: jnp.ndarray = None):
         if batch_segments is None:
             assert graph_mask is None
             assert node_mask is None
@@ -138,7 +139,8 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
                       cell_offset=cell_offset,
                       batch_segments=batch_segments,
                       node_mask=node_mask,
-                      graph_mask=graph_mask
+                      graph_mask=graph_mask,
+                      total_charge=total_charge
                       )
 
         energy = model.apply(params, inputs)['energy']  # (num_graphs)
@@ -240,6 +242,7 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
                             batch_segments: jnp.ndarray = None,
                             node_mask: jnp.ndarray = None,
                             graph_mask: jnp.ndarray = None,
+                            total_charge: jnp.ndarray = None,
                             *args,
                             **kwargs):
         (_, energy), forces = jax.value_and_grad(
@@ -254,7 +257,8 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
                           cell_offset,
                           batch_segments,
                           node_mask,
-                          graph_mask
+                          graph_mask,
+                          total_charge
                           )
 
         if batch_segments is None:
@@ -273,7 +277,8 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
                 cell_offset=cell_offset,
                 batch_segments=batch_segments,
                 node_mask=node_mask,
-                graph_mask=graph_mask
+                graph_mask=graph_mask,
+                total_charge=total_charge
                 )
 
         dipole = model.apply(params, inputs)['dipole']  # (num_graphs)

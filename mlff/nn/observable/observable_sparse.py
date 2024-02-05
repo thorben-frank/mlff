@@ -171,8 +171,8 @@ class DipoleSparse(BaseSubModule):
         node_mask = inputs['node_mask']  # (num_nodes)
         graph_mask = inputs['graph_mask']  # (num_graphs)
         positions = inputs['positions'] # (num_nodes, 3)
-        # total_charge = inputs['total_charge'] # (num_graphs) #TODO: read total_charge from loaded graph
-        total_charge = jnp.zeros_like(graph_mask)
+        total_charge = inputs['total_charge'] # (num_graphs) #TODO: read total_charge from loaded graph
+        # total_charge = jnp.zeros_like(graph_mask)
 
         num_graphs = len(graph_mask)
         num_nodes = len(node_mask)
