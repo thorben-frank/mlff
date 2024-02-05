@@ -66,6 +66,8 @@ def evaluate(
 
         node_mask = batch_testing['node_mask']
         graph_mask = batch_testing['graph_mask']
+        graph_mask_expanded = batch_testing['graph_mask_expanded']
+        # graph_mask_expanded = jnp.repeat(graph_mask,3).reshape(-1,3)
 
         inputs = {k: v for (k, v) in batch_testing.items() if k not in testing_targets}
         output_prediction = obs_fn(params, **inputs)
@@ -80,6 +82,8 @@ def evaluate(
                 msk = graph_mask
             elif t == 'dipole':
                 msk = graph_mask
+            elif t == 'dipole_vec':
+                msk = graph_mask_expanded
             elif t == 'hirshfeld_ratios':
                 msk = node_mask
             else:

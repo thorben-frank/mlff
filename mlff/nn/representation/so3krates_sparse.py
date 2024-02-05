@@ -5,7 +5,7 @@ from mlff.nn.embed import GeometryEmbedSparse, AtomTypeEmbedSparse, ChargeEmbedS
 from mlff.nn.layer import SO3kratesLayerSparse
 from mlff.nn.observable import EnergySparse, PartialChargeSparse
 from .representation_utils import make_embedding_modules
-from mlff.nn.observable import EnergySparse, DipoleSparse, HirshfeldSparse
+from mlff.nn.observable import EnergySparse, DipoleSparse, DipoleVecSparse, HirshfeldSparse
 from typing import Sequence
 
 
@@ -91,6 +91,14 @@ def init_so3krates_sparse(
         # learn_atomic_type_shifts=energy_learn_atomic_type_shifts,
     )
 
+    dipole_vec = DipoleVecSparse(
+        prop_keys=None,
+        output_is_zero_at_init=output_is_zero_at_init,
+        regression_dim=energy_regression_dim,
+        activation_fn=getattr(
+            nn.activation, energy_activation_fn
+        ) if energy_activation_fn != 'identity' else lambda u: u,
+    )
     hirshfeld_ratios = HirshfeldSparse(
         prop_keys=None,
         output_is_zero_at_init=output_is_zero_at_init,
@@ -106,6 +114,6 @@ def init_so3krates_sparse(
         geometry_embeddings=[geometry_embed],
         feature_embeddings=embedding_modules,
         layers=layers,
-        observables=[energy, dipole, hirshfeld_ratios],
+        observables=[energy, dipole, dipole_vec, hirshfeld_ratios],
         prop_keys=None
     )

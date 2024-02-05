@@ -15,6 +15,7 @@ property_to_mask = {
     'stress': 'graph_mask',
     'forces': 'node_mask',
     'dipole': 'graph_mask',
+    'dipole_vec': 'graph_mask_expanded',
     'hirshfeld_ratios': 'node_mask',
 }
 
@@ -337,7 +338,7 @@ def fit(
                 )
 
             # Print train metrics
-            # print(print_metrics(f"train_{epoch}_{step}:", train_metrics_np))
+            print(print_metrics(f"train_{epoch}_{step}:", train_metrics_np))
 
             # Start validation process.
             if step % eval_every_num_steps == 0:

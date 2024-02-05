@@ -120,12 +120,16 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
                   batch_segments: jnp.ndarray = None,
                   node_mask: jnp.ndarray = None,
                   graph_mask: jnp.ndarray = None,
-                  total_charge: jnp.ndarray = None):
+                  graph_mask_expanded: jnp.ndarray = None,
+                  total_charge: jnp.ndarray = None,
+                  center_of_mass: jnp.ndarray = None):
         if batch_segments is None:
             assert graph_mask is None
+            assert graph_mask_expanded is None
             assert node_mask is None
 
             graph_mask = jnp.ones((1,)).astype(jnp.bool_)  # (1)
+            graph_mask_expanded = jnp.ones((1,3)).astype(jnp.bool_)  # (1,3)
             node_mask = jnp.ones((len(positions),)).astype(jnp.bool_)  # (num_nodes)
             batch_segments = jnp.zeros_like(atomic_numbers)  # (num_nodes)
 
@@ -140,7 +144,9 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
                       batch_segments=batch_segments,
                       node_mask=node_mask,
                       graph_mask=graph_mask,
-                      total_charge=total_charge
+                      graph_mask_expanded=graph_mask_expanded,
+                      total_charge=total_charge,
+                      center_of_mass=center_of_mass
                       )
 
         energy = model.apply(params, inputs)['energy']  # (num_graphs)
@@ -242,7 +248,9 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
                             batch_segments: jnp.ndarray = None,
                             node_mask: jnp.ndarray = None,
                             graph_mask: jnp.ndarray = None,
+                            graph_mask_expanded: jnp.ndarray = None,
                             total_charge: jnp.ndarray = None,
+                            center_of_mass: jnp.ndarray = None,
                             *args,
                             **kwargs):
         (_, energy), forces = jax.value_and_grad(
@@ -258,14 +266,18 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
                           batch_segments,
                           node_mask,
                           graph_mask,
-                          total_charge
+                          graph_mask_expanded,
+                          total_charge,
+                          center_of_mass
                           )
 
         if batch_segments is None:
             assert graph_mask is None
+            assert graph_mask_expanded is None
             assert node_mask is None
 
             graph_mask = jnp.ones((1,)).astype(jnp.bool_)  # (1)
+            graph_mask_expanded = jnp.ones((1,3)).astype(jnp.bool_)  # (1,3)
             node_mask = jnp.ones((len(positions),)).astype(jnp.bool_)  # (num_nodes)
             batch_segments = jnp.zeros_like(atomic_numbers)  # (num_nodes) 
 
@@ -278,14 +290,20 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
                 batch_segments=batch_segments,
                 node_mask=node_mask,
                 graph_mask=graph_mask,
-                total_charge=total_charge
+                graph_mask_expanded=graph_mask_expanded,
+                total_charge=total_charge,
+                center_of_mass=center_of_mass
                 )
 
         dipole = model.apply(params, inputs)['dipole']  # (num_graphs)
         dipole = jnp.where(graph_mask, dipole, jnp.asarray(0., dtype=dipole.dtype))  # (num_graphs)
+
+        dipole_vec = model.apply(params, inputs)['dipole_vec']  # (num_graphs)
+        dipole_vec = jnp.where(graph_mask_expanded, dipole_vec, jnp.asarray(0., dtype=dipole_vec.dtype))  # (num_graphs)
         hirshfeld_ratios = model.apply(params, inputs)['hirshfeld_ratios']  # (num_graphs)
         hirshfeld_ratios = jnp.where(node_mask, hirshfeld_ratios, jnp.asarray(0., dtype=hirshfeld_ratios.dtype))  # (num_graphs)
-        return dict(energy=energy, forces=forces, dipole=dipole, hirshfeld_ratios = hirshfeld_ratios)
+
+        return dict(energy=energy, forces=forces, dipole=dipole, dipole_vec=dipole_vec, hirshfeld_ratios = hirshfeld_ratios)
         
     # return energy_and_force_and_dipole_fn
     return energy_and_force_and_dipole_and_hirsh_fn

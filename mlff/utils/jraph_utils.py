@@ -17,6 +17,8 @@ def batch_info_fn(batched_graph: jraph.GraphsTuple):
     """
     node_mask = jraph.get_node_padding_mask(batched_graph)
     graph_mask = jraph.get_graph_padding_mask(batched_graph)
+    graph_mask_expanded = jnp.repeat(graph_mask,3).reshape(-1,3)
+
     num_of_non_padded_graphs = len(graph_mask) - jraph.get_number_of_padding_with_graphs_graphs(batched_graph)
     if len(graph_mask) == 1:
         raise RuntimeError('Only batched `jraph.GraphsTuple` should be passed to `batch_info_fn`.')
@@ -28,6 +30,7 @@ def batch_info_fn(batched_graph: jraph.GraphsTuple):
 
     return dict(node_mask=node_mask,
                 graph_mask=graph_mask,
+                graph_mask_expanded=graph_mask_expanded,
                 batch_segments=batch_segments,
                 num_of_non_padded_graphs=num_of_non_padded_graphs)
 
@@ -47,7 +50,9 @@ def graph_to_batch_fn(graph: jraph.GraphsTuple):
         forces=graph.nodes.get('forces'),
         stress=graph.globals.get('stress'),
         total_charge=graph.globals.get('total_charge'),
+        center_of_mass=graph.globals.get('center_of_mass'),
         dipole=graph.globals.get('dipole'),
+        dipole_vec=graph.globals.get('dipole_vec'),
         hirshfeld_ratios=graph.nodes.get('hirshfeld_ratios'),
     )
     batch_info = batch_info_fn(graph)

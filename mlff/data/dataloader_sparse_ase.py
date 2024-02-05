@@ -126,16 +126,22 @@ def ASE_to_jraph(
             stress = None
         try:
             hirshfeld_ratios = mol.arrays['hirsh_ratios']
-        except PropertyNotImplementedError:
+        except:
             hirshfeld_ratios = None
         try:
             dipole = mol.info['dipole']
-        except PropertyNotImplementedError:
+        except:
             dipole = None
         try:
-            total_charge = mol.info['total_charge']
+            total_charge = mol.info['charge']
+            if total_charge == 0.0:
+                center_of_mass = [0., 0., 0.]
+            else:
+                center_of_mass = mol.get_center_of_mass()
         except:
             total_charge = 0.
+            center_of_mass = [0., 0., 0.]
+
     else:
         energy = None
         forces = None
@@ -143,6 +149,7 @@ def ASE_to_jraph(
         hirshfeld_ratios = None
         dipole = None
         total_charge = None
+        center_of_mass = None
 
     total_charge = mol.info.get('total_charge')
     multiplicity = mol.info.get('multiplicity')
@@ -191,8 +198,9 @@ def ASE_to_jraph(
         "energy": np.array([energy]).reshape(-1) if energy is not None else None,
         "stress": np.array(stress) if stress is not None else None,
         "dipole": np.array([np.linalg.norm(dipole)]) if dipole is not None else None,
-        "dipole_vec": np.array(dipole) if dipole is not None else None,
+        "dipole_vec": np.array(dipole.reshape(-1,3)) if dipole is not None else None,
         "total_charge": np.array([total_charge]) if total_charge is not None else None,
+        "center_of_mass": np.array([center_of_mass]) if center_of_mass is not None else None
     }
 
     return jraph.GraphsTuple(
