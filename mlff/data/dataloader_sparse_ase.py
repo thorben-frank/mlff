@@ -142,6 +142,10 @@ def ASE_to_jraph(
         except:
             total_charge = 0.
             center_of_mass = [0., 0., 0.]
+        try:
+            rij = mol.get_all_distances()
+        except PropertyNotImplementedError:
+            rij = None
 
     else:
         energy = None
