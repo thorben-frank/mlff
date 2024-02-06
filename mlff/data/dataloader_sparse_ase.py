@@ -124,10 +124,11 @@ def ASE_to_jraph(
             stress = mol.get_stress()
         except PropertyNotImplementedError:
             stress = None
+        #TODO: Read Hirshfeld ratios only when they are needed, i.e. hirsh_ratios weight is not 0
         try:
             hirshfeld_ratios = mol.arrays['hirsh_ratios']
         except:
-            hirshfeld_ratios = None
+            hirshfeld_ratios = [1.] * len(atomic_numbers)
         try:
             dipole = mol.info['dipole']
         except:
