@@ -5,6 +5,10 @@ from ase.io import read
 from ase.units import Bohr, Hartree
 from ase.units import alpha as fine_structure
 import scipy.optimize as opt
+from mlff.nn.base.sub_module import BaseSubModule
+from jax.ops import segment_sum
+from typing import Any, Callable, Dict
+import flax.linen as nn
 
 def _get_ref_data():
     fname = '/Users/adil.kabylda/Documents/mlff_v1.0/train_runs/ref.dat'
@@ -69,40 +73,49 @@ def Damp(R, gamma, n):
         f += -jnp.exp(-gamma*R**2/2)* gamma**k * R**(2*k)/2**k/jax.scipy.special.factorial(k)
     return f
 
-species, alphas, C6s = _get_ref_data()
+class EnergyDispersionSparse(BaseSubModule):
+    prop_keys: Dict
+    module_name = 'energy_dispersion'
 
-# Reading the molecule
-mol = read('/Users/adil.kabylda/Documents/mlff_v1.0/train_runs/qm7x_disp_train.extxyz', index="20", format='extxyz')
+    # Reading the molecule
+    # mol = read('/Users/adil.kabylda/Documents/mlff_v1.0/train_runs/qm7x_disp_train.extxyz', index="20", format='extxyz')
 
-# Getting positions and converting them to a.u.
-positions = mol.get_positions() / Bohr
-hirshfeld_ratios = mol.arrays['hirsh_ratios']
+    @nn.compact
+    def __call__(self, inputs: Dict, *args, **kwargs):
 
-# Getting atomic numbers (needed to link to the free-atom reference values)
-at_nums = mol.get_atomic_numbers()
-N = len(at_nums)
-alpha = alphas[at_nums-1] * hirshfeld_ratios
-C6 = C6s[at_nums-1] * hirshfeld_ratios**2  
+        species, alphas, C6s = _get_ref_data()
 
-# Treating all atomic pairs in one shot by 2d arrays
-# Computing mixed parameters
-a0_mat = (alpha[:, None] + alpha[None, :])/2
-C6_mat = 2 * C6[:, None] * C6[None, :] * alpha[None, :] * alpha[:, None]
-C6_mat *= 1/(alpha[None, :]**2 * C6[:, None] + alpha[:, None]**2 * C6[None, :])
+        # Getting positions and converting them to a.u.
+        positions = inputs['positions'] / Bohr # (num_nodes, 3)
+        hirshfeld_ratios = inputs['hirshfeld_ratios'] #pass from observables somehow
 
-# Computing all pairwise distances
-Rs = positions[:, None, :] - positions[None, :, :]
-dists = jnp.sqrt(jnp.sum(Rs**2, -1))
+        # Getting atomic numbers (needed to link to the free-atom reference values)
+        atomic_numbers = inputs['atomic_numbers']  # (num_nodes)
+        N = len(atomic_numbers)
+        alpha = alphas[atomic_numbers-1] * hirshfeld_ratios
+        C6 = C6s[atomic_numbers-1] * hirshfeld_ratios**2  
 
-# Getting the QDO parameters for all pairs
-gamma = QDO_params(a0_mat, C6_mat)
+        # Treating all atomic pairs in one shot by 2d arrays
+        # Computing mixed parameters
+        a0_mat = (alpha[:, None] + alpha[None, :])/2
+        C6_mat = 2 * C6[:, None] * C6[None, :] * alpha[None, :] * alpha[:, None]
+        C6_mat *= 1/(alpha[None, :]**2 * C6[:, None] + alpha[:, None]**2 * C6[None, :])
 
-# Masking the diagonal elements to avoid division by zero
-gamma = gamma[~jnp.eye(len(gamma), dtype=bool)].reshape(len(gamma), -1)
-dists = dists[~jnp.eye(len(dists), dtype=bool)].reshape(len(dists), -1)
-C6_mat = C6_mat[~jnp.eye(len(C6_mat), dtype=bool)].reshape(len(C6_mat), -1)
+        # Computing all pairwise distances
+        Rs = positions[:, None, :] - positions[None, :, :]
+        dists = jnp.sqrt(jnp.sum(Rs**2, -1))
 
-# Computing the dispersion energy
-ene_mat = vdw_QDO_disp_damp(dists, gamma, C6_mat)
-disp_energy = 0.5 * jnp.sum(ene_mat)
-print(disp_energy)
+        # Getting the QDO parameters for all pairs
+        gamma = QDO_params(a0_mat, C6_mat)
+
+        # Masking the diagonal elements to avoid division by zero
+        gamma = gamma[~jnp.eye(len(gamma), dtype=bool)].reshape(len(gamma), -1)
+        dists = dists[~jnp.eye(len(dists), dtype=bool)].reshape(len(dists), -1)
+        C6_mat = C6_mat[~jnp.eye(len(C6_mat), dtype=bool)].reshape(len(C6_mat), -1)
+
+        # Computing the dispersion energy
+        ene_mat = vdw_QDO_disp_damp(dists, gamma, C6_mat)
+        disp_energy = 0.5 * jnp.sum(ene_mat)
+        print(disp_energy)
+
+        return disp_energy
