@@ -32,6 +32,71 @@ def scaled_mse_loss(y, y_label, scale, mask):
     return mse
 
 
+def graph_mse_loss(y, y_label, batch_segments, graph_mask, scale):
+    del batch_segments
+
+    assert y.shape == y_label.shape
+
+    full_mask = ~jnp.isnan(
+        y_label
+    ) & jnp.expand_dims(
+        graph_mask, [y_label.ndim - 1 - o for o in range(0, y_label.ndim - 1)]
+    )
+    denominator = full_mask.sum().astype(y.dtype)
+    mse = (
+            jnp.sum(
+                2 * scale * optax.l2_loss(
+                    jnp.where(full_mask, y, 0).reshape(-1),
+                    jnp.where(full_mask, y_label, 0).reshape(-1),
+                )
+            )
+            / denominator
+    )
+    return mse
+
+
+def node_mse_loss(y, y_label, batch_segments, graph_mask, scale):
+
+    assert y.shape == y_label.shape
+
+    num_graphs = graph_mask.sum().astype(y.dtype)  # ()
+
+    squared = 2 * optax.l2_loss(
+        predictions=y,
+        targets=y_label,
+    )  # same shape as y
+
+    # sum up the l2_losses for node properties along the non-leading dimension. For e.g. scalar node quantities
+    # this does not have any effect, but e.g. for vectorial and tensorial node properties one averages over all
+    # additional non-leading dimension. E.g. for forces this corresponds to taking mean over x, y, z component.
+    node_mean_squared = squared.reshape(len(squared), -1).mean(axis=-1)  # (num_nodes)
+
+    per_graph_mse = jraph.segment_mean(
+        data=node_mean_squared,
+        segment_ids=batch_segments,
+        num_segments=len(graph_mask)
+    )  # (num_graphs)
+
+    # Set contributions from padding graphs to zero.
+    per_graph_mse = jnp.where(
+        graph_mask,
+        per_graph_mse,
+        jnp.asarray(0., dtype=per_graph_mse.dtype)
+    )  # (num_graphs)
+
+    # Calculate mean and scale.
+    mse = scale * jnp.sum(per_graph_mse) / num_graphs  # ()
+
+    return mse
+
+
+property_to_loss = {
+    'energy': graph_mse_loss,
+    'stress': graph_mse_loss,
+    'forces': node_mse_loss,
+}
+
+
 def make_loss_fn(obs_fn: Callable, weights: Dict, scales: Dict = None):
     # Targets are collected based on the loss weights.
     targets = list(weights.keys())
@@ -55,11 +120,19 @@ def make_loss_fn(obs_fn: Callable, weights: Dict, scales: Dict = None):
         metrics = {}
         # Iterate over the targets, calculate loss and multiply with loss weights and scales.
         for target in targets:
-            _l = scaled_mse_loss(
+            # _l = scaled_mse_loss(
+            #     y=outputs_predict[target],
+            #     y_label=outputs_true[target],
+            #     scale=_scales[target],
+            #     mask=inputs[property_to_mask[target]]
+            # )
+            target_loss_fn = property_to_loss[target]
+            _l = target_loss_fn(
                 y=outputs_predict[target],
                 y_label=outputs_true[target],
                 scale=_scales[target],
-                mask=inputs[property_to_mask[target]]
+                batch_segments=inputs['batch_segments'],
+                graph_mask=inputs['graph_mask'],
             )
 
             loss += weights[target] * _l
