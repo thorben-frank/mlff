@@ -8,4 +8,5 @@ from .observable_sparse import EnergySparse
 from .observable_sparse import DipoleSparse
 from .observable_sparse import DipoleVecSparse
 from .observable_sparse import HirshfeldSparse
-
+from .observable_sparse import DummySparse
+from .observable_sparse import PartialChargesSparse

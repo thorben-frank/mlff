@@ -3,6 +3,7 @@ from .observable_sparse import EnergySparse
 from .observable_sparse import DipoleSparse
 from .observable_sparse import DipoleVecSparse
 from .observable_sparse import HirshfeldSparse
+from .observable_sparse import DummySparse
 
 
 def get_observable_module(name, h):
@@ -14,6 +15,8 @@ def get_observable_module(name, h):
         return DipoleSparse(**h)    
     elif name == 'dipole_vec_sparse':
         return DipoleVecSparse(**h)    
+    elif name == 'dummy_sparse':
+        return DummySparse(**h)
     elif name == 'hirsh_ratios_sparse':
         return HirshfeldSparse(**h)  
     else:

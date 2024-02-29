@@ -336,17 +336,39 @@ class HirshfeldSparse(BaseSubModule):
         q_x_k = jnp.where(node_mask, qk, jnp.asarray(0., dtype=k.dtype))
 
         v_eff = v_shift + q_x_k  # shape: (n)
-        v_eff = jnp.where(node_mask, v_eff, jnp.asarray(0., dtype=v_eff.dtype))
+        hirshfeld_ratios = jnp.where(node_mask, v_eff, jnp.asarray(0., dtype=v_eff.dtype))
 
-        return dict(hirshfeld_ratios=v_eff)
-    
-class DipoleVecSparse(BaseSubModule):
+        return dict(hirshfeld_ratios=hirshfeld_ratios)
+
+class DummySparse(BaseSubModule):
     prop_keys: Dict
     regression_dim: int = None
     activation_fn: Callable[[Any], Any] = lambda u: u
     output_is_zero_at_init: bool = True
+    module_name = 'dummy'
+
+    def setup(self):
+        pass
+
+    def another_number(self, num: int = 21):
+        return num
+    
+    @nn.compact
+    def __call__(self,
+                 inputs: Dict,
+                 *args,
+                 **kwargs) -> Dict[str, jnp.ndarray]:
+        # Return a constant value of 42 for dummy_number
+        dummy_number = 42
+        return dict(dummy=dummy_number)
+    
+class PartialChargesSparse(BaseSubModule):
+    prop_keys: Dict
+    regression_dim: int = None
+    activation_fn: Callable[[Any], Any] = lambda u: u
+    output_is_zero_at_init: bool = True
+    module_name: str = 'partial_charges'
     # return_partial_charges: bool = True
-    module_name: str = 'dipole_vec'
      
     def setup(self):
         # self.partial_charge_key = self.prop_keys.get('partial_charge')
@@ -357,7 +379,7 @@ class DipoleVecSparse(BaseSubModule):
         if self.output_is_zero_at_init:
             self.kernel_init = nn.initializers.zeros_init()
         else:
-            self.kernel_init = nn.initializers.lecun_normal()        
+            self.kernel_init = nn.initializers.lecun_normal()   
 
     @nn.compact
     def __call__(self,
@@ -413,8 +435,119 @@ class DipoleVecSparse(BaseSubModule):
 
         charge_conservation = (1 / number_of_atoms_in_molecule) * (total_charge - total_charge_predicted)
         partial_charges = x_q + jnp.repeat(charge_conservation, number_of_atoms_in_molecule, total_repeat_length = num_nodes)   # shape: (num_nodes)
+        
         #TODO: Check whether partial charges make sense
-        #TODO: Constrain or normalize partial charges to not exceed total charge
+        #TODO: Constrain or normalize partial charges to not exceed total charge, maybe not needed. Supporting info in SpookyNet shows that partial charges are already reasonable.
+        # print('RETURN WASSAP partial_charges')
+        return dict(partial_charges=partial_charges)
+    
+        # # self._partial_charges = partial_charges
+        # #Shift origin to center of mass to get consistent dipole moment for charged molecules
+        # center_of_mass_expanded = jnp.repeat(center_of_mass, number_of_atoms_in_molecule, axis = 0, total_repeat_length = num_nodes) # shape: (num_nodes, 3)
+        # positions_shifted = positions - center_of_mass_expanded
+        
+        # #mu = positions * charges / (1e-11 / c / e)  # [num_nodes, 3]
+        # mu_i = positions_shifted * partial_charges[:, None] #(512,3) * (512,)
+        # # print('mu_i.shape', mu_i.shape)  # (num_nodes, 3)
+        # # print('partial_charges', partial_charges)
+
+        # dipole = segment_sum(
+        #     mu_i,
+        #     segment_ids=batch_segments,
+        #     num_segments=num_graphs
+        # )  # (num_graphs, 3)
+
+        # dipole_vec = jnp.where(graph_mask_expanded, dipole, jnp.asarray(0., dtype=dipole.dtype))
+        # # print('dipole_vec')
+        # # print(dipole_vec.shape) # (num_graphs, 3)
+        # # print(dipole_vec)
+
+        # return dict(dipole_vec=dipole_vec)
+
+class DipoleVecSparse(BaseSubModule):
+    prop_keys: Dict
+    regression_dim: int = None
+    activation_fn: Callable[[Any], Any] = lambda u: u
+    output_is_zero_at_init: bool = True
+    module_name: str = 'dipole_vec'
+    partial_charges: Optional[Any] = None
+    # return_partial_charges: bool = True
+     
+    def setup(self):
+        # self.partial_charge_key = self.prop_keys.get('partial_charge')
+        # self.atomic_type_key = self.prop_keys.get('atomic_type')
+        # self.total_charge_key = self.prop_keys.get('total_charge')
+        # self._partial_charges = None
+
+        if self.output_is_zero_at_init:
+            self.kernel_init = nn.initializers.zeros_init()
+        else:
+            self.kernel_init = nn.initializers.lecun_normal()   
+
+        # if self.partial_charges is not None:
+        #     self.partial_charges = self.partial_charges
+        # else:
+        #     print('ELSE')
+
+    @nn.compact
+    def __call__(self,
+                 inputs: Dict,
+                 *args,
+                 **kwargs) -> Dict[str, jnp.ndarray]:
+
+        x = inputs['x']  # (num_nodes, num_features)
+        atomic_numbers = inputs['atomic_numbers']  # (num_nodes)
+        batch_segments = inputs['batch_segments']  # (num_nodes)
+        node_mask = inputs['node_mask']  # (num_nodes)
+        graph_mask = inputs['graph_mask']  # (num_graphs)
+        graph_mask_expanded = inputs['graph_mask_expanded']
+        positions = inputs['positions'] # (num_nodes, 3)
+        total_charge = inputs['total_charge'] # (num_graphs)
+        center_of_mass = inputs['center_of_mass'] # (num_graphs, 3)
+        # partial_charges = inputs['partial_charges'] # (num_nodes)
+        partial_charges = self.partial_charges(inputs)['partial_charges']
+        num_graphs = len(graph_mask)
+        num_nodes = len(node_mask)
+
+        # #q_ - element-dependent bias
+        # q_ = nn.Embed(num_embeddings=100, features=1)(atomic_numbers).squeeze(axis=-1)  # shape: (num_nodes)
+        # if self.regression_dim is not None:
+        #     y = nn.Dense(
+        #         self.regression_dim,
+        #         kernel_init=nn.initializers.lecun_normal(),
+        #         name='charge_dense_regression_vec'
+        #     )(x)  # (num_nodes, regression_dim)
+        #     y = self.activation_fn(y)  # (num_nodes, regression_dim)
+        #     x_ = nn.Dense(
+        #         1,
+        #         kernel_init=self.kernel_init,
+        #         name='charge_dense_final_vec'
+        #     )(y).squeeze(axis=-1)  # (num_nodes)
+        # else:
+        #     x_ = nn.Dense(
+        #         1,
+        #         kernel_init=self.kernel_init,
+        #         name='charge_dense_final_vec'
+        #     )(x).squeeze(axis=-1)  # (num_nodes)
+
+        # #mask x_q from padding graph
+        # x_q = jnp.where(node_mask, x_ + q_, jnp.asarray(0., dtype=x_.dtype))  # (num_nodes)
+        # # x_q = safe_scale(x_ + q_, scale=point_mask)  # shape: (n)
+
+        # total_charge_predicted = segment_sum(
+        #     x_q,
+        #     segment_ids=batch_segments,
+        #     num_segments=num_graphs
+        # )  # (num_graphs)
+
+        _, number_of_atoms_in_molecule = jnp.unique(batch_segments, return_counts = True, size=num_graphs)
+        # print(f"args: {args}")
+        # print(f"partial_charges: {partial_charges}")
+        # partial_charges = args[0]['partial_charges']
+        # charge_conservation = (1 / number_of_atoms_in_molecule) * (total_charge - total_charge_predicted)
+        # partial_charges = x_q + jnp.repeat(charge_conservation, number_of_atoms_in_molecule, total_repeat_length = num_nodes)   # shape: (num_nodes)
+        #TODO: Check whether partial charges make sense
+        #TODO: Constrain or normalize partial charges to not exceed total charge, maybe not needed. Supporting info in SpookyNet shows that partial charges are already reasonable.
 
         # self._partial_charges = partial_charges
         #Shift origin to center of mass to get consistent dipole moment for charged molecules
