@@ -97,7 +97,9 @@ def evaluate(
             metrics_dict[f"{t}_mse"] = calculate_mse(
                 y_predicted=output_prediction[t], y_true=batch_testing[t], msk=msk
             )
-
+            # metrics_dict[f"{t}_true"] = batch_testing[t][msk]
+            # metrics_dict[f"{t}_predicted"] = output_prediction[t][msk]
+     
         # Track the metrics per batch if they are written to file.
         if write_batch_metrics_to is not None:
             row_metrics += [jax.device_get(metrics_dict)]

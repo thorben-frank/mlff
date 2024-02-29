@@ -345,12 +345,14 @@ class DipoleVecSparse(BaseSubModule):
     regression_dim: int = None
     activation_fn: Callable[[Any], Any] = lambda u: u
     output_is_zero_at_init: bool = True
+    # return_partial_charges: bool = True
     module_name: str = 'dipole_vec'
-
+     
     def setup(self):
         # self.partial_charge_key = self.prop_keys.get('partial_charge')
         # self.atomic_type_key = self.prop_keys.get('atomic_type')
         # self.total_charge_key = self.prop_keys.get('total_charge')
+        # self._partial_charges = None
 
         if self.output_is_zero_at_init:
             self.kernel_init = nn.initializers.zeros_init()
@@ -362,24 +364,7 @@ class DipoleVecSparse(BaseSubModule):
                  inputs: Dict,
                  *args,
                  **kwargs) -> Dict[str, jnp.ndarray]:
-        """
-        #TODO: Update docstring
-        Predict partial charges, from atom-wise features `x`, atomic types `atomic_numbers` and the total charge of the system `total_charge`.
 
-        Args:
-            inputs (Dict):
-                x (Array): Node features, (num_nodes, num_features)
-                atomic_numbers (Array): Atomic numbers, (num_nodes)
-                total_charge (Array): Total charge, shape: (1)
-                batch_segments (Array): Batch segments, (num_nodes)
-                node_mask (Array): Node mask, (num_nodes)
-                graph_mask (Array): Graph mask, (num_graphs)
-            *args ():
-            **kwargs ():
-
-        #Returns: Dictionary of form {'q': Array}, where Array are the predicted partial charges, shape: (n,1)
-
-        """
         x = inputs['x']  # (num_nodes, num_features)
         atomic_numbers = inputs['atomic_numbers']  # (num_nodes)
         batch_segments = inputs['batch_segments']  # (num_nodes)
@@ -429,13 +414,17 @@ class DipoleVecSparse(BaseSubModule):
         charge_conservation = (1 / number_of_atoms_in_molecule) * (total_charge - total_charge_predicted)
         partial_charges = x_q + jnp.repeat(charge_conservation, number_of_atoms_in_molecule, total_repeat_length = num_nodes)   # shape: (num_nodes)
         #TODO: Check whether partial charges make sense
+        #TODO: Constrain or normalize partial charges to not exceed total charge
 
+        # self._partial_charges = partial_charges
         #Shift origin to center of mass to get consistent dipole moment for charged molecules
         center_of_mass_expanded = jnp.repeat(center_of_mass, number_of_atoms_in_molecule, axis = 0, total_repeat_length = num_nodes) # shape: (num_nodes, 3)
         positions_shifted = positions - center_of_mass_expanded
         
         #mu = positions * charges / (1e-11 / c / e)  # [num_nodes, 3]
         mu_i = positions_shifted * partial_charges[:, None] #(512,3) * (512,)
+        # print('mu_i.shape', mu_i.shape)  # (num_nodes, 3)
+        # print('partial_charges', partial_charges)
 
         dipole = segment_sum(
             mu_i,
@@ -444,8 +433,12 @@ class DipoleVecSparse(BaseSubModule):
         )  # (num_graphs, 3)
 
         dipole_vec = jnp.where(graph_mask_expanded, dipole, jnp.asarray(0., dtype=dipole.dtype))
+        # print('dipole_vec')
+        # print(dipole_vec.shape) # (num_graphs, 3)
+        # print(dipole_vec)
 
         return dict(dipole_vec=dipole_vec)
+        # return dict(dipole_vec=dipole_vec, partial_charges = partial_charges)#, dict(partial_charges=partial_charges)
     
 
 # if use_electrostatics:
@@ -472,288 +465,288 @@ class DipoleVecSparse(BaseSubModule):
 # else:
 #     ea_ele = ea.new_zeros(N)
         
-class ElectrostaticEnergy(BaseSubModule):
-    prop_keys: Dict
-    # zmax: int = 118
-    # regression_dim: int = None
-    # activation_fn: Callable[[Any], Any] = lambda u: u
-    # learn_atomic_type_scales: bool = False
-    # learn_atomic_type_shifts: bool = False
-    # zbl_repulsion: bool = False
-    # zbl_repulsion_shift: float = 0.
-    # output_is_zero_at_init: bool = True
-    # output_convention: str = 'per_structure'
-    module_name: str = 'electrostatic_energy'
+# class ElectrostaticEnergy(BaseSubModule):
+#     prop_keys: Dict
+#     # zmax: int = 118
+#     # regression_dim: int = None
+#     # activation_fn: Callable[[Any], Any] = lambda u: u
+#     # learn_atomic_type_scales: bool = False
+#     # learn_atomic_type_shifts: bool = False
+#     # zbl_repulsion: bool = False
+#     # zbl_repulsion_shift: float = 0.
+#     # output_is_zero_at_init: bool = True
+#     # output_convention: str = 'per_structure'
+#     module_name: str = 'electrostatic_energy'
 
-    ke: float = 14.399645351950548,
-    cuton: float = 0.0,
-    cutoff: float = 1.0,
-    lr_cutoff: Optional[float] = None,    
+#     ke: float = 14.399645351950548,
+#     cuton: float = 0.0,
+#     cutoff: float = 1.0,
+#     lr_cutoff: Optional[float] = None,    
 
-    kehalf = ke / 2
-    use_ewald_summation = False
-    alpha = 0.0
-    alpha2 = 0.0
-    two_pi = 2.0 * jnp.pi
-    one_over_sqrtpi = 1 / jnp.sqrt(jnp.pi)
-    kmul = jnp.array([])
+#     kehalf = ke / 2
+#     use_ewald_summation = False
+#     alpha = 0.0
+#     alpha2 = 0.0
+#     two_pi = 2.0 * jnp.pi
+#     one_over_sqrtpi = 1 / jnp.sqrt(jnp.pi)
+#     kmul = jnp.array([])
 
-    def set_lr_cutoff(self, lr_cutoff: Optional[float] = None) -> None:
-        """ Change the long range cutoff. """
-        self.lr_cutoff = lr_cutoff
-        if self.lr_cutoff is not None:
-            self.lr_cutoff2 = lr_cutoff ** 2
-            self.two_div_cut = 2.0 / lr_cutoff
-            self.rcutconstant = lr_cutoff / (lr_cutoff ** 2 + 1.0) ** (3.0 / 2.0)
-            self.cutconstant = (2 * lr_cutoff ** 2 + 1.0) / (lr_cutoff ** 2 + 1.0) ** (
-                3.0 / 2.0
-            )
-        else:
-            self.lr_cutoff2 = None
-            self.two_div_cut = None
-            self.rcutconstant = None
-            self.cutconstant = None
+#     def set_lr_cutoff(self, lr_cutoff: Optional[float] = None) -> None:
+#         """ Change the long range cutoff. """
+#         self.lr_cutoff = lr_cutoff
+#         if self.lr_cutoff is not None:
+#             self.lr_cutoff2 = lr_cutoff ** 2
+#             self.two_div_cut = 2.0 / lr_cutoff
+#             self.rcutconstant = lr_cutoff / (lr_cutoff ** 2 + 1.0) ** (3.0 / 2.0)
+#             self.cutconstant = (2 * lr_cutoff ** 2 + 1.0) / (lr_cutoff ** 2 + 1.0) ** (
+#                 3.0 / 2.0
+#             )
+#         else:
+#             self.lr_cutoff2 = None
+#             self.two_div_cut = None
+#             self.rcutconstant = None
+#             self.cutconstant = None
 
-    def set_kmax(self, Nxmax: int, Nymax: int, Nzmax: int) -> None:
-        """ Set integer reciprocal space cutoff for Ewald summation """
-        kx = jnp.arange(0, Nxmax + 1)
-        kx = jnp.concatenate([kx, -kx[1:]])
-        ky = jnp.arange(0, Nymax + 1)
-        ky = jnp.concatenate([ky, -ky[1:]])
-        kz = jnp.arange(0, Nzmax + 1)
-        kz = jnp.concatenate([kz, -kz[1:]])
-        kmul = jnp.array(jnp.meshgrid(kx, ky, kz)).reshape(3, -1).T[1:]  # 0th entry is 0 0 0
-        kmax = max(max(Nxmax, Nymax), Nzmax)
-        self.kmul = kmul[jnp.sum(kmul ** 2, axis=-1) <= kmax ** 2]
+#     def set_kmax(self, Nxmax: int, Nymax: int, Nzmax: int) -> None:
+#         """ Set integer reciprocal space cutoff for Ewald summation """
+#         kx = jnp.arange(0, Nxmax + 1)
+#         kx = jnp.concatenate([kx, -kx[1:]])
+#         ky = jnp.arange(0, Nymax + 1)
+#         ky = jnp.concatenate([ky, -ky[1:]])
+#         kz = jnp.arange(0, Nzmax + 1)
+#         kz = jnp.concatenate([kz, -kz[1:]])
+#         kmul = jnp.array(jnp.meshgrid(kx, ky, kz)).reshape(3, -1).T[1:]  # 0th entry is 0 0 0
+#         kmax = max(max(Nxmax, Nymax), Nzmax)
+#         self.kmul = kmul[jnp.sum(kmul ** 2, axis=-1) <= kmax ** 2]
 
-    def set_alpha(self, alpha: Optional[float] = None) -> None:
-        """ Set real space damping parameter for Ewald summation """
-        if alpha is None:  # automatically determine alpha
-            alpha = 4.0 / self.cutoff + 1e-3
-        self.alpha = alpha
-        self.alpha2 = alpha ** 2
-        self.two_pi = 2.0 * jnp.pi
-        self.one_over_sqrtpi = 1 / jnp.sqrt(jnp.pi)
-        # print a warning if alpha is so small that the reciprocal space sum
-        # might "leak" into the damped part of the real space coulomb interaction
-        if alpha * self.cutoff < 4.0:  # erfc(4.0) ~ 1e-8
-            print(
-                "Warning: Damping parameter alpha is",
-                alpha,
-                "but probably should be at least",
-                4.0 / self.cutoff,
-            )
+#     def set_alpha(self, alpha: Optional[float] = None) -> None:
+#         """ Set real space damping parameter for Ewald summation """
+#         if alpha is None:  # automatically determine alpha
+#             alpha = 4.0 / self.cutoff + 1e-3
+#         self.alpha = alpha
+#         self.alpha2 = alpha ** 2
+#         self.two_pi = 2.0 * jnp.pi
+#         self.one_over_sqrtpi = 1 / jnp.sqrt(jnp.pi)
+#         # print a warning if alpha is so small that the reciprocal space sum
+#         # might "leak" into the damped part of the real space coulomb interaction
+#         if alpha * self.cutoff < 4.0:  # erfc(4.0) ~ 1e-8
+#             print(
+#                 "Warning: Damping parameter alpha is",
+#                 alpha,
+#                 "but probably should be at least",
+#                 4.0 / self.cutoff,
+#             )
 
-    def _real_space(
-        self,
-        N: int,
-        q: jnp.ndarray,
-        rij: jnp.ndarray,
-        idx_i: jnp.ndarray,
-        idx_j: jnp.ndarray,
-    ) -> jnp.ndarray:
-        if q.device.type == "cpu":  # indexing is faster on CPUs
-            fac = self.kehalf * q[idx_i] * q[idx_j]
-        else:  # gathering is faster on GPUs
-            fac = self.kehalf * jnp.take(q, idx_i) * jnp.take(q, idx_j)
-        f = switch_function(rij, self.cuton, self.cutoff)
-        coulomb = 1.0 / rij
-        damped = 1.0 / (rij ** 2 + 1.0) ** (1.0 / 2.0)
-        pairwise = fac * (f * damped + (1 - f) * coulomb) * erfc(self.alpha * rij)
-        return jnp.zeros(N).at[idx_i].add(pairwise)
+#     def _real_space(
+#         self,
+#         N: int,
+#         q: jnp.ndarray,
+#         rij: jnp.ndarray,
+#         idx_i: jnp.ndarray,
+#         idx_j: jnp.ndarray,
+#     ) -> jnp.ndarray:
+#         if q.device.type == "cpu":  # indexing is faster on CPUs
+#             fac = self.kehalf * q[idx_i] * q[idx_j]
+#         else:  # gathering is faster on GPUs
+#             fac = self.kehalf * jnp.take(q, idx_i) * jnp.take(q, idx_j)
+#         f = switch_function(rij, self.cuton, self.cutoff)
+#         coulomb = 1.0 / rij
+#         damped = 1.0 / (rij ** 2 + 1.0) ** (1.0 / 2.0)
+#         pairwise = fac * (f * damped + (1 - f) * coulomb) * erfc(self.alpha * rij)
+#         return jnp.zeros(N).at[idx_i].add(pairwise)
 
-    def _reciprocal_space(
-        self,
-        q: jnp.ndarray,
-        R: jnp.ndarray,
-        cell: jnp.ndarray,
-        num_batch: int,
-        batch_seg: jnp.ndarray,
-        eps: float = 1e-8,
-    ) -> jnp.ndarray:
-        # calculate k-space vectors
-        box_length = jnp.diagonal(cell, axis1=-2, axis2=-1)
-        k = self.two_pi * self.kmul[jnp.newaxis, :] / box_length[..., jnp.newaxis]
-        # gaussian charge density
-        k2 = jnp.sum(k * k, axis=-1)  # squared length of k-vectors
-        qg = jnp.exp(-0.25 * k2 / self.alpha2) / k2
-        # fourier charge density
-        if q.device.type == "cpu":  # indexing is faster on CPUs
-            dot = jnp.sum(k[batch_seg] * R[..., jnp.newaxis], axis=-1)
-        else:  # gathering is faster on GPUs
-            b = batch_seg.reshape(-1, 1, 1).repeat(1, k.shape[-2], k.shape[-1])
-            dot = jnp.sum(jnp.take(k, b, axis=0) * R[..., jnp.newaxis], axis=-1)
-        q_real = jnp.zeros((num_batch, dot.shape[-1])).at[batch_seg].add(q[..., jnp.newaxis] * jnp.cos(dot))
-        q_imag = jnp.zeros((num_batch, dot.shape[-1])).at[batch_seg].add(q[..., jnp.newaxis] * jnp.sin(dot))
-        qf = q_real ** 2 + q_imag ** 2
-        # reciprocal energy
-        e_reciprocal = (
-            self.two_pi / jnp.prod(box_length, axis=1) * jnp.sum(qf * qg, axis=-1)
-        )
-        # self interaction correction
-        q2 = q * q
-        e_self = self.alpha * self.one_over_sqrtpi * q2
-        # spread reciprocal energy over atoms (to get an atomic contributions)
-        w = q2 + eps  # epsilon is added to prevent division by zero
-        wnorm = jnp.zeros(num_batch).at[batch_seg].add(w)
-        if w.device.type == "cpu":  # indexing is faster on CPUs
-            w = w / wnorm[batch_seg]
-            e_reciprocal = w * e_reciprocal[batch_seg]
-        else:  # gathering is faster on GPUs
-            w = w / jnp.take(wnorm, batch_seg, axis=0)
-            e_reciprocal = w * jnp.take(e_reciprocal, batch_seg, axis=0)
-        return self.ke * (e_reciprocal - e_self)
+#     def _reciprocal_space(
+#         self,
+#         q: jnp.ndarray,
+#         R: jnp.ndarray,
+#         cell: jnp.ndarray,
+#         num_batch: int,
+#         batch_seg: jnp.ndarray,
+#         eps: float = 1e-8,
+#     ) -> jnp.ndarray:
+#         # calculate k-space vectors
+#         box_length = jnp.diagonal(cell, axis1=-2, axis2=-1)
+#         k = self.two_pi * self.kmul[jnp.newaxis, :] / box_length[..., jnp.newaxis]
+#         # gaussian charge density
+#         k2 = jnp.sum(k * k, axis=-1)  # squared length of k-vectors
+#         qg = jnp.exp(-0.25 * k2 / self.alpha2) / k2
+#         # fourier charge density
+#         if q.device.type == "cpu":  # indexing is faster on CPUs
+#             dot = jnp.sum(k[batch_seg] * R[..., jnp.newaxis], axis=-1)
+#         else:  # gathering is faster on GPUs
+#             b = batch_seg.reshape(-1, 1, 1).repeat(1, k.shape[-2], k.shape[-1])
+#             dot = jnp.sum(jnp.take(k, b, axis=0) * R[..., jnp.newaxis], axis=-1)
+#         q_real = jnp.zeros((num_batch, dot.shape[-1])).at[batch_seg].add(q[..., jnp.newaxis] * jnp.cos(dot))
+#         q_imag = jnp.zeros((num_batch, dot.shape[-1])).at[batch_seg].add(q[..., jnp.newaxis] * jnp.sin(dot))
+#         qf = q_real ** 2 + q_imag ** 2
+#         # reciprocal energy
+#         e_reciprocal = (
+#             self.two_pi / jnp.prod(box_length, axis=1) * jnp.sum(qf * qg, axis=-1)
+#         )
+#         # self interaction correction
+#         q2 = q * q
+#         e_self = self.alpha * self.one_over_sqrtpi * q2
+#         # spread reciprocal energy over atoms (to get an atomic contributions)
+#         w = q2 + eps  # epsilon is added to prevent division by zero
+#         wnorm = jnp.zeros(num_batch).at[batch_seg].add(w)
+#         if w.device.type == "cpu":  # indexing is faster on CPUs
+#             w = w / wnorm[batch_seg]
+#             e_reciprocal = w * e_reciprocal[batch_seg]
+#         else:  # gathering is faster on GPUs
+#             w = w / jnp.take(wnorm, batch_seg, axis=0)
+#             e_reciprocal = w * jnp.take(e_reciprocal, batch_seg, axis=0)
+#         return self.ke * (e_reciprocal - e_self)
 
-    def _ewald(
-        self,
-        N: int,
-        q: jnp.ndarray,
-        R: jnp.ndarray,
-        rij: jnp.ndarray,
-        idx_i: jnp.ndarray,
-        idx_j: jnp.ndarray,
-        cell: jnp.ndarray,
-        num_batch: int,
-        batch_seg: jnp.ndarray,
-    ) -> jnp.ndarray:
-        e_real = self._real_space(N, q, rij, idx_i, idx_j)
-        e_reciprocal = self._reciprocal_space(q, R, cell, num_batch, batch_seg)
-        return e_real + e_reciprocal
+#     def _ewald(
+#         self,
+#         N: int,
+#         q: jnp.ndarray,
+#         R: jnp.ndarray,
+#         rij: jnp.ndarray,
+#         idx_i: jnp.ndarray,
+#         idx_j: jnp.ndarray,
+#         cell: jnp.ndarray,
+#         num_batch: int,
+#         batch_seg: jnp.ndarray,
+#     ) -> jnp.ndarray:
+#         e_real = self._real_space(N, q, rij, idx_i, idx_j)
+#         e_reciprocal = self._reciprocal_space(q, R, cell, num_batch, batch_seg)
+#         return e_real + e_reciprocal
     
-    def _coulomb(
-        self,
-        N: int,
-        q: jnp.ndarray,
-        rij: jnp.ndarray,
-        idx_i: jnp.ndarray,
-        idx_j: jnp.ndarray,
-    ) -> jnp.ndarray:
-        if q.device.type == "cpu":  # indexing is faster on CPUs
-            fac = self.kehalf * q[idx_i] * q[idx_j]
-        else:  # gathering is faster on GPUs
-            fac = self.kehalf * jnp.take(q, idx_i) * jnp.take(q, idx_j)
-        f = switch_function(rij, self.cuton, self.cutoff)
-        if self.lr_cutoff is None:
-            coulomb = 1.0 / rij
-            damped = 1.0 / (rij ** 2 + 1.0) ** (1.0 / 2.0)
-        else:
-            coulomb = jnp.where(
-                rij < self.lr_cutoff,
-                1.0 / rij + rij / self.lr_cutoff2 - self.two_div_cut,
-                jnp.zeros_like(rij),
-            )
-            damped = jnp.where(
-                rij < self.lr_cutoff,
-                1.0 / (rij ** 2 + 1.0) ** (1.0 / 2.0)
-                + rij * self.rcutconstant
-                - self.cutconstant,
-                jnp.zeros_like(rij),
-            )
-        pairwise = fac * (f * damped + (1 - f) * coulomb)
-        return jnp.zeros(N).at[idx_i].add(pairwise)
+#     def _coulomb(
+#         self,
+#         N: int,
+#         q: jnp.ndarray,
+#         rij: jnp.ndarray,
+#         idx_i: jnp.ndarray,
+#         idx_j: jnp.ndarray,
+#     ) -> jnp.ndarray:
+#         if q.device.type == "cpu":  # indexing is faster on CPUs
+#             fac = self.kehalf * q[idx_i] * q[idx_j]
+#         else:  # gathering is faster on GPUs
+#             fac = self.kehalf * jnp.take(q, idx_i) * jnp.take(q, idx_j)
+#         f = switch_function(rij, self.cuton, self.cutoff)
+#         if self.lr_cutoff is None:
+#             coulomb = 1.0 / rij
+#             damped = 1.0 / (rij ** 2 + 1.0) ** (1.0 / 2.0)
+#         else:
+#             coulomb = jnp.where(
+#                 rij < self.lr_cutoff,
+#                 1.0 / rij + rij / self.lr_cutoff2 - self.two_div_cut,
+#                 jnp.zeros_like(rij),
+#             )
+#             damped = jnp.where(
+#                 rij < self.lr_cutoff,
+#                 1.0 / (rij ** 2 + 1.0) ** (1.0 / 2.0)
+#                 + rij * self.rcutconstant
+#                 - self.cutconstant,
+#                 jnp.zeros_like(rij),
+#             )
+#         pairwise = fac * (f * damped + (1 - f) * coulomb)
+#         return jnp.zeros(N).at[idx_i].add(pairwise)
     
-        # N: Number of atoms.
-        # P: Number of atom pairs.
-        # B: Batch size (number of different molecules).
-    def forward(
-        self,
-        N: int, #number of atoms
-        q: jnp.ndarray, #qa - Atomic partial charges [N]
-        rij: jnp.ndarray, #Pairwise interatomic distances [P]
-        idx_i: jnp.ndarray, #(LongTensor [P]): Index of atom i for all atomic pairs ij. Each pair must be specified as both ij and ji.
-        idx_j: jnp.ndarray,
-        R: Optional[jnp.ndarray] = None, #Cartesian coordinates (x,y,z) of atoms (FloatTensor [N, 3])
-        cell: Optional[jnp.ndarray] = None, #FloatTensor [B, 3, 3] or None
-        num_batch: int = 1, #Batch size (number of different molecules)
-        batch_seg: Optional[jnp.ndarray] = None,
-                #    batch_seg (LongTensor [N]):
-                # Index for each atom that specifies to which molecule in the
-                # batch it belongs. For example, when predicting a H2O and a CH4
-                # molecule, batch_seg would be [0, 0, 0, 1, 1, 1, 1, 1] to
-                # indicate that the first three atoms belong to the first molecule
-                # and the last five atoms to the second molecule.
-    ) -> jnp.ndarray:
-        if self.use_ewald_summation:
-            assert R is not None
-            assert cell is not None
-            assert batch_seg is not None
-            return self._ewald(N, q, R, rij, idx_i, idx_j, cell, num_batch, batch_seg)
-        else:
-            return self._coulomb(N, q, rij, idx_i, idx_j)
+#         # N: Number of atoms.
+#         # P: Number of atom pairs.
+#         # B: Batch size (number of different molecules).
+#     def forward(
+#         self,
+#         N: int, #number of atoms
+#         q: jnp.ndarray, #qa - Atomic partial charges [N]
+#         rij: jnp.ndarray, #Pairwise interatomic distances [P]
+#         idx_i: jnp.ndarray, #(LongTensor [P]): Index of atom i for all atomic pairs ij. Each pair must be specified as both ij and ji.
+#         idx_j: jnp.ndarray,
+#         R: Optional[jnp.ndarray] = None, #Cartesian coordinates (x,y,z) of atoms (FloatTensor [N, 3])
+#         cell: Optional[jnp.ndarray] = None, #FloatTensor [B, 3, 3] or None
+#         num_batch: int = 1, #Batch size (number of different molecules)
+#         batch_seg: Optional[jnp.ndarray] = None,
+#                 #    batch_seg (LongTensor [N]):
+#                 # Index for each atom that specifies to which molecule in the
+#                 # batch it belongs. For example, when predicting a H2O and a CH4
+#                 # molecule, batch_seg would be [0, 0, 0, 1, 1, 1, 1, 1] to
+#                 # indicate that the first three atoms belong to the first molecule
+#                 # and the last five atoms to the second molecule.
+#     ) -> jnp.ndarray:
+#         if self.use_ewald_summation:
+#             assert R is not None
+#             assert cell is not None
+#             assert batch_seg is not None
+#             return self._ewald(N, q, R, rij, idx_i, idx_j, cell, num_batch, batch_seg)
+#         else:
+#             return self._coulomb(N, q, rij, idx_i, idx_j)
 
-    #N - number of atoms... in batch or where
-    #qa - need to pass from DipoleVecSparse
-    #rij - need to pass from ase dataloader
-    #idx_i - need to pass from ase dataloader, senders
-    #idx_j - need to pass from ase dataloader, receivers
-    #R - done
-    #cell - none for now
-    #num_batch - ?
-    #batch_seg - ?
+#     #N - number of atoms... in batch or where
+#     #qa - need to pass from DipoleVecSparse
+#     #rij - need to pass from ase dataloader
+#     #idx_i - need to pass from ase dataloader, senders
+#     #idx_j - need to pass from ase dataloader, receivers
+#     #R - done
+#     #cell - none for now
+#     #num_batch - ?
+#     #batch_seg - ?
         
-        #    def energy_fn(params,
-        #           positions: jnp.ndarray,
-        #           atomic_numbers: jnp.ndarray,
-        #           idx_i: jnp.ndarray,
-        #           idx_j: jnp.ndarray,
-        #           cell: jnp.ndarray = None,
-        #           cell_offset: jnp.ndarray = None,
-        #           batch_segments: jnp.ndarray = None,
-        #           node_mask: jnp.ndarray = None,
-        #           graph_mask: jnp.ndarray = None,
-        #           graph_mask_expanded: jnp.ndarray = None,
-        #           total_charge: jnp.ndarray = None,
-        #           center_of_mass: jnp.ndarray = None):
+#         #    def energy_fn(params,
+#         #           positions: jnp.ndarray,
+#         #           atomic_numbers: jnp.ndarray,
+#         #           idx_i: jnp.ndarray,
+#         #           idx_j: jnp.ndarray,
+#         #           cell: jnp.ndarray = None,
+#         #           cell_offset: jnp.ndarray = None,
+#         #           batch_segments: jnp.ndarray = None,
+#         #           node_mask: jnp.ndarray = None,
+#         #           graph_mask: jnp.ndarray = None,
+#         #           graph_mask_expanded: jnp.ndarray = None,
+#         #           total_charge: jnp.ndarray = None,
+#         #           center_of_mass: jnp.ndarray = None):
 
-    @nn.compact
-    def __call__(self, inputs: Dict, *args, **kwargs):
-        graph_mask = inputs['graph_mask']  # (num_graphs)
-        N = len(graph_mask) #not sure
-        qa = inputs['qa'] #need to pass it somehow
-        rij = inputs['rij']
-        idx_i = inputs['idx_i']
-        idx_j = inputs['idx_j']
-        R = inputs['positions']
-        cell = inputs['cell']
-        # num_batch = inputs['']
-        # batch_seg = inputs['batch_segments']  # (num_nodes)
+#     @nn.compact
+#     def __call__(self, inputs: Dict, *args, **kwargs):
+#         graph_mask = inputs['graph_mask']  # (num_graphs)
+#         N = len(graph_mask) #not sure
+#         qa = inputs['qa'] #need to pass it somehow
+#         rij = inputs['rij']
+#         idx_i = inputs['idx_i']
+#         idx_j = inputs['idx_j']
+#         R = inputs['positions']
+#         cell = inputs['cell']
+#         # num_batch = inputs['']
+#         # batch_seg = inputs['batch_segments']  # (num_nodes)
 
-        if self.use_ewald_summation:
-            assert R is not None
-            assert cell is not None
-            assert batch_seg is not None
-            return self._ewald(N, q, R, rij, idx_i, idx_j, cell, num_batch, batch_seg)
-        else:
-            return self._coulomb(N, q, rij, idx_i, idx_j)   
+#         if self.use_ewald_summation:
+#             assert R is not None
+#             assert cell is not None
+#             assert batch_seg is not None
+#             return self._ewald(N, q, R, rij, idx_i, idx_j, cell, num_batch, batch_seg)
+#         else:
+#             return self._coulomb(N, q, rij, idx_i, idx_j)   
 
-        #need to return coulomb energy for the batch
-        
-            
-        # if self.output_convention == 'per_atom':
-        #     return segment_sum(e_rep_edge, segment_ids=idx_i, num_segments=len(z))[:, None]  # shape: (n,1)
-        # elif self.output_convention == 'per_structure':
-        #     return e_rep_edge.sum(axis=0)  # shape: (1) 
+#         #need to return coulomb energy for the batch
+
+
+#         # if self.output_convention == 'per_atom':
+#         #     return segment_sum(e_rep_edge, segment_ids=idx_i, num_segments=len(z))[:, None]  # shape: (n,1)
+#         # elif self.output_convention == 'per_structure':
+#         #     return e_rep_edge.sum(axis=0)  # shape: (1) 
 
   
-    # @nn.compact
-    # def __call__(self, inputs: Dict, *args, **kwargs):
-    #     x = inputs['x']  # (num_nodes, num_features)
-    #     atomic_numbers = inputs['atomic_numbers']  # (num_nodes)
-    #     batch_segments = inputs['batch_segments']  # (num_nodes)
-    #     node_mask = inputs['node_mask']  # (num_nodes)
-    #     graph_mask = inputs['graph_mask']  # (num_graphs)
+#     # @nn.compact
+#     # def __call__(self, inputs: Dict, *args, **kwargs):
+#     #     x = inputs['x']  # (num_nodes, num_features)
+#     #     atomic_numbers = inputs['atomic_numbers']  # (num_nodes)
+#     #     batch_segments = inputs['batch_segments']  # (num_nodes)
+#     #     node_mask = inputs['node_mask']  # (num_nodes)
+#     #     graph_mask = inputs['graph_mask']  # (num_graphs)
 
-    #     num_graphs = len(graph_mask)
+#     #     num_graphs = len(graph_mask)
 
-    #     atomic_energy = func(x)  # (num_nodes)
+#     #     atomic_energy = func(x)  # (num_nodes)
 
-    #     atomic_energy = jnp.where(node_mask, atomic_energy, jnp.asarray(0., dtype=atomic_energy.dtype))  # (num_nodes)
+#     #     atomic_energy = jnp.where(node_mask, atomic_energy, jnp.asarray(0., dtype=atomic_energy.dtype))  # (num_nodes)
         
-    #     energy = segment_sum(
-    #         atomic_energy,
-    #         segment_ids=batch_segments,
-    #         num_segments=num_graphs
-    #     )  # (num_graphs)
-    #     energy = jnp.where(graph_mask, energy, jnp.asarray(0., dtype=energy.dtype))
+#     #     energy = segment_sum(
+#     #         atomic_energy,
+#     #         segment_ids=batch_segments,
+#     #         num_segments=num_graphs
+#     #     )  # (num_graphs)
+#     #     energy = jnp.where(graph_mask, energy, jnp.asarray(0., dtype=energy.dtype))
 
-    #     return dict(energy=energy)
+#     #     return dict(energy=energy)

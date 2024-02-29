@@ -98,7 +98,14 @@ def init_so3krates_sparse(
         activation_fn=getattr(
             nn.activation, energy_activation_fn
         ) if energy_activation_fn != 'identity' else lambda u: u,
+        # return_partial_charges=True
     )
+    # dipole_and_charges = dipole_vec.calculate_dipole_and_partial_charges()
+
+    # print('sparse')
+    # print(dipole_vec)
+    # print(dipole_vec)
+    
     hirshfeld_ratios = HirshfeldSparse(
         prop_keys=None,
         output_is_zero_at_init=output_is_zero_at_init,
