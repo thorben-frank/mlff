@@ -10,3 +10,4 @@ from .observable_sparse import DipoleVecSparse
 from .observable_sparse import HirshfeldSparse
 from .observable_sparse import DummySparse
 from .observable_sparse import PartialChargesSparse
+from .observable_sparse import ElectrostaticEnergySparse
