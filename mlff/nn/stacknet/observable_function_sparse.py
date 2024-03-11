@@ -162,11 +162,6 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
                       )
 
         energy = model.apply(params, inputs)['energy']  # (num_graphs)
-        # dummy = model.apply(params, inputs)['dummy']
-
-        # dummy_another_number = dummy.another_number()
-        # print(f"dummy: {dummy}")
-        # print(f"dummy_another_number: {dummy_another_number}")
         energy = jnp.where(graph_mask, energy, jnp.asarray(0., dtype=energy.dtype))  # (num_graphs)
         return -jnp.sum(energy), energy  # (), (num_graphs)
 

@@ -361,28 +361,6 @@ class HirshfeldSparse(BaseSubModule):
         #TODO: better way to ensure positive values?
 
         return dict(hirshfeld_ratios=hirshfeld_ratios)
-
-class DummySparse(BaseSubModule):
-    prop_keys: Dict
-    regression_dim: int = None
-    activation_fn: Callable[[Any], Any] = lambda u: u
-    output_is_zero_at_init: bool = True
-    module_name = 'dummy'
-
-    def setup(self):
-        pass
-
-    def another_number(self, num: int = 21):
-        return num
-    
-    @nn.compact
-    def __call__(self,
-                 inputs: Dict,
-                 *args,
-                 **kwargs) -> Dict[str, jnp.ndarray]:
-        # Return a constant value of 42 for dummy_number
-        dummy_number = 42
-        return dict(dummy=dummy_number)
     
 class PartialChargesSparse(BaseSubModule):
     prop_keys: Dict

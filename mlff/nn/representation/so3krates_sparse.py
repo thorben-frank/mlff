@@ -5,7 +5,7 @@ from mlff.nn.embed import GeometryEmbedSparse, AtomTypeEmbedSparse, ChargeEmbedS
 from mlff.nn.layer import SO3kratesLayerSparse
 from mlff.nn.observable import EnergySparse, PartialChargeSparse
 from .representation_utils import make_embedding_modules
-from mlff.nn.observable import EnergySparse, DipoleSparse, DipoleVecSparse, HirshfeldSparse, DummySparse, PartialChargesSparse, ElectrostaticEnergySparse, DispersionEnergySparse
+from mlff.nn.observable import EnergySparse, DipoleSparse, DipoleVecSparse, HirshfeldSparse, PartialChargesSparse, ElectrostaticEnergySparse, DispersionEnergySparse
 from typing import Sequence
 
 
@@ -149,27 +149,10 @@ def init_so3krates_sparse(
         dispersion_energy_bool=dispersion_energy_bool,
     )
 
-    # dummy = DummySparse(
-    #     prop_keys=None,
-    #     output_is_zero_at_init=output_is_zero_at_init,
-    #     regression_dim=energy_regression_dim,
-    #     activation_fn=getattr(
-    #         nn.activation, energy_activation_fn
-    #     ) if energy_activation_fn != 'identity' else lambda u: u,
-    #     # return_partial_charges=True
-    # )
-    # print(f"dummy: {dummy}")
-    # print(f"energy: {energy}")
-    # print(f"dipole: {dipole}")
-    # print(f"dipole_vec: {dipole_vec}")
-    # print(f"dipole_vec.get_partial_charges: {dipole_vec.get_partial_charges()}")
-    
-
-
     return StackNetSparse(
         geometry_embeddings=[geometry_embed],
         feature_embeddings=embedding_modules,
         layers=layers,
-        observables=[energy, dipole, dipole_vec, hirshfeld_ratios],#, dummy],
+        observables=[energy, dipole, dipole_vec, hirshfeld_ratios],
         prop_keys=None
     )
