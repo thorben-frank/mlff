@@ -218,7 +218,6 @@ class DipoleSparse(BaseSubModule):
         graph_mask = inputs['graph_mask']  # (num_graphs)
         positions = inputs['positions'] # (num_nodes, 3)
         total_charge = inputs['total_charge'] # (num_graphs) #TODO: read total_charge from loaded graph
-        center_of_mass = inputs['center_of_mass'] # (num_graphs, 3)
 
         num_graphs = len(graph_mask)
         num_nodes = len(node_mask)
@@ -259,12 +258,13 @@ class DipoleSparse(BaseSubModule):
         charge_conservation = (1 / number_of_atoms_in_molecule) * (total_charge - total_charge_predicted)
         partial_charges = x_q + jnp.repeat(charge_conservation, number_of_atoms_in_molecule, total_repeat_length = num_nodes)   # shape: (num_nodes)
         
-        #Shift origin to center of mass to get consistent dipole moment for charged molecules
-        center_of_mass_expanded = jnp.repeat(center_of_mass, number_of_atoms_in_molecule, axis = 0, total_repeat_length = num_nodes) # shape: (num_nodes, 3)
-        positions_shifted = positions - center_of_mass_expanded
+        # Shift origin to center of mass to get consistent dipole moment for charged molecules - not needed, since FHI-aims does not shift 
+        # center_of_mass_expanded = jnp.repeat(center_of_mass, number_of_atoms_in_molecule, axis = 0, total_repeat_length = num_nodes) # shape: (num_nodes, 3)
+        # positions_shifted = positions - center_of_mass_expanded
+        # mu = positions * charges / (1e-11 / c / e)  # [num_nodes, 3]
+        # mu_i = positions_shifted * partial_charges[:, None] #(512,3) * (512,)
 
-        #mu = positions * charges / (1e-11 / c / e)  # [num_nodes, 3]
-        mu_i = positions_shifted * partial_charges[:, None] #(512,3) * (512,)
+        mu_i = positions * partial_charges[:, None] #(512,3) * (512,)
 
         dipole = segment_sum(
             mu_i,
@@ -395,7 +395,6 @@ class PartialChargesSparse(BaseSubModule):
         graph_mask_expanded = inputs['graph_mask_expanded']
         positions = inputs['positions'] # (num_nodes, 3)
         total_charge = inputs['total_charge'] # (num_graphs)
-        center_of_mass = inputs['center_of_mass'] # (num_graphs, 3)
 
         num_graphs = len(graph_mask)
         num_nodes = len(node_mask)
@@ -480,7 +479,6 @@ class DipoleVecSparse(BaseSubModule):
         graph_mask_expanded = inputs['graph_mask_expanded']
         positions = inputs['positions'] # (num_nodes, 3)
         total_charge = inputs['total_charge'] # (num_graphs)
-        center_of_mass = inputs['center_of_mass'] # (num_graphs, 3)
         # partial_charges = inputs['partial_charges'] # (num_nodes)
         partial_charges = self.partial_charges(inputs)['partial_charges']
         num_graphs = len(graph_mask)
@@ -491,12 +489,13 @@ class DipoleVecSparse(BaseSubModule):
         #TODO: Constrain or normalize partial charges to not exceed total charge, maybe not needed. Supporting info in SpookyNet shows that partial charges are already reasonable.
 
         # self._partial_charges = partial_charges
-        #Shift origin to center of mass to get consistent dipole moment for charged molecules
-        center_of_mass_expanded = jnp.repeat(center_of_mass, number_of_atoms_in_molecule, axis = 0, total_repeat_length = num_nodes) # shape: (num_nodes, 3)
-        positions_shifted = positions - center_of_mass_expanded
+        # Shift origin to center of mass to get consistent dipole moment for charged molecules - not needed, since FHI-aims does not shift 
+        # center_of_mass_expanded = jnp.repeat(center_of_mass, number_of_atoms_in_molecule, axis = 0, total_repeat_length = num_nodes) # shape: (num_nodes, 3)
+        # positions_shifted = positions - center_of_mass_expanded
         
         #mu = positions * charges / (1e-11 / c / e)  # [num_nodes, 3]
-        mu_i = positions_shifted * partial_charges[:, None] #(512,3) * (512,)
+        # mu_i = positions_shifted * partial_charges[:, None] #(512,3) * (512,)
+        mu_i = positions * partial_charges[:, None] #(512,3) * (512,)
 
         dipole = segment_sum(
             mu_i,
