@@ -122,7 +122,13 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
                   graph_mask: jnp.ndarray = None,
                   graph_mask_expanded: jnp.ndarray = None,
                   total_charge: jnp.ndarray = None,
-                  center_of_mass: jnp.ndarray = None):
+                  center_of_mass: jnp.ndarray = None,
+                  i_pairs: jnp.ndarray = None,
+                  j_pairs: jnp.ndarray = None,
+                  d_ij_all: jnp.ndarray = None,
+                  pair_mask: jnp.ndarray = None,
+                  batch_segments_pairs: jnp.ndarray = None,
+                  dummmy: jnp.ndarray = None):
         if batch_segments is None:
             assert graph_mask is None
             assert graph_mask_expanded is None
@@ -146,7 +152,13 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
                       graph_mask=graph_mask,
                       graph_mask_expanded=graph_mask_expanded,
                       total_charge=total_charge,
-                      center_of_mass=center_of_mass
+                      center_of_mass=center_of_mass,
+                      i_pairs=i_pairs,
+                      j_pairs=j_pairs,
+                      d_ij_all=d_ij_all,
+                      pair_mask=pair_mask,
+                      batch_segments_pairs=batch_segments_pairs,
+                      dummmy = dummmy
                       )
 
         energy = model.apply(params, inputs)['energy']  # (num_graphs)
@@ -256,6 +268,12 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
                             graph_mask_expanded: jnp.ndarray = None,
                             total_charge: jnp.ndarray = None,
                             center_of_mass: jnp.ndarray = None,
+                            i_pairs: jnp.ndarray = None,
+                            j_pairs: jnp.ndarray = None,
+                            d_ij_all: jnp.ndarray = None,
+                            pair_mask: jnp.ndarray = None,
+                            batch_segments_pairs: jnp.ndarray = None,
+                            dummmy: jnp.ndarray = None,
                             *args,
                             **kwargs):
         (_, energy), forces = jax.value_and_grad(
@@ -273,7 +291,13 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
                           graph_mask,
                           graph_mask_expanded,
                           total_charge,
-                          center_of_mass
+                          center_of_mass,
+                          i_pairs,
+                          j_pairs,
+                          d_ij_all,
+                          pair_mask,
+                          batch_segments_pairs,
+                          dummmy
                           )
 
         if batch_segments is None:
@@ -285,7 +309,6 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
             graph_mask_expanded = jnp.ones((1,3)).astype(jnp.bool_)  # (1,3)
             node_mask = jnp.ones((len(positions),)).astype(jnp.bool_)  # (num_nodes)
             batch_segments = jnp.zeros_like(atomic_numbers)  # (num_nodes) 
-
         inputs = dict(positions=positions,
                 atomic_numbers=atomic_numbers,
                 idx_i=idx_i,
@@ -297,7 +320,13 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
                 graph_mask=graph_mask,
                 graph_mask_expanded=graph_mask_expanded,
                 total_charge=total_charge,
-                center_of_mass=center_of_mass
+                center_of_mass=center_of_mass,
+                i_pairs=i_pairs,
+                j_pairs=j_pairs,
+                d_ij_all=d_ij_all,
+                pair_mask=pair_mask,
+                batch_segments_pairs=batch_segments_pairs,
+                dummmy = dummmy
                 )
 
         dipole = model.apply(params, inputs)['dipole']  # (num_graphs)

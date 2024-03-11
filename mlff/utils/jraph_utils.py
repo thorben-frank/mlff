@@ -18,6 +18,7 @@ def batch_info_fn(batched_graph: jraph.GraphsTuple):
     node_mask = jraph.get_node_padding_mask(batched_graph)
     graph_mask = jraph.get_graph_padding_mask(batched_graph)
     graph_mask_expanded = jnp.repeat(graph_mask,3).reshape(-1,3)
+    pair_mask = jraph.get_pair_padding_mask(batched_graph)
 
     num_of_non_padded_graphs = len(graph_mask) - jraph.get_number_of_padding_with_graphs_graphs(batched_graph)
     if len(graph_mask) == 1:
@@ -28,10 +29,18 @@ def batch_info_fn(batched_graph: jraph.GraphsTuple):
         total_repeat_length=len(node_mask)
     )
 
+    batch_segments_pairs = jnp.repeat(
+        jnp.arange(len(graph_mask)),
+        repeats=batched_graph.n_pairs,
+        total_repeat_length=len(pair_mask)
+    )
+
     return dict(node_mask=node_mask,
+                pair_mask=pair_mask,
                 graph_mask=graph_mask,
                 graph_mask_expanded=graph_mask_expanded,
                 batch_segments=batch_segments,
+                batch_segments_pairs=batch_segments_pairs,
                 num_of_non_padded_graphs=num_of_non_padded_graphs)
 
 
@@ -54,6 +63,10 @@ def graph_to_batch_fn(graph: jraph.GraphsTuple):
         dipole=graph.globals.get('dipole'),
         dipole_vec=graph.globals.get('dipole_vec'),
         hirshfeld_ratios=graph.nodes.get('hirshfeld_ratios'),
+        i_pairs=graph.i_pairs,
+        j_pairs=graph.j_pairs,
+        d_ij_all=graph.d_ij_all,
+        # dummmy=graph.globals.get('dummmy'),
     )
     batch_info = batch_info_fn(graph)
     batch.update(batch_info)

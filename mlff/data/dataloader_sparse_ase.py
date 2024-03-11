@@ -58,6 +58,7 @@ class AseDataLoaderSparse:
         loaded_data = []
         max_num_of_nodes = 0
         max_num_of_edges = 0
+        max_num_of_pairs = 0
         i = 0
         for a in tqdm(iread(self.input_file)):
             if keep(i):
@@ -73,8 +74,10 @@ class AseDataLoaderSparse:
                 if graph is not None:
                     num_nodes = len(graph.nodes['atomic_numbers'])
                     num_edges = len(graph.receivers)
-                    max_num_of_nodes = max_num_of_nodes if num_nodes <= max_num_of_nodes else num_nodes
+                    num_pairs = num_nodes * (num_nodes - 1) // 2
+                max_num_of_nodes = max_num_of_nodes if num_nodes <= max_num_of_nodes else num_nodes
                     max_num_of_edges = max_num_of_edges if num_edges <= max_num_of_edges else num_edges
+                max_num_of_pairs = max_num_of_pairs if num_pairs <= max_num_of_pairs else num_pairs
             else:
                 pass
             i += 1
@@ -86,7 +89,7 @@ class AseDataLoaderSparse:
                 )
         logging.mlff("... done!")
 
-        return loaded_data, {'max_num_of_nodes': max_num_of_nodes, 'max_num_of_edges': max_num_of_edges}
+        return loaded_data, {'max_num_of_nodes': max_num_of_nodes, 'max_num_of_edges': max_num_of_edges, 'max_num_of_pairs': max_num_of_pairs}
 
 
 def ASE_to_jraph(
@@ -110,6 +113,7 @@ def ASE_to_jraph(
     """
 
     atomic_numbers = mol.get_atomic_numbers()
+    n_atoms = len(atomic_numbers)
     positions = mol.get_positions()
     if mol.get_calculator() is not None:
         try:
@@ -128,7 +132,7 @@ def ASE_to_jraph(
         try:
             hirshfeld_ratios = mol.arrays['hirsh_ratios']
         except:
-            hirshfeld_ratios = [1.] * len(atomic_numbers)
+            hirshfeld_ratios = [1.] * n_atoms
         try:
             dipole = mol.info['dipole']
         except:
@@ -142,10 +146,6 @@ def ASE_to_jraph(
         except:
             total_charge = 0.
             center_of_mass = [0., 0., 0.]
-        try:
-            rij = mol.get_all_distances()
-        except PropertyNotImplementedError:
-            rij = None
 
     else:
         energy = None
@@ -196,8 +196,11 @@ def ASE_to_jraph(
             "hirshfeld_ratios": np.array(hirshfeld_ratios) if hirshfeld_ratios is not None else None
             }
 
+    senders = np.array(j)
+    receivers = np.array(i)
+
     n_node = np.array([mol.get_global_number_of_atoms()])
-    n_edge = np.array([len(senders)])
+    n_edge = np.array([len(i)])
 
     global_context = {
         "energy": np.array([energy]).reshape(-1) if energy is not None else None,
@@ -215,5 +218,9 @@ def ASE_to_jraph(
                 receivers=receivers,
                 n_node=n_node,
                 n_edge=n_edge,
-                globals=global_context
+                globals=global_context,
+                n_pairs = n_pairs,
+                i_pairs = i_pairs,
+                j_pairs = j_pairs,
+                d_ij_all = d_ij_all,
     )

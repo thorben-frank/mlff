@@ -17,6 +17,8 @@ property_to_mask = {
     'dipole': 'graph_mask',
     'dipole_vec': 'graph_mask_expanded',
     'hirshfeld_ratios': 'node_mask',
+    'dispersion_energy': 'graph_mask',
+    'electrostatic_energy': 'graph_mask'
 }
 
 def print_metrics(epoch, eval_metrics):
@@ -289,7 +291,8 @@ def fit(
             training_data,
             n_node=batch_max_num_nodes,
             n_edge=batch_max_num_edges,
-            n_graph=batch_max_num_graphs
+            n_graph=batch_max_num_graphs,
+            n_pairs=batch_max_num_nodes*(batch_max_num_nodes-1)//(batch_max_num_graphs//2),
         )
 
         # Start iteration over batched graphs.
@@ -338,7 +341,7 @@ def fit(
                 )
 
             # Print train metrics
-            print(print_metrics(f"train_{epoch}_{step}:", train_metrics_np))
+            # print(print_metrics(f"train_{epoch}_{step}:", train_metrics_np))
 
             # Start validation process.
             if step % eval_every_num_steps == 0:
@@ -346,7 +349,8 @@ def fit(
                     validation_data,
                     n_node=batch_max_num_nodes,
                     n_edge=batch_max_num_edges,
-                    n_graph=batch_max_num_graphs
+                    n_graph=batch_max_num_graphs,
+                    n_pairs=batch_max_num_nodes*(batch_max_num_nodes-1)//(batch_max_num_graphs//2),
                 )
 
                 # Start iteration over validation batches.

@@ -50,7 +50,8 @@ def evaluate(
         testing_data,
         n_node=batch_max_num_nodes,
         n_edge=batch_max_num_edges,
-        n_graph=batch_max_num_graphs
+        n_graph=batch_max_num_graphs,
+        n_pairs=batch_max_num_nodes*(batch_max_num_nodes-1)//(batch_max_num_graphs//2)
     )
 
     # Create a collections object for the test targets.
@@ -86,6 +87,10 @@ def evaluate(
                 msk = graph_mask_expanded
             elif t == 'hirshfeld_ratios':
                 msk = node_mask
+            elif t == 'dispersion_energy':
+                msk = graph_mask
+            elif t == 'electrostatic_energy':
+                msk = graph_mask
             else:
                 raise ValueError(
                     f"Evaluate not implemented for target={t}."

@@ -5,7 +5,7 @@ from mlff.nn.embed import GeometryEmbedSparse, AtomTypeEmbedSparse, ChargeEmbedS
 from mlff.nn.layer import SO3kratesLayerSparse
 from mlff.nn.observable import EnergySparse, PartialChargeSparse
 from .representation_utils import make_embedding_modules
-from mlff.nn.observable import EnergySparse, DipoleSparse, DipoleVecSparse, HirshfeldSparse, DummySparse, PartialChargesSparse, ElectrostaticEnergySparse
+from mlff.nn.observable import EnergySparse, DipoleSparse, DipoleVecSparse, HirshfeldSparse, DummySparse, PartialChargesSparse, ElectrostaticEnergySparse, DispersionEnergySparse
 from typing import Sequence
 
 
@@ -35,7 +35,9 @@ def init_so3krates_sparse(
         energy_activation_fn: str = 'identity',
         energy_learn_atomic_type_scales: bool = False,
         energy_learn_atomic_type_shifts: bool = False,
-        input_convention: str = 'positions'
+        input_convention: str = 'positions',
+        electrostatic_energy_bool: bool = False,
+        dispersion_energy_bool: bool = False,
 ):
     embedding_modules = make_embedding_modules(
         num_features=num_features,
@@ -112,6 +114,26 @@ def init_so3krates_sparse(
     )
     # dipole_and_charges = dipole_vec.calculate_dipole_and_partial_charges()
 
+    hirshfeld_ratios = HirshfeldSparse(
+        prop_keys=None,
+        output_is_zero_at_init=output_is_zero_at_init,
+        regression_dim=energy_regression_dim,
+        activation_fn=getattr(
+            nn.activation, energy_activation_fn
+        ) if energy_activation_fn != 'identity' else lambda u: u,
+        # learn_atomic_type_scales=energy_learn_atomic_type_scales,
+        # learn_atomic_type_shifts=energy_learn_atomic_type_shifts,
+    ) 
+
+    dispersion_energy = DispersionEnergySparse(
+        prop_keys=None,
+        output_is_zero_at_init=output_is_zero_at_init,
+        hirshfeld_ratios=hirshfeld_ratios,
+        regression_dim=energy_regression_dim,
+        activation_fn=getattr(
+            nn.activation, energy_activation_fn
+        ) if energy_activation_fn != 'identity' else lambda u: u,
+    )
     energy = EnergySparse(
         prop_keys=None,
         output_is_zero_at_init=output_is_zero_at_init,
@@ -122,33 +144,27 @@ def init_so3krates_sparse(
         learn_atomic_type_scales=energy_learn_atomic_type_scales,
         learn_atomic_type_shifts=energy_learn_atomic_type_shifts,
         electrostatic_energy=electrostatic_energy,
+        dispersion_energy=dispersion_energy,
+        electrostatic_energy_bool=electrostatic_energy_bool,
+        dispersion_energy_bool=dispersion_energy_bool,
     )
 
-    dummy = DummySparse(
-        prop_keys=None,
-        output_is_zero_at_init=output_is_zero_at_init,
-        regression_dim=energy_regression_dim,
-        activation_fn=getattr(
-            nn.activation, energy_activation_fn
-        ) if energy_activation_fn != 'identity' else lambda u: u,
-        # return_partial_charges=True
-    )
+    # dummy = DummySparse(
+    #     prop_keys=None,
+    #     output_is_zero_at_init=output_is_zero_at_init,
+    #     regression_dim=energy_regression_dim,
+    #     activation_fn=getattr(
+    #         nn.activation, energy_activation_fn
+    #     ) if energy_activation_fn != 'identity' else lambda u: u,
+    #     # return_partial_charges=True
+    # )
     # print(f"dummy: {dummy}")
     # print(f"energy: {energy}")
     # print(f"dipole: {dipole}")
     # print(f"dipole_vec: {dipole_vec}")
     # print(f"dipole_vec.get_partial_charges: {dipole_vec.get_partial_charges()}")
     
-    hirshfeld_ratios = HirshfeldSparse(
-        prop_keys=None,
-        output_is_zero_at_init=output_is_zero_at_init,
-        regression_dim=energy_regression_dim,
-        activation_fn=getattr(
-            nn.activation, energy_activation_fn
-        ) if energy_activation_fn != 'identity' else lambda u: u,
-        # learn_atomic_type_scales=energy_learn_atomic_type_scales,
-        # learn_atomic_type_shifts=energy_learn_atomic_type_shifts,
-    )    
+
 
     return StackNetSparse(
         geometry_embeddings=[geometry_embed],

@@ -61,6 +61,8 @@ def make_so3krates_sparse_from_config(config: config_dict.ConfigDict = None):
         energy_activation_fn=model_config.energy_activation_fn,
         energy_learn_atomic_type_scales=model_config.energy_learn_atomic_type_scales,
         energy_learn_atomic_type_shifts=model_config.energy_learn_atomic_type_shifts,
+        electrostatic_energy_bool=model_config.electrostatic_energy_bool,
+        dispersion_energy_bool=model_config.dispersion_energy_bool
     )
 
 
