@@ -8,11 +8,19 @@ from typing import Optional
 from mlff.cutoff_function import add_cell_offsets_sparse
 from mlff.masking.mask import safe_norm
 from ase.units import Bohr, Hartree
-# from ase.units import alpha as fine_structure
+from ase.units import alpha as fine_structure
 # import jax.scipy.optimize as opt
 # import scipy.optimize as opt
 from mlff.nn.observable.dispersion_ref_data import alphas, C6_coef
 from jax.scipy.special import factorial
+# import sys
+# import jaxopt
+from jaxopt import Broyden
+# from jaxopt import ScipyBoundedMinimize
+# from jaxopt import ProjectedGradient
+# from jaxopt import Bisection
+# from jaxopt.projection import projection_non_negative
+# from jax import lax
 
 @jax.jit
 def _switch_component(x: jnp.ndarray, ones: jnp.ndarray, zeros: jnp.ndarray) -> jnp.ndarray:
@@ -357,7 +365,7 @@ class HirshfeldSparse(BaseSubModule):
         q_x_k = jnp.where(node_mask, qk, jnp.asarray(0., dtype=k.dtype))
 
         v_eff = v_shift + q_x_k  # shape: (n)
-        hirshfeld_ratios = jnp.where(node_mask, jnp.abs(v_eff), jnp.asarray(0., dtype=v_eff.dtype))
+        hirshfeld_ratios = jnp.where(node_mask, jnp.clip(jnp.abs(v_eff), 0.5, 1.1), jnp.asarray(0., dtype=v_eff.dtype))
         #TODO: better way to ensure positive values?
 
         return dict(hirshfeld_ratios=hirshfeld_ratios)
@@ -792,21 +800,122 @@ def mixing_rules(
     hirshfeld_ratios: jnp.ndarray,
 ) -> jnp.ndarray:
     
-    atomic_number_i = atomic_numbers[idx_i]
-    atomic_number_j = atomic_numbers[idx_j]
+    atomic_number_i = atomic_numbers[idx_i]-1
+    atomic_number_j = atomic_numbers[idx_j]-1
     hirshefld_ratio_i = hirshfeld_ratios[idx_i]
     hirshefld_ratio_j = hirshfeld_ratios[idx_j]
 
-    alpha_i = alphas[atomic_number_i-1] * hirshefld_ratio_i
-    C6_i = C6_coef[atomic_number_i-1] * hirshefld_ratio_i**2
-    alpha_j = alphas[atomic_number_j-1] * hirshefld_ratio_j
-    C6_j = C6_coef[atomic_number_j-1] * hirshefld_ratio_j**2
+    alpha_i = alphas[atomic_number_i] * hirshefld_ratio_i
+    C6_i = C6_coef[atomic_number_i] * hirshefld_ratio_i**2
+    alpha_j = alphas[atomic_number_j] * hirshefld_ratio_j
+    C6_j = C6_coef[atomic_number_j] * hirshefld_ratio_j**2
 
     alpha_ij = (alpha_i + alpha_j) / 2
     C6_ij = 2 * C6_i * C6_j * alpha_j * alpha_i / (alpha_i**2 * C6_j + alpha_j**2 * C6_i)
 
     return alpha_ij, C6_ij
+
+# @jax.jit
+# def QDO_params_linear_fun(x,a,b):
+#     p = 1 - jnp.exp(-b*x)*(1 + (2*b*x)/2 + (2*b*x)**2/8 + (2*b*x)**3/48 + (2*b*x)**4/6/48)
+#     f = a*jnp.exp(b*x) - (2*x**2 + x/b)/p
+#     return jnp.array(f)[0]
+
+# @jax.jit
+# def QDO_params_linear_fun(x, a, b):
+#     p = 1 - jnp.exp(-b*x) * (1 + (2*b*x)/2 + (2*b*x)**2/8 + (2*b*x)**3/48 + (2*b*x)**4/6/48)
+#     f = a*jnp.exp(b*x) - (2*x**2 + x/b)/p
+#     return jnp.array(f)[0]
+@jax.jit
+def QDO_params_linear_fun(x, a, b):#data):
+    # a = data[0]
+    # b = data[1]
+    p = 1 - jnp.exp(-b*x) * (1 + (2*b*x)/2 + (2*b*x)**2/8 + (2*b*x)**3/48 + (2*b*x)**4/6/48)
+    f = a*jnp.exp(b*x) - (2*x**2 + x/b)/p
+    # f = jnp.reshape(f, ())
+    return f
     
+@jax.jit
+def QDO_params_linear(alpha):
+    # This function returns gamma = mu*omega based on the vdW-OQDO parametrization
+    # It is enough to have just 'gamma' to compute the dispersion energy
+    
+    # Flattening matrices of atomic pairs and taking only unique values for convenience
+    a0 = jnp.array(alpha)
+
+    # Starting points for the larger root that we need
+    x0 = jnp.array([0.5 * jnp.ones(a0.shape)])
+    tol = 1e-6
+
+    b = jnp.array(2*fine_structure**(-8/21)*a0**(2/7))
+    a = jnp.array(9/64*fine_structure**(4/3))
+    broyden = Broyden(fun=QDO_params_linear_fun, tol = tol, max_stepsize=0.02, verbose=0)
+    # broyden = Bisection(optimality_fun=QDO_params_linear_fun, lower=0.2, upper=0.5)
+    sol = jnp.array(broyden.run(x0, a, b).params)
+    return jnp.array(sol)[0]
+    # return sol
+
+    # x = opt.fsolve(fun, x0, args=(a,b), xtol=tol, factor=1)
+    # sol = opt.root(fun, x0, args=(a,b), method='lm', options={'xtol': tol} )
+    # sol = opt.minimize(QDO_params_linear_fun, x0, args=(a,b), method='BFGS', tol = tol)#, value_and_grad = False)#, tol = tol)#, options={'maxiter': 100})#, options={'xtol':tol})
+
+    # solver = jaxopt.BFGS(QDO_params_linear_fun, value_and_grad=False,verbose=False, tol=tol)
+
+
+    # if jnp.amax(sol) > 2:
+    #     raise ValueError(f"Error: Array contains numbers outside the range [0, 1], {jnp.amax(sol)}")
+    # elif jnp.where(jnp.amin(sol) < 0, )
+    #     raise ValueError(f"Error: Array contains numbers outside the range [0, 1], {jnp.amin(sol)}")
+        
+    # def check_array_bounds(arr):
+    #     if jnp.any((arr < 0) | (arr > 1)):
+    #         raise ValueError("Error: Array contains numbers outside the range [0, 1]")
+    #     else:
+    #         return "Array is within bounds"
+        
+    # try:
+    #     result = check_array_bounds(sol)
+    #     print(result)  # Output: Error: Array contains numbers outside the range [0, 1]
+    # except ValueError as e:
+    #     print(e)
+
+    # #check if sol is larger than 0 and smaller than 2
+    # if jnp.any(sol < 0) or jnp.any(sol > 1):
+
+    #     jnp.where(sol)
+    #     print("Error: Solution is out of range.")
+
+    # print(sol)
+    # lbfgsb = ScipyBoundedMinimize(fun=QDO_params_linear_fun, method="l-bfgs-b")
+    # lower_bounds = jnp.zeros_like(x0)
+    # # upper_bounds = jnp.ones_like(x0) * 10
+    # print('lower_bounds', lower_bounds)
+    # bounds = (0, 2)
+    # sol = lbfgsb.run(x0, bounds=bounds, data=(a, b)).params
+    # sol = lbfgsb.run(x0, a, b).params
+
+    # pg = ProjectedGradient(fun=QDO_params_linear_fun, projection=projection_non_negative)
+    # sol = pg.run(x0, data=(a, b)).params
+
+    # sol = jaxopt.ScipyRootFinding(QDO_params_linear_fun, x0, args=(a,b), method='lm', options={'xtol': tol})
+    # print(sol.x)
+
+    # sol, state = solver.run(x0, a, b)
+    # print(f"sol: {sol}")
+    # print(f"state: {state}")
+ 
+
+# def QDO_params_linear(alpha):
+#     a = jnp.array(alpha)
+#     x0 = jnp.array([0.5])
+#     tol = 1e-5
+
+#     b = jnp.array([2*fine_structure**(-8/21)*a0**(2/7)])
+#     a = jnp.array([9/64*fine_structure**(4/3)])
+#     sol = opt.minimize(QDO_params_linear_fun, x0, args=(a,b), method='BFGS', tol = tol)
+#     return a, b, jnp.array(sol.x[0])  
+
+
 class DispersionEnergySparse(BaseSubModule):
     prop_keys: Dict
     hirshfeld_ratios: Optional[Any] = None
@@ -864,37 +973,6 @@ class DispersionEnergySparse(BaseSubModule):
     #     return gamma
     
 
-    # @jax.jit
-    # def QDO_params_linear(self, alpha, C6):
-    #     # This function returns gamma = mu*omega based on the vdW-OQDO parametrization
-    #     # It is enough to have just 'gamma' to compute the dispersion energy
-        
-    #     # Flattening matrices of atomic pairs and taking only unique values for convenience
-    #     a0 = jnp.array(alpha)
-
-    #     # Starting points for the larger root that we need
-    #     x0 = jnp.array([0.5 * jnp.ones(a0.shape)])
-    #     # Setting tolerance
-    #     # tol = 1e-5
-    #     tol = 1e-4
-
-    #     def fun(x,a,b):
-    #         p = 1 - jnp.exp(-b*x)*(1 + (2*b*x)/2 + (2*b*x)**2/8 + (2*b*x)**3/48 + (2*b*x)**4/6/48)
-    #         f = a*jnp.exp(b*x) - (2*x**2 + x/b)/p
-    #         return jnp.array(f)
-
-    #     b = jnp.array(2*fine_structure**(-8/21)*jnp.power(a0,2/7))
-    #     a = jnp.array(9/64*fine_structure**(4/3))
-
-    #     # x = opt.fsolve(fun, x0, args=(a,b), xtol=tol, factor=1)
-    #     # sol = opt.root(fun, x0, args=(a,b), method='lm', options={'xtol': tol} )
-    #     # sol = opt.minimize(fun, x0, args=(a,b), method='BFGS', value_and_grad = False)#, tol = tol)#, options={'maxiter': 100})#, options={'xtol':tol})
-
-    #     solver = jaxopt.BFGS(fun, value_and_grad=False,verbose=False, tol=tol)
-    #     sol, state = solver.run(x0, a, b)
-
-    #     return sol
-
     
     @nn.compact
     def __call__(self, inputs: Dict, *args, **kwargs) -> jnp.ndarray:  
@@ -916,54 +994,80 @@ class DispersionEnergySparse(BaseSubModule):
         # cell = inputs.get('cell')  # shape: (num_graphs, 3, 3)
         # cell_offsets = inputs.get('cell_offset')  # shape: (num_pairs, 3)
 
-        # Getting positions and converting them to a.u.
-        # positions = inputs['positions'] / Bohr # (num_nodes, 3)
         hirshfeld_ratios = self.hirshfeld_ratios(inputs)['hirshfeld_ratios']
-        # hirshfeld_ratios = jnp.maximum(hirshfeld_ratios, 0.5)
 
         # Getting atomic numbers (needed to link to the free-atom reference values)
         atomic_numbers = inputs['atomic_numbers']  # (num_nodes)
         
+        # Getting positions and converting them to a.u.
         d_ij_all = d_ij_all / Bohr #TODO: is it needed if we learn gamma_ij?
 
-# #Calculate alpha_ij and C6_ij using mixing rules
+        # print('Hartree', Hartree)
+        # print('Bohr', Bohr)
+        # print('atomic_numbers.shape', atomic_numbers.shape)
+        # print('hirshfeld_ratios.shape', hirshfeld_ratios.shape)
+        # print('d_ij_all.shape', d_ij_all.shape)
+        # print('i_pairs.shape', i_pairs.shape)
+        # print('j_pairs.shape', j_pairs.shape)
+        #Calculate alpha_ij and C6_ij using mixing rules
         alpha_ij, C6_ij = mixing_rules(atomic_numbers, i_pairs, j_pairs, hirshfeld_ratios)
         alpha_ij = jnp.where(pair_mask, alpha_ij, jnp.asarray(0., dtype=alpha_ij.dtype))  # (num_pairs)
+        # print('alpha_ij[0:100]', alpha_ij[0:100])
         C6_ij = jnp.where(pair_mask, C6_ij, jnp.asarray(0., dtype=C6_ij.dtype))  # (num_pairs)
+        # print('C6_ij[0:100]', C6_ij[0:100])
         
-        # gamma_ij = self.QDO_params_linear(alpha_ij, C6_ij)
-        # opt.minimize is not available - learn gamma_ij
-        if self.regression_dim is not None:
-            y = nn.Dense(
-                self.regression_dim,
-                kernel_init=nn.initializers.lecun_normal(),
-                # kernel_init=nn.initializers.constant(0.5),
-                name='gamma_dense_regression_vec'
-            )(alpha_ij)  # (num_nodes)
-            y = self.activation_fn(y)  # (num_nodes)
-            gamma_ij = nn.Dense(
-                num_pairs,
-                kernel_init=self.kernel_init,
-                name='gamma_dense_final_vec'
-            )(y)#.squeeze(axis=-1)  # (num_nodes)
-        else:
-            gamma_ij = nn.Dense(
-                num_pairs,
-                kernel_init=self.kernel_init,
-                name='gamma_dense_final_vec'
-            )(alpha_ij)#.squeeze(axis=-1)  # (num_nodes)
+        gamma_ij = 0.5 * jnp.ones((num_pairs, ))
 
-        #TODO: constraint gamma_ij to be close to 0.5?
+        # gamma_ij = jnp.zeros((num_pairs, ))
+        # # for i in range(num_pairs):
+        # for i in range(50):
+        #     # gamma_ij = gamma_ij.at[i].set(QDO_params_linear(alpha_ij[i]))
+        #     # gamma_ij = gamma_ij.at[i].set(QDO_params_linear(i/10))
+        #     print(i/10, QDO_params_linear(i/10))
+        # # print('gamma_ij[0:500]', gamma_ij[0:500])
+        # # print(QDO_params_linear([17.587666]*50))
+        # print('gamma_ij[0:100]', gamma_ij[0:100])
+        
+        # try to learn gamma_ij
+        # if self.regression_dim is not None:
+        #     y = nn.Dense(
+        #         self.regression_dim,
+        #         kernel_init=nn.initializers.lecun_normal(),
+        #         # kernel_init=nn.initializers.constant(0.5),
+        #         name='gamma_dense_regression_vec'
+        #     )(alpha_ij)  # (num_nodes)
+        #     y = self.activation_fn(y)  # (num_nodes)
+        #     gamma_ij = nn.Dense(
+        #         num_pairs,
+        #         kernel_init=self.kernel_init,
+        #         name='gamma_dense_final_vec'
+        #     )(y)#.squeeze(axis=-1)  # (num_nodes)
+        # else:
+        #     gamma_ij = nn.Dense(
+        #         num_pairs,
+        #         kernel_init=self.kernel_init,
+        #         name='gamma_dense_final_vec'
+        #     )(alpha_ij)#.squeeze(axis=-1)  # (num_nodes)
 
-        gamma_ij = jnp.where(pair_mask, jnp.abs(gamma_ij), jnp.asarray(0., dtype=gamma_ij.dtype))  # (num_pairs)
-       
-
-
+        # print('gamma_ij[0:30]', gamma_ij[0:30])
+        gamma_ij = jnp.where(pair_mask, jnp.clip(gamma_ij, 0.2, 0.5), jnp.asarray(0., dtype=gamma_ij.dtype))  # (num_pairs)
+        # print('gamma_ij[0:30]', gamma_ij[0:30])
         #  Computing the vdW-QDO dispersion energy and returning it in eV
+        # print('d_ij_all[0:100]', d_ij_all[0:100])
+        # print('d_ij_all[100:200]', d_ij_all[100:200])
+        # print('d_ij_all[200:300]', d_ij_all[200:300])
+        # print('d_ij_all[300:400]', d_ij_all[300:400])
+
+
+        # print('gamma_ij[0:100]', gamma_ij[0:100])
+        # print('gamma_ij[-100:]', gamma_ij[-100])
+
         dispersion_energy_ij = vdw_QDO_disp_damp(d_ij_all, gamma_ij, C6_ij)
+        # print('dispersion_energy_ij.shape', dispersion_energy_ij.shape)
+        # print('dispersion_energy_ij[0:100]', dispersion_energy_ij[0:100])
 
         dispersion_energy_ij = jnp.where(pair_mask, dispersion_energy_ij, jnp.asarray(0., dtype=dispersion_energy_ij.dtype))
-
+        # print('batch_segments_pairs[0:30]', batch_segments_pairs[0:30])
         # molecular_dispersion_energy = segment_sum(
         #         dispersion_energy_ij,
         #         segment_ids=batch_segments_pairs,
@@ -977,5 +1081,8 @@ class DispersionEnergySparse(BaseSubModule):
                 segment_ids=i_pairs,
                 num_segments=num_nodes
             )  # (num_graphs)
-     
+        # print('atomic_dispersion_energy.shape', atomic_dispersion_energy.shape)
+        # print('atomic_dispersion_energy[0:100]', atomic_dispersion_energy[0:100])
+        # print('atomic_dispersion_energy[-100:]', atomic_dispersion_energy[-100:])
+        # sys.exit()
         return dict(dispersion_energy=atomic_dispersion_energy)

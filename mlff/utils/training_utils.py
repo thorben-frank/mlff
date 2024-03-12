@@ -105,7 +105,11 @@ property_to_loss = {
     'energy': graph_mse_loss,
     'stress': graph_mse_loss,
     'forces': node_mse_loss,
+    'dipole': graph_mse_loss,
+    'dipole_vec': graph_mse_loss,
+    'hirshfeld_ratios': node_mse_loss,
 }
+
 
 
 def make_loss_fn(obs_fn: Callable, weights: Dict, scales: Dict = None):
