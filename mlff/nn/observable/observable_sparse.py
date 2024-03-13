@@ -365,7 +365,8 @@ class HirshfeldSparse(BaseSubModule):
         q_x_k = jnp.where(node_mask, qk, jnp.asarray(0., dtype=k.dtype))
 
         v_eff = v_shift + q_x_k  # shape: (n)
-        hirshfeld_ratios = jnp.where(node_mask, jnp.clip(jnp.abs(v_eff), 0.5, 1.1), jnp.asarray(0., dtype=v_eff.dtype))
+        #hirshfeld_ratios = jnp.where(node_mask, jnp.clip(jnp.abs(v_eff), 0.5, 1.1), jnp.asarray(0., dtype=v_eff.dtype))
+        hirshfeld_ratios = jnp.where(node_mask, jnp.abs(v_eff), jnp.asarray(0., dtype=v_eff.dtype))
         #TODO: better way to ensure positive values?
 
         return dict(hirshfeld_ratios=hirshfeld_ratios)
@@ -1007,6 +1008,7 @@ class DispersionEnergySparse(BaseSubModule):
         # cell_offsets = inputs.get('cell_offset')  # shape: (num_pairs, 3)
 
         hirshfeld_ratios = self.hirshfeld_ratios(inputs)['hirshfeld_ratios']
+        hirshfeld_ratios = jnp.clip(jnp.abs(hirshfeld_ratios), 0.5, 1.1)
 
         # Getting atomic numbers (needed to link to the free-atom reference values)
         atomic_numbers = inputs['atomic_numbers']  # (num_nodes)
@@ -1023,9 +1025,9 @@ class DispersionEnergySparse(BaseSubModule):
         # print('j_pairs.shape', j_pairs.shape)
         #Calculate alpha_ij and C6_ij using mixing rules
         alpha_ij, C6_ij = mixing_rules(atomic_numbers, i_pairs, j_pairs, hirshfeld_ratios)
-        alpha_ij = jnp.where(pair_mask, alpha_ij, jnp.asarray(0., dtype=alpha_ij.dtype))  # (num_pairs)
+        #alpha_ij = jnp.where(pair_mask, alpha_ij, jnp.asarray(0., dtype=alpha_ij.dtype))  # (num_pairs)
         # print('alpha_ij[0:100]', alpha_ij[0:100])
-        C6_ij = jnp.where(pair_mask, C6_ij, jnp.asarray(0., dtype=C6_ij.dtype))  # (num_pairs)
+        #C6_ij = jnp.where(pair_mask, C6_ij, jnp.asarray(0., dtype=C6_ij.dtype))  # (num_pairs)
         # print('C6_ij[0:100]', C6_ij[0:100])
         
         # gamma_ij = 0.5 * jnp.ones((num_pairs, ))
@@ -1065,7 +1067,7 @@ class DispersionEnergySparse(BaseSubModule):
 
         # print('gamma_ij[0:30]', gamma_ij[0:30])
         # gamma_ij = jnp.where(pair_mask, jnp.clip(gamma_ij, 0.2, 0.5), jnp.asarray(0., dtype=gamma_ij.dtype))  # (num_pairs)
-        gamma_ij = jnp.where(pair_mask, gamma_ij, jnp.asarray(0., dtype=gamma_ij.dtype))  # (num_pairs)
+        #gamma_ij = jnp.where(pair_mask, gamma_ij, jnp.asarray(0., dtype=gamma_ij.dtype))  # (num_pairs)
         # print('gamma_ij[0:30]', gamma_ij[0:30])
         #  Computing the vdW-QDO dispersion energy and returning it in eV
         # print('d_ij_all[0:100]', d_ij_all[0:100])
