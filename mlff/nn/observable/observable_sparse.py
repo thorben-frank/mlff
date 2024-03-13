@@ -815,6 +815,18 @@ def mixing_rules(
 
     return alpha_ij, C6_ij
 
+@jax.jit
+def gamma_cubic_fit(a0):
+    # 'x' is vdW radius
+    x = fine_structure**(-4/21)*a0**(1/7) 
+    b3 = -0.00078893
+    b2 = 0.04125273
+    b1 = 0.24428889
+    b0 = -0.00433008
+    sigma = b3*x**3 + b2*x**2 + b1*x + b0
+    gamma = 1/2/sigma**2
+    return gamma
+
 # @jax.jit
 # def QDO_params_linear_fun(x,a,b):
 #     p = 1 - jnp.exp(-b*x)*(1 + (2*b*x)/2 + (2*b*x)**2/8 + (2*b*x)**3/48 + (2*b*x)**4/6/48)
@@ -1016,7 +1028,9 @@ class DispersionEnergySparse(BaseSubModule):
         C6_ij = jnp.where(pair_mask, C6_ij, jnp.asarray(0., dtype=C6_ij.dtype))  # (num_pairs)
         # print('C6_ij[0:100]', C6_ij[0:100])
         
-        gamma_ij = 0.5 * jnp.ones((num_pairs, ))
+        # gamma_ij = 0.5 * jnp.ones((num_pairs, ))
+        #use cubic fit for gamma
+        gamma_ij = gamma_cubic_fit(alpha_ij)
 
         # gamma_ij = jnp.zeros((num_pairs, ))
         # # for i in range(num_pairs):
@@ -1050,7 +1064,8 @@ class DispersionEnergySparse(BaseSubModule):
         #     )(alpha_ij)#.squeeze(axis=-1)  # (num_nodes)
 
         # print('gamma_ij[0:30]', gamma_ij[0:30])
-        gamma_ij = jnp.where(pair_mask, jnp.clip(gamma_ij, 0.2, 0.5), jnp.asarray(0., dtype=gamma_ij.dtype))  # (num_pairs)
+        # gamma_ij = jnp.where(pair_mask, jnp.clip(gamma_ij, 0.2, 0.5), jnp.asarray(0., dtype=gamma_ij.dtype))  # (num_pairs)
+        gamma_ij = jnp.where(pair_mask, gamma_ij, jnp.asarray(0., dtype=gamma_ij.dtype))  # (num_pairs)
         # print('gamma_ij[0:30]', gamma_ij[0:30])
         #  Computing the vdW-QDO dispersion energy and returning it in eV
         # print('d_ij_all[0:100]', d_ij_all[0:100])
