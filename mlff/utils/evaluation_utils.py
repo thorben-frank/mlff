@@ -91,11 +91,26 @@ def evaluate(
                 msk = graph_mask
             elif t == 'electrostatic_energy':
                 msk = graph_mask
+            # elif t == 'electrostatic_energy':
+            #     msk = graph_mask
+            # elif t == 'dispersion_energy':
+            #     msk = graph_mask
+            # elif t == 'partial_charges':
+            #     msk = node_mask
             else:
                 raise ValueError(
                     f"Evaluate not implemented for target={t}."
                 )
-
+            # if t == 'electrostatic_energy':
+            #     print(f"electrostatic_energy output_prediction[t]: {output_prediction[t]}")
+            #     metrics_dict[f"{t}_prediction"] = output_prediction[t][msk]
+            # elif t =='dispersion_energy':
+            #     print(f"dispersion_energy output_prediction[t]: {output_prediction[t]}")
+            #     metrics_dict[f"{t}_prediction"] = output_prediction[t][msk]
+            # elif t == 'partial_charges':
+            #     print(f"partial_charges output_prediction[t]: {output_prediction[t]}")
+            #     metrics_dict[f"{t}_prediction"] = output_prediction[t][msk]
+            # else:
             metrics_dict[f"{t}_mae"] = calculate_mae(
                 y_predicted=output_prediction[t], y_true=batch_testing[t], msk=msk
             )

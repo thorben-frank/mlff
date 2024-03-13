@@ -160,6 +160,8 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
                       )
 
         energy = model.apply(params, inputs)['energy']  # (num_graphs)
+        # print(f"model.apply(params, inputs)['energy']: {model.apply(params, inputs)['energy']}")
+        # print(f"model.apply(params, inputs): {model.apply(params, inputs)}")
         energy = jnp.where(graph_mask, energy, jnp.asarray(0., dtype=energy.dtype))  # (num_graphs)
         return -jnp.sum(energy), energy  # (), (num_graphs)
 
@@ -330,6 +332,7 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
         # print(f"dipole_vec: {dipole_vec}") #dipole_vec: Traced<ShapedArray(float32[50,3])>with<DynamicJaxprTrace(level=4/0)>
         hirshfeld_ratios = model.apply(params, inputs)['hirshfeld_ratios']  # (num_graphs)
         hirshfeld_ratios = jnp.where(node_mask, hirshfeld_ratios, jnp.asarray(0., dtype=hirshfeld_ratios.dtype))  # (num_graphs)
+        # partial_charges = model.apply(params, inputs)['partial_charges']  # (num_graphs)
 
         return dict(energy=energy, forces=forces, dipole=dipole, dipole_vec=dipole_vec, hirshfeld_ratios = hirshfeld_ratios)
         
