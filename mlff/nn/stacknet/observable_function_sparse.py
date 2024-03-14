@@ -39,15 +39,24 @@ def get_observable_fn_sparse(model: StackNetSparse, observable: str = None):
                 batch_segments: jnp.ndarray = None,
                 node_mask: jnp.ndarray = None,
                 graph_mask: jnp.ndarray = None,
-                displacements: jnp.ndarray = None
+                displacements: jnp.ndarray = None,
+                graph_mask_expanded: jnp.ndarray = None,
+                total_charge: jnp.ndarray = None,
+                i_pairs: jnp.ndarray = None,
+                j_pairs: jnp.ndarray = None,
+                d_ij_all: jnp.ndarray = None,
+                pair_mask: jnp.ndarray = None,
+                batch_segments_pairs: jnp.ndarray = None,
         ):
             if batch_segments is None:
                 assert graph_mask is None
                 assert node_mask is None
+                assert graph_mask_expanded is None
 
                 graph_mask = jnp.ones((1,)).astype(jnp.bool_)  # (1)
                 node_mask = jnp.ones((len(atomic_numbers),)).astype(jnp.bool_)  # (num_nodes)
                 batch_segments = jnp.zeros_like(atomic_numbers)  # (num_nodes)
+                graph_mask_expanded = jnp.ones((1,3)).astype(jnp.bool_)  # (1,3)
 
             inputs = dict(
                 positions=positions,
@@ -61,7 +70,14 @@ def get_observable_fn_sparse(model: StackNetSparse, observable: str = None):
                 cell_offset=cell_offset,
                 batch_segments=batch_segments,
                 node_mask=node_mask,
-                graph_mask=graph_mask
+                graph_mask=graph_mask,
+                graph_mask_expanded=graph_mask_expanded,
+                total_charge=total_charge,
+                i_pairs=i_pairs,
+                j_pairs=j_pairs,
+                d_ij_all=d_ij_all,
+                pair_mask=pair_mask,
+                batch_segments_pairs=batch_segments_pairs,
             )
             return model.apply(params, inputs)
     else:
@@ -78,15 +94,24 @@ def get_observable_fn_sparse(model: StackNetSparse, observable: str = None):
                 batch_segments: jnp.ndarray = None,
                 node_mask: jnp.ndarray = None,
                 graph_mask: jnp.ndarray = None,
-                displacements: jnp.ndarray = None
+                displacements: jnp.ndarray = None,
+                graph_mask_expanded: jnp.ndarray = None,
+                total_charge: jnp.ndarray = None,
+                i_pairs: jnp.ndarray = None,
+                j_pairs: jnp.ndarray = None,
+                d_ij_all: jnp.ndarray = None,
+                pair_mask: jnp.ndarray = None,
+                batch_segments_pairs: jnp.ndarray = None,
         ):
             if batch_segments is None:
                 assert graph_mask is None
+                assert graph_mask_expanded is None
                 assert node_mask is None
 
                 graph_mask = jnp.ones((1,)).astype(jnp.bool_)  # (1)
+                graph_mask_expanded = jnp.ones((1,3)).astype(jnp.bool_)  # (1,3)
                 node_mask = jnp.ones((len(positions),)).astype(jnp.bool_)  # (num_nodes)
-                batch_segments = jnp.zeros_like(atomic_numbers)  # (num_nodes)
+                batch_segments = jnp.zeros_like(atomic_numbers)  # (num_nodes)   
 
             inputs = dict(
                 positions=positions,
@@ -100,7 +125,14 @@ def get_observable_fn_sparse(model: StackNetSparse, observable: str = None):
                 cell_offset=cell_offset,
                 batch_segments=batch_segments,
                 node_mask=node_mask,
-                graph_mask=graph_mask
+                graph_mask=graph_mask,
+                graph_mask_expanded=graph_mask_expanded,
+                total_charge=total_charge,
+                i_pairs=i_pairs,
+                j_pairs=j_pairs,
+                d_ij_all=d_ij_all,
+                pair_mask=pair_mask,
+                batch_segments_pairs=batch_segments_pairs,
             )
             return dict(observable=model.apply(params, inputs)[observable])
 

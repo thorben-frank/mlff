@@ -284,8 +284,8 @@ class DipoleSparse(BaseSubModule):
 
         return dict(dipole=dipole)
     
-    # def reset_output_convention(self, output_convention):
-    #     self.output_convention = output_convention
+    def reset_output_convention(self, output_convention):
+        self.output_convention = output_convention
 
     def __dict_repr__(self) -> Dict[str, Dict[str, Any]]:
         return {self.module_name: {'output_is_zero_at_init': self.output_is_zero_at_init,
@@ -370,6 +370,9 @@ class HirshfeldSparse(BaseSubModule):
         #TODO: better way to ensure positive values?
 
         return dict(hirshfeld_ratios=hirshfeld_ratios)
+
+    def reset_output_convention(self, output_convention):
+        self.output_convention = output_convention
     
 class PartialChargesSparse(BaseSubModule):
     prop_keys: Dict
@@ -447,6 +450,9 @@ class PartialChargesSparse(BaseSubModule):
         #TODO: Check whether partial charges make sense
         #TODO: Constrain or normalize partial charges to not exceed total charge, maybe not needed. Supporting info in SpookyNet shows that partial charges are already reasonable.
         return dict(partial_charges=partial_charges)
+
+    def reset_output_convention(self, output_convention):
+        self.output_convention = output_convention
     
 
 class DipoleVecSparse(BaseSubModule):
@@ -515,6 +521,9 @@ class DipoleVecSparse(BaseSubModule):
         dipole_vec = jnp.where(graph_mask_expanded, dipole, jnp.asarray(0., dtype=dipole.dtype))
 
         return dict(dipole_vec=dipole_vec)
+
+    def reset_output_convention(self, output_convention):
+        self.output_convention = output_convention
     
 @jax.jit
 def _coulomb(
@@ -743,6 +752,9 @@ class ElectrostaticEnergySparse(BaseSubModule):
         atomic_electrostatic_energy = jnp.where(node_mask, atomic_electrostatic_energy, jnp.asarray(0., dtype=atomic_electrostatic_energy.dtype))
         
         return dict(electrostatic_energy=atomic_electrostatic_energy)
+
+    def reset_output_convention(self, output_convention):
+        self.output_convention = output_convention
 
         # if self.use_ewald_summation:
         #     assert d_ij_all is not None
@@ -1103,3 +1115,6 @@ class DispersionEnergySparse(BaseSubModule):
         # print('atomic_dispersion_energy[-100:]', atomic_dispersion_energy[-100:])
         # sys.exit()
         return dict(dispersion_energy=atomic_dispersion_energy)
+    
+    def reset_output_convention(self, output_convention):
+        self.output_convention = output_convention
