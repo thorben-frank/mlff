@@ -99,8 +99,8 @@ def init_so3krates_sparse(
             nn.activation, energy_activation_fn
         ) if energy_activation_fn != 'identity' else lambda u: u,
         partial_charges=partial_charges,
+        cutoff=cutoff,
     )
-    # print(f"electrostatic_energy: {electrostatic_energy}")
 
     dipole_vec = DipoleVecSparse(
         prop_keys=None,
@@ -112,7 +112,6 @@ def init_so3krates_sparse(
         partial_charges=partial_charges,
         # return_partial_charges=True
     )
-    # dipole_and_charges = dipole_vec.calculate_dipole_and_partial_charges()
 
     hirshfeld_ratios = HirshfeldSparse(
         prop_keys=None,
@@ -121,8 +120,6 @@ def init_so3krates_sparse(
         activation_fn=getattr(
             nn.activation, energy_activation_fn
         ) if energy_activation_fn != 'identity' else lambda u: u,
-        # learn_atomic_type_scales=energy_learn_atomic_type_scales,
-        # learn_atomic_type_shifts=energy_learn_atomic_type_shifts,
     ) 
 
     dispersion_energy = DispersionEnergySparse(
