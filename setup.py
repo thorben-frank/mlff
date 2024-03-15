@@ -10,6 +10,7 @@ setup(
         "numpy",
         "clu",
         # "jax == 0.4.8",
+        "e3x",
         "flax",
         "jaxopt",
         "jraph",
@@ -42,6 +43,7 @@ setup(
             "trajectory_to_xyz=mlff.cAPI.mlff_postprocessing:trajectory_to_xyz",
             "to_mlff_input=mlff.cAPI.mlff_input_processing:to_mlff_input",
             "train_so3krates_sparse=mlff.CLI.run_training:train_so3krates_sparse",
+            "train_itp_net=mlff.CLI.run_training_itp_net:train_itp_net",
             "fine_tune_so3krates_sparse=mlff.CLI.run_fine_tuning:fine_tune_so3krates_sparse",
             "evaluate_so3krates_sparse=mlff.CLI.run_evaluation:evaluate_so3krates_sparse",
             "evaluate_so3krates_sparse_on=mlff.CLI.run_evaluation_on:evaluate_so3krates_sparse_on"

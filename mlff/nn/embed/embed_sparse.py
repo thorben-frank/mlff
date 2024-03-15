@@ -5,6 +5,7 @@ from functools import partial
 from typing import (Any, Dict, Sequence)
 
 import flax.linen as nn
+import e3x
 
 from mlff.nn.base.sub_module import BaseSubModule
 from mlff.masking.mask import safe_mask
@@ -12,6 +13,64 @@ from mlff.masking.mask import safe_norm
 from mlff.cutoff_function import add_cell_offsets_sparse
 from mlff import utils
 from mlff.basis_function.spherical import init_sph_fn
+
+
+class GeometryEmbedE3x(BaseSubModule):
+    prop_keys: Dict
+    max_degree: int
+    radial_basis_fn: str
+    num_radial_basis_fn: int
+    cutoff_fn: str
+    cutoff: float
+    input_convention: str = 'positions'
+    module_name: str = 'geometry_embed_e3x'
+
+    def __call__(self, inputs, *args, **kwargs):
+
+        idx_i = inputs['idx_i']  # shape: (num_pairs)
+        idx_j = inputs['idx_j']  # shape: (num_pairs)
+        cell = inputs.get('cell')  # shape: (num_graphs, 3, 3)
+        cell_offsets = inputs.get('cell_offset')  # shape: (num_pairs, 3)
+
+        if self.input_convention == 'positions':
+            positions = inputs['positions']  # (N, 3)
+
+            # Calculate pairwise distance vectors
+            r_ij = jax.vmap(
+                lambda i, j: positions[j] - positions[i]
+            )(idx_i, idx_j)  # (num_pairs, 3)
+
+            # Apply minimal image convention if needed.
+            if cell is not None:
+                r_ij = add_cell_offsets_sparse(
+                    r_ij=r_ij,
+                    cell=cell,
+                    cell_offsets=cell_offsets
+                )  # shape: (num_pairs,3)
+
+        # Here it is assumed that PBC (if present) have already been respected in displacement calculation.
+        elif self.input_convention == 'displacements':
+            positions = None
+            r_ij = inputs['displacements']
+        else:
+            raise ValueError(f"{self.input_convention} is not a valid argument for `input_convention`.")
+
+        basis, cut = e3x.nn.basis(
+            r=r_ij,
+            max_degree=self.max_degree,
+            radial_fn=getattr(e3x.nn, self.radial_basis_fn),
+            num=self.num_radial_basis_fn,
+            cutoff_fn=partial(getattr(e3x.nn, self.cutoff_fn), cutoff=self.cutoff),
+            return_cutoff=True
+        )  # (N, 1, (max_degree+1)^2, num_radial_basis_fn), (N, )
+
+        geometric_data = {'positions': positions,
+                          'basis': basis,
+                          'r_ij': r_ij,
+                          'cut': cut,
+                          }
+
+        return geometric_data
 
 
 class GeometryEmbedSparse(BaseSubModule):

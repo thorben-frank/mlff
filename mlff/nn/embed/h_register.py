@@ -8,6 +8,7 @@ from .embed import (
 
 from .embed_sparse import (
     GeometryEmbedSparse,
+    GeometryEmbedE3x,
     AtomTypeEmbedSparse
 )
 
@@ -19,6 +20,8 @@ def get_embedding_module(name: str, h: Dict):
         return AtomTypeEmbedSparse(**h)
     elif name == 'geometry_embed':
         return GeometryEmbed(**h)
+    elif name == 'geometry_embed_e3x':
+        return GeometryEmbedE3x(**h)
     elif name == 'geometry_embed_sparse':
         return GeometryEmbedSparse(**h)
     elif name == 'one_hot_embed':

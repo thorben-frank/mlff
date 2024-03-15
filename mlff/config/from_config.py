@@ -61,6 +61,46 @@ def make_so3krates_sparse_from_config(config: config_dict.ConfigDict = None):
     )
 
 
+def make_itp_net_from_config(config: config_dict.ConfigDict):
+    """Make an iterated tensor product model from a config.
+
+        Args:
+            config (): The config.
+
+        Returns:
+            ITP flax model.
+        """
+
+    model_config = config.model
+
+    return nn.ITPNet(
+        num_features=model_config.num_features,
+        radial_basis_fn=model_config.radial_basis_fn,
+        num_radial_basis_fn=model_config.num_radial_basis_fn,
+        cutoff_fn=model_config.cutoff_fn,
+        filter_num_layers=model_config.filter_num_layers,
+        filter_activation_fn=model_config.filter_activation_fn,
+        mp_max_degree=model_config.mp_max_degree,
+        mp_post_res_block=model_config.mp_post_res_block,
+        mp_post_res_block_activation_fn=model_config.mp_post_res_block_activation_fn,
+        itp_max_degree=model_config.itp_max_degree,
+        itp_num_features=model_config.itp_num_features,
+        itp_post_res_block=model_config.itp_post_res_block,
+        itp_post_res_block_activation_fn=model_config.itp_post_res_block_activation_fn,
+        itp_connectivity=model_config.itp_connectivity,
+        feature_collection_over_layers=model_config.feature_collection_over_layers,
+        include_pseudotensors=model_config.include_pseudotensors,
+        message_normalization=config.model.message_normalization,
+        avg_num_neighbors=config.data.avg_num_neighbors if config.model.message_normalization == 'avg_num_neighbors' else None,
+        output_is_zero_at_init=model_config.output_is_zero_at_init,
+        input_convention=model_config.input_convention,
+        energy_regression_dim=model_config.energy_regression_dim,
+        energy_activation_fn=model_config.energy_activation_fn,
+        energy_learn_atomic_type_scales=model_config.energy_learn_atomic_type_scales,
+        energy_learn_atomic_type_shifts=model_config.energy_learn_atomic_type_shifts
+    )
+
+
 def make_optimizer_from_config(config: config_dict.ConfigDict = None):
     """Make optax optimizer from config.
 
@@ -85,11 +125,12 @@ def make_optimizer_from_config(config: config_dict.ConfigDict = None):
         )
 
 
-def run_training(config: config_dict.ConfigDict):
+def run_training(config: config_dict.ConfigDict, model: str = None):
     """Run training given a config.
 
     Args:
         config (): The config.
+        model (): The model to train. Defaults to SO3krates.
 
     Returns:
 
@@ -190,10 +231,17 @@ def run_training(config: config_dict.ConfigDict):
     ))
 
     opt = make_optimizer_from_config(config)
-    so3k = make_so3krates_sparse_from_config(config)
+    if model is None or model == 'so3krates':
+        net = make_so3krates_sparse_from_config(config)
+    elif model == 'itp_net':
+        net = make_itp_net_from_config(config)
+    else:
+        raise ValueError(
+            f'{model=} is not a valid model.'
+        )
 
     loss_fn = training_utils.make_loss_fn(
-        get_energy_and_force_fn_sparse(so3k),
+        get_energy_and_force_fn_sparse(net),
         weights=config.training.loss_weights
     )
 
@@ -238,7 +286,7 @@ def run_training(config: config_dict.ConfigDict):
     wandb.init(config=config.to_dict(), **config.training.wandb_init_args)
     logging.mlff('Training is starting!')
     training_utils.fit(
-        model=so3k,
+        model=net,
         optimizer=opt,
         loss_fn=loss_fn,
         graph_to_batch_fn=jraph_utils.graph_to_batch_fn,
