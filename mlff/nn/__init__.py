@@ -1,7 +1,8 @@
 from .representation import (So3krates,
                              So3kratACE,
                              SchNet,
-                             SO3kratesSparse)
+                             SO3kratesSparse,
+                             ITPNet)
 
 from .stacknet import (get_observable_fn,
                        get_energy_force_stress_fn,
@@ -15,4 +16,4 @@ from .embed import (AtomTypeEmbed,
 from .observable import (Energy,
                          ZBLRepulsion)
 
-from .embed import GeometryEmbedSparse
+from .embed import GeometryEmbedSparse, GeometryEmbedE3x

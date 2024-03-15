@@ -2,6 +2,7 @@ from typing import Dict
 from .so3krates_layer import So3kratesLayer
 from .so3kratace_layer import So3krataceLayer
 from .schnet_layer import SchNetLayer
+from .itp_layer import ITPLayer
 
 
 def get_layer(name: str, h: Dict):
@@ -11,6 +12,8 @@ def get_layer(name: str, h: Dict):
         return So3krataceLayer(**h)
     elif name == 'schnet_layer':
         return SchNetLayer(**h)
+    elif name == 'itp_layer':
+        return ITPLayer(**h)
     elif name == 'spookynet_layer':
         raise NotImplementedError('SpookyNet not implemented!')
         return SpookyNetLayer(**h)
