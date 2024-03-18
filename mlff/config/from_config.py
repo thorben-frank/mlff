@@ -125,7 +125,7 @@ def make_optimizer_from_config(config: config_dict.ConfigDict = None):
         )
 
 
-def run_training(config: config_dict.ConfigDict, model: str = None):
+def run_training(config: config_dict.ConfigDict, model: str = 'so3krates'):
     """Run training given a config.
 
     Args:
@@ -231,7 +231,7 @@ def run_training(config: config_dict.ConfigDict, model: str = None):
     ))
 
     opt = make_optimizer_from_config(config)
-    if model is None or model == 'so3krates':
+    if model == 'so3krates':
         net = make_so3krates_sparse_from_config(config)
     elif model == 'itp_net':
         net = make_itp_net_from_config(config)
@@ -308,6 +308,7 @@ def run_training(config: config_dict.ConfigDict, model: str = None):
 
 def run_evaluation(
         config,
+        model: str = 'so3krates',
         num_test: int = None,
         testing_targets: Sequence[str] = None,
         pick_idx: np.ndarray = None,
@@ -317,6 +318,7 @@ def run_evaluation(
 
     Args:
         config (): The config file.
+        model (): The model to evaluate. Defaults to SO3krates.
         num_test (): Number of testing points. If not given, is determined from config using
             num_test = num_data - num_train - num_valid. Note that still the whole data set is loaded. If one wants to
             only load subparts of the data, one has to use pick_idx.
@@ -400,10 +402,18 @@ def run_evaluation(
         raise FileNotFoundError(f'No checkpoint found at {ckpt_dir}.')
     logging.mlff(f'... done.')
 
-    so3k = make_so3krates_sparse_from_config(config)
+    if model == 'so3krates':
+        net = make_so3krates_sparse_from_config(config)
+    elif model == 'itp_net':
+        net = make_itp_net_from_config(config)
+    else:
+        raise ValueError(
+            f'{model=} is not a valid model.'
+        )
     logging.mlff(f'Evaluate on {data_filepath} for targets {targets}.')
+
     return evaluation_utils.evaluate(
-        model=so3k,
+        model=net,
         params=params,
         graph_to_batch_fn=jraph_utils.graph_to_batch_fn,
         testing_data=testing_data,
@@ -418,7 +428,8 @@ def run_evaluation(
 def run_fine_tuning(
         config: config_dict.ConfigDict,
         start_from_workdir: str,
-        strategy: str
+        strategy: str,
+        model: str = 'so3krates',
 ):
     """Run training given a config.
 
@@ -426,6 +437,7 @@ def run_fine_tuning(
             config (): The config.
             start_from_workdir (str): The workdir of the model that should be fine tuned.
             strategy (str): Fine tuning strategy.
+            model (str): Model to finetune.
 
         Returns:
 
@@ -593,10 +605,17 @@ def run_fine_tuning(
     #  fine_tuning_config or to silently ignore the model config in the config file. For now one has to make sure to
     #  define a suited model from config such that for now responsibility lies at the user. And code breaks if it is
     #  not done properly so is directly visible by user.
-    so3k = make_so3krates_sparse_from_config(config)
+    if model == 'so3krates':
+        net = make_so3krates_sparse_from_config(config)
+    elif model == 'itp_net':
+        net = make_itp_net_from_config(config)
+    else:
+        raise ValueError(
+            f'{model=} is not a valid model.'
+        )
 
     loss_fn = training_utils.make_loss_fn(
-        get_energy_and_force_fn_sparse(so3k),
+        get_energy_and_force_fn_sparse(net),
         weights=config.training.loss_weights
     )
 
@@ -641,7 +660,7 @@ def run_fine_tuning(
         f'Fine tuning model from {start_from_workdir} on {data_filepath}!'
     )
     training_utils.fit(
-        model=so3k,
+        model=net,
         optimizer=opt,
         loss_fn=loss_fn,
         graph_to_batch_fn=jraph_utils.graph_to_batch_fn,

@@ -37,12 +37,14 @@ class mlffCalculatorSparse(Calculator):
                              F_to_eV_Ang: float = 1.,
                              capacity_multiplier: float = 1.25,
                              add_energy_shift: bool = False,
-                             dtype: np.dtype = np.float32):
+                             dtype: np.dtype = np.float32,
+                             model: str = 'so3krates'):
 
         mlff_potential = MLFFPotentialSparse.create_from_ckpt_dir(
             ckpt_dir=ckpt_dir,
             add_shift=add_energy_shift,
-            dtype=dtype
+            dtype=dtype,
+            model=model
         )
 
         return cls(potential=mlff_potential,

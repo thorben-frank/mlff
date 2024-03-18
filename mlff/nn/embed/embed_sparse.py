@@ -72,6 +72,19 @@ class GeometryEmbedE3x(BaseSubModule):
 
         return geometric_data
 
+    def reset_input_convention(self, input_convention: str) -> None:
+        self.input_convention = input_convention
+
+    def __dict_repr__(self) -> Dict[str, Dict[str, Any]]:
+        return {self.module_name: {'max_degree': self.max_degree,
+                                   'radial_basis_fn': self.radial_basis_fn,
+                                   'num_radial_basis_fn': self.num_radial_basis_fn,
+                                   'cutoff_fn': self.cutoff_fn,
+                                   'cutoff': self.cutoff,
+                                   'input_convention': self.input_convention,
+                                   'prop_keys': self.prop_keys}
+                }
+
 
 class GeometryEmbedSparse(BaseSubModule):
     prop_keys: Dict

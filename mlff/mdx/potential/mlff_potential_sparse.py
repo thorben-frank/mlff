@@ -21,7 +21,7 @@ def load_hyperparameters(workdir: str):
     return cfg
 
 
-def load_model_from_workdir(workdir: str):
+def load_model_from_workdir(workdir: str, model='so3krates'):
     cfg = load_hyperparameters(workdir)
 
     loaded_mngr = checkpoint.CheckpointManager(
@@ -38,9 +38,16 @@ def load_model_from_workdir(workdir: str):
         })
     params = mgr_state.get("params")
 
-    model = from_config.make_so3krates_sparse_from_config(cfg)
+    if model == 'so3krates':
+        net = from_config.make_so3krates_sparse_from_config(cfg)
+    elif model == 'itp_net':
+        net = from_config.make_itp_net_from_config(cfg)
+    else:
+        raise ValueError(
+            f'{model=} is not a valid model.'
+        )
 
-    return model, params
+    return net, params
 
 
 @struct.dataclass
@@ -52,15 +59,32 @@ class MLFFPotentialSparse(MachineLearningPotential):
     dtype: Type = struct.field(pytree_node=False)  # TODO: remove and determine based on dtype of atomsx
 
     @classmethod
-    def create_from_ckpt_dir(cls, ckpt_dir: str, add_shift: bool = False, dtype=jnp.float32):
+    def create_from_ckpt_dir(
+            cls,
+            ckpt_dir: str,
+            add_shift: bool = False,
+            dtype=jnp.float32,
+            model: str = 'so3krates'
+    ):
         logging.warning(
             '`create_from_ckpt_dir` is deprecated and replaced by `create_from_workdir`, please use this method in '
             'the future. For now this calls `create_from_workdir` but will raise an error in the future.'
         )
-        return cls.create_from_workdir(ckpt_dir, add_shift, dtype)
+        return cls.create_from_workdir(
+            ckpt_dir,
+            add_shift,
+            dtype,
+            model
+        )
 
     @classmethod
-    def create_from_workdir(cls, workdir: str, add_shift: bool = False, dtype=jnp.float32):
+    def create_from_workdir(
+            cls,
+            workdir: str,
+            add_shift: bool = False,
+            dtype=jnp.float32,
+            model: str = 'so3krates'
+    ):
         """
 
 
@@ -68,6 +92,7 @@ class MLFFPotentialSparse(MachineLearningPotential):
             workdir ():
             add_shift ():
             dtype ():
+            model ():
 
         Returns:
 
@@ -81,14 +106,15 @@ class MLFFPotentialSparse(MachineLearningPotential):
                             ' suggest to disable the energy shift since increasing the precision slows down'
                             ' computation.')
 
-        net, params = load_model_from_workdir(workdir=workdir)
+        net, params = load_model_from_workdir(workdir=workdir, model=model)
         cfg = load_hyperparameters(workdir=workdir)
 
         net.reset_input_convention('displacements')
         net.reset_output_convention('per_atom')
 
         cutoff = cfg.model.cutoff
-        steps = cfg.model.num_layers
+        # ITPNet is strictly local so has effectively "one" MP layer in terms of effective cutoff.
+        steps = cfg.model.num_layers if model != 'itp_net' else 1
 
         effective_cutoff = steps * cutoff
 
