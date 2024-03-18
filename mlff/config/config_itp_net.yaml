@@ -16,19 +16,19 @@ model:
   filter_activation_fn: identity  # Activation function for the filter.
   mp_max_degree: 2
   mp_post_res_block: true
-  mp_post_res_block_activation_fn: identity
-  itp_num_features: 16
+  mp_post_res_block_activation_fn: silu
+  itp_num_features: 32
   itp_max_degree: 2
-  itp_num_updates: 2
+  itp_num_updates: 3
   itp_post_res_block: true
-  itp_post_res_block_activation_fn: identity
+  itp_post_res_block_activation_fn: silu
   itp_connectivity: dense
   feature_collection_over_layers: last
   include_pseudotensors: false
   message_normalization: avg_num_neighbors # How to normalize the message function. Options are (identity, sqrt_num_features, avg_num_neighbors)
   output_is_zero_at_init: true  # The output of the full network is zero at initialization.
   energy_regression_dim: 128  # Dimension to which final features are projected, before atomic energies are calculated.
-  energy_activation_fn: identity  # Activation function to use on the energy_regression_dim before atomic energies are calculated.
+  energy_activation_fn: silu  # Activation function to use on the energy_regression_dim before atomic energies are calculated.
   energy_learn_atomic_type_scales: false
   energy_learn_atomic_type_shifts: false
   input_convention: positions  # Input convention.
@@ -62,6 +62,6 @@ training:
   training_seed: 0  # Seed used for shuffling the batches during training.
   log_gradient_values: False  # Log the norm of the gradients for each set of weights.
   wandb_init_args:  # Arguments to wandb.init(). See https://docs.wandb.ai/ref/python/init. The config itself is passed as config to wandb.init().
-    name: first_training_run
+    name: first_itp_training_run
     project: mlff
     group: null
