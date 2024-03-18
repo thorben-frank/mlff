@@ -195,15 +195,18 @@ class ITPLayer(BaseSubModule):
                 use_bias=False
             )(x)  # Input is not part of features so add it by hand.
             for x_f in features:
-                x_final += e3x.nn.Dense(
-                    num_features,
-                    use_bias=False
-                )(
-                    e3x.nn.change_max_degree_or_type(
-                        x_f,
-                        max_degree=0,
-                        include_pseudotensors=False
-                    )
+                x_final = e3x.nn.add(
+                    x_final,  # First summand.
+                    e3x.nn.Dense(
+                        num_features,
+                        use_bias=False
+                    )(
+                        e3x.nn.change_max_degree_or_type(
+                            x_f,
+                            max_degree=0,
+                            include_pseudotensors=False
+                        )
+                    )  # Second summand.
                 )  # (N, 1, 1, num_features)
         else:
             raise ValueError(
