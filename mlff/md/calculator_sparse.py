@@ -38,13 +38,14 @@ class mlffCalculatorSparse(Calculator):
                              capacity_multiplier: float = 1.25,
                              add_energy_shift: bool = False,
                              dtype: np.dtype = np.float32,
-                             model: str = 'so3krates'):
+                             model: str = 'so3krates',
+                             has_aux: bool = False):
 
         mlff_potential = MLFFPotentialSparse.create_from_ckpt_dir(
             ckpt_dir=ckpt_dir,
             add_shift=add_energy_shift,
             dtype=dtype,
-            model=model
+            model=model,
         )
 
         return cls(potential=mlff_potential,
@@ -53,6 +54,7 @@ class mlffCalculatorSparse(Calculator):
                    F_to_eV_Ang=F_to_eV_Ang,
                    capacity_multiplier=capacity_multiplier,
                    dtype=dtype,
+                   has_aux=has_aux
                    )
 
     def __init__(
@@ -63,6 +65,7 @@ class mlffCalculatorSparse(Calculator):
             capacity_multiplier: float = 1.25,
             calculate_stress: bool = False,
             dtype: np.dtype = np.float32,
+            has_aux: bool = False,
             *args,
             **kwargs
     ):
@@ -90,25 +93,75 @@ class mlffCalculatorSparse(Calculator):
             def energy_fn(system, strain: jnp.ndarray, neighbors):
                 graph = system_to_graph(system, neighbors)
                 graph = strain_graph(graph, strain)
-                return potential(graph).sum()
+
+                out, aux = potential(graph, has_aux=has_aux)
+                if isinstance(out, tuple):
+                    atomic_energy = out[0]
+                    aux = out[1]
+                    return atomic_energy.sum(), aux
+                else:
+                    atomic_energy = out
+                    return atomic_energy.sum()
 
             @jax.jit
             def calculate_fn(system: System, neighbors):
                 strain = get_strain()
-                energy, grads = jax.value_and_grad(energy_fn, argnums=(0, 1), allow_int=True)(system, strain, neighbors)
+                out, grads = jax.value_and_grad(
+                    energy_fn,
+                    argnums=(0, 1),
+                    allow_int=True,
+                    has_aux=has_aux
+                )(
+                    system,
+                    strain,
+                    neighbors
+                  )
+
                 forces = - grads[0].R
                 stress = grads[1]
-                return {'energy': energy, 'forces': forces, 'stress': stress}
+
+                if isinstance(out, tuple):
+                    if not has_aux:
+                        raise ValueError
+
+                    return {'energy': out[0], 'forces': forces, 'stress': stress, 'aux': out[1]}
+                else:
+                    return {'energy': out, 'forces': forces, 'stress': stress}
+
         else:
             def energy_fn(system, neighbors):
                 graph = system_to_graph(system, neighbors)
-                return potential(graph).sum()
+                out = potential(graph, has_aux=has_aux)
+                if isinstance(out, tuple):
+                    if not has_aux:
+                        raise ValueError
+
+                    atomic_energy = out[0]
+                    aux = out[1]
+                    return atomic_energy.sum(), aux
+                else:
+                    atomic_energy = out
+                    return atomic_energy.sum()
 
             @jax.jit
             def calculate_fn(system, neighbors):
-                energy, grads = jax.value_and_grad(energy_fn, allow_int=True)(system, neighbors)
+                out, grads = jax.value_and_grad(
+                    energy_fn,
+                    allow_int=True,
+                    has_aux=has_aux
+                )(
+                    system,
+                    neighbors
+                )
                 forces = - grads.R
-                return {'energy': energy, 'forces': forces}
+
+                if isinstance(out, tuple):
+                    if not has_aux:
+                        raise ValueError
+
+                    return {'energy': out[0], 'forces': forces, 'aux': out[1]}
+                else:
+                    return {'energy': out, 'forces': forces}
 
         self.calculate_fn = calculate_fn
 

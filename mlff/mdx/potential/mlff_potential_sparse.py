@@ -1,3 +1,4 @@
+import jax
 import jax.numpy as jnp
 import numpy as np
 import logging
@@ -55,7 +56,7 @@ class MLFFPotentialSparse(MachineLearningPotential):
     cutoff: float = struct.field(pytree_node=False)
     effective_cutoff: float = struct.field(pytree_node=False)
 
-    potential_fn: Callable[[Graph], jnp.ndarray] = struct.field(pytree_node=False)
+    potential_fn: Callable[[Graph, bool], jnp.ndarray] = struct.field(pytree_node=False)
     dtype: Type = struct.field(pytree_node=False)  # TODO: remove and determine based on dtype of atomsx
 
     @classmethod
@@ -64,7 +65,7 @@ class MLFFPotentialSparse(MachineLearningPotential):
             ckpt_dir: str,
             add_shift: bool = False,
             dtype=jnp.float32,
-            model: str = 'so3krates'
+            model: str = 'so3krates',
     ):
         logging.warning(
             '`create_from_ckpt_dir` is deprecated and replaced by `create_from_workdir`, please use this method in '
@@ -74,7 +75,7 @@ class MLFFPotentialSparse(MachineLearningPotential):
             ckpt_dir,
             add_shift,
             dtype,
-            model
+            model,
         )
 
     @classmethod
@@ -83,7 +84,7 @@ class MLFFPotentialSparse(MachineLearningPotential):
             workdir: str,
             add_shift: bool = False,
             dtype=jnp.float32,
-            model: str = 'so3krates'
+            model: str = 'so3krates',
     ):
         """
 
@@ -93,6 +94,7 @@ class MLFFPotentialSparse(MachineLearningPotential):
             add_shift ():
             dtype ():
             model ():
+            has_aux (): If the potential returns the full output of the model in addition to the atomic energies.
 
         Returns:
 
@@ -144,15 +146,18 @@ class MLFFPotentialSparse(MachineLearningPotential):
 
             return x
 
-        def potential_fn(graph: Graph):
+        def potential_fn(graph: Graph, has_aux: bool = False):
             x = graph_to_mlff_input(graph)
             y = obs_fn(params, **x)
-            return shift_fn(y['energy'], x['atomic_numbers']).reshape(-1).astype(dtype)
+            if has_aux:
+                return shift_fn(y['energy'], x['atomic_numbers']).reshape(-1).astype(dtype), jax.tree_map(lambda u: u.astype(dtype), y)
+            else:
+                return shift_fn(y['energy'], x['atomic_numbers']).reshape(-1).astype(dtype)
 
         return cls(cutoff=cutoff,
                    effective_cutoff=effective_cutoff,
                    potential_fn=potential_fn,
                    dtype=dtype)
 
-    def __call__(self, graph: Graph) -> jnp.ndarray:
-        return self.potential_fn(graph)
+    def __call__(self, graph: Graph, has_aux: bool = False) -> jnp.ndarray:
+        return self.potential_fn(graph, has_aux)
