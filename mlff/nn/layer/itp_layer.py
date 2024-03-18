@@ -110,9 +110,9 @@ class ITPLayer(BaseSubModule):
             sigma = get_activation_fn(self.filter_activation_fn)
             basis = sigma(
                 e3x.nn.Dense(
-                    features=num_features
+                    features=num_features,
                 )(
-                    basis
+                    basis,
                 )
             )
 
@@ -122,8 +122,8 @@ class ITPLayer(BaseSubModule):
         )(
             inputs=x,
             basis=basis,
-            src_idx=idx_i,
-            dst_idx=idx_j,
+            dst_idx=idx_i,
+            src_idx=idx_j,
             num_segments=len(x)
         )
 
@@ -136,7 +136,7 @@ class ITPLayer(BaseSubModule):
         z = e3x.nn.Dense(features=num_features)(x)  # (N, 1 or 2, (max_degree + 1)^2, num_features)
 
         # Skip connection around message pass.
-        y = e3x.nn.add(y + z)  # (N, 1 or 2, (max_degree + 1)^2, num_features)
+        y = e3x.nn.add(y, z)  # (N, 1 or 2, (max_degree + 1)^2, num_features)
 
         # Residual block.
         if self.mp_post_res_block:
@@ -179,6 +179,13 @@ class ITPLayer(BaseSubModule):
 
         if self.feature_collection_over_layers == 'last':
             x_final = features[-1]
+
+            # If num_itp_updates == 0, we have to remove the l>0 degrees from the MP update explicitly.
+            x_final = e3x.nn.change_max_degree_or_type(
+                x_final,
+                max_degree=0,
+                include_pseudotensors=False
+            )
             # (N, 1, 1, num_itp_features * num_itp_updates) for dense
             # (N, 1, 1, num_itp_updates) for skip and independent
 

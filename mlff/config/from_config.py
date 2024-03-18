@@ -85,6 +85,7 @@ def make_itp_net_from_config(config: config_dict.ConfigDict):
         mp_post_res_block_activation_fn=model_config.mp_post_res_block_activation_fn,
         itp_max_degree=model_config.itp_max_degree,
         itp_num_features=model_config.itp_num_features,
+        itp_num_updates=model_config.itp_num_updates,
         itp_post_res_block=model_config.itp_post_res_block,
         itp_post_res_block_activation_fn=model_config.itp_post_res_block_activation_fn,
         itp_connectivity=model_config.itp_connectivity,

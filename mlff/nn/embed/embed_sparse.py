@@ -61,7 +61,8 @@ class GeometryEmbedE3x(BaseSubModule):
             radial_fn=getattr(e3x.nn, self.radial_basis_fn),
             num=self.num_radial_basis_fn,
             cutoff_fn=partial(getattr(e3x.nn, self.cutoff_fn), cutoff=self.cutoff),
-            return_cutoff=True
+            return_cutoff=True,
+
         )  # (N, 1, (max_degree+1)^2, num_radial_basis_fn), (N, )
 
         geometric_data = {'positions': positions,

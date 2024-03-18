@@ -231,8 +231,8 @@ def test_apply(ipt_connectivity, feature_collection_over_layers, _ipt_num_featur
 #
 #     npt.assert_allclose(output_translated.get('x'), output.get('x'))
 #     npt.assert_allclose(output_translated.get('ev'), output.get('ev'))
-#
-#
+
+
 # def test_rotation_equivariance():
 #     from mlff.geometric import get_rotation_matrix
 #
