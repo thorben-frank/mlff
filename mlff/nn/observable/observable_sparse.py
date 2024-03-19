@@ -493,7 +493,26 @@ def _coulomb(q: jnp.ndarray, rij: jnp.ndarray,
     pairwise = fac * (f * damped + (1 - f) * coulomb)
 
     return pairwise
-    
+
+@jax.jit
+def _coulomb_erf(q: jnp.ndarray, rij: jnp.ndarray, 
+             idx_i: jnp.ndarray, idx_j: jnp.ndarray,
+             kehalf: float, sigma: jnp.ndarray
+) -> jnp.ndarray:
+    """ Pairwise Coulomb interaction with erf damping """
+    pairwise = kehalf * q[idx_i] * q[idx_j] * jax.scipy.special.erf(rij/(sigma*jnp.sqrt(2)))/rij
+    return pairwise
+
+@jax.jit
+def sigma_cubic_fit(alpha):
+    vdW_radius = fine_structure**(-4/21)*alpha**(1/7) 
+    b0 = -0.00433008
+    b1 = 0.24428889
+    b2 = 0.04125273
+    b3 = -0.00078893
+    sigma = b3*vdW_radius**3 + b2*vdW_radius**2 + b1*vdW_radius + b0
+    return sigma*jnp.sqrt(2)
+
 class ElectrostaticEnergySparse(BaseSubModule):
     prop_keys: Dict
     regression_dim: int = None
@@ -682,8 +701,20 @@ class ElectrostaticEnergySparse(BaseSubModule):
         i_pairs = inputs['i_pairs']
         j_pairs = inputs['j_pairs']
 
+        hirshfeld_ratios = self.hirshfeld_ratios(inputs)['hirshfeld_ratios']
+        hirshfeld_ratios = jnp.clip(jnp.abs(hirshfeld_ratios), 0.5, 1.1)
 
-        atomic_electrostatic_energy_ij = _coulomb(partial_charges, d_ij_all, i_pairs, j_pairs, self.kehalf, self.cuton, self.cutoff)
+        # Getting atomic numbers (needed to link to the free-atom reference values)
+        atomic_numbers = inputs['atomic_numbers']  # (num_nodes)
+
+        # Calculate alpha_ij and C6_ij using mixing rules
+        alpha_ij, C6_ij = mixing_rules(atomic_numbers, i_pairs, j_pairs, hirshfeld_ratios)
+        
+        # Use cubic fit for sigma
+        sigma_ij = sigma_cubic_fit(alpha_ij)
+    
+        # atomic_electrostatic_energy_ij = _coulomb(partial_charges, d_ij_all, i_pairs, j_pairs, self.kehalf, self.cuton, self.cutoff)
+        atomic_electrostatic_energy_ij = _coulomb_erf(partial_charges, d_ij_all, i_pairs, j_pairs, sigma_ij)
 
         atomic_electrostatic_energy = segment_sum(
                 atomic_electrostatic_energy_ij,
@@ -770,15 +801,15 @@ def mixing_rules(
     return alpha_ij, C6_ij
 
 @jax.jit
-def gamma_cubic_fit(a0):
-    vdW_radius = fine_structure**(-4/21)*a0**(1/7) 
+def gamma_cubic_fit(alpha):
+    vdW_radius = fine_structure**(-4/21)*alpha**(1/7) 
     b0 = -0.00433008
     b1 = 0.24428889
     b2 = 0.04125273
     b3 = -0.00078893
     sigma = b3*vdW_radius**3 + b2*vdW_radius**2 + b1*vdW_radius + b0
     gamma = 1/2/sigma**2
-    return gamma
+    return gamma#, sigma*jnp.sqrt(2)
 
 class DispersionEnergySparse(BaseSubModule):
     prop_keys: Dict
