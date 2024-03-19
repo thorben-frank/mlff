@@ -91,28 +91,6 @@ def init_so3krates_sparse(
         ) if energy_activation_fn != 'identity' else lambda u: u,
     )
 
-    electrostatic_energy = ElectrostaticEnergySparse(
-        prop_keys=None,
-        output_is_zero_at_init=output_is_zero_at_init,
-        regression_dim=energy_regression_dim,
-        activation_fn=getattr(
-            nn.activation, energy_activation_fn
-        ) if energy_activation_fn != 'identity' else lambda u: u,
-        partial_charges=partial_charges,
-        cutoff=cutoff,
-    )
-
-    dipole_vec = DipoleVecSparse(
-        prop_keys=None,
-        output_is_zero_at_init=output_is_zero_at_init,
-        regression_dim=energy_regression_dim,
-        activation_fn=getattr(
-            nn.activation, energy_activation_fn
-        ) if energy_activation_fn != 'identity' else lambda u: u,
-        partial_charges=partial_charges,
-        # return_partial_charges=True
-    )
-
     hirshfeld_ratios = HirshfeldSparse(
         prop_keys=None,
         output_is_zero_at_init=output_is_zero_at_init,
@@ -130,6 +108,29 @@ def init_so3krates_sparse(
         activation_fn=getattr(
             nn.activation, energy_activation_fn
         ) if energy_activation_fn != 'identity' else lambda u: u,
+    )
+
+    electrostatic_energy = ElectrostaticEnergySparse(
+        prop_keys=None,
+        output_is_zero_at_init=output_is_zero_at_init,
+        regression_dim=energy_regression_dim,
+        hirshfeld_ratios=hirshfeld_ratios,
+        activation_fn=getattr(
+            nn.activation, energy_activation_fn
+        ) if energy_activation_fn != 'identity' else lambda u: u,
+        partial_charges=partial_charges,
+        cutoff=cutoff,
+    )
+
+    dipole_vec = DipoleVecSparse(
+        prop_keys=None,
+        output_is_zero_at_init=output_is_zero_at_init,
+        regression_dim=energy_regression_dim,
+        activation_fn=getattr(
+            nn.activation, energy_activation_fn
+        ) if energy_activation_fn != 'identity' else lambda u: u,
+        partial_charges=partial_charges,
+        # return_partial_charges=True
     )
     energy = EnergySparse(
         prop_keys=None,

@@ -500,7 +500,7 @@ def _coulomb_erf(q: jnp.ndarray, rij: jnp.ndarray,
              kehalf: float, sigma: jnp.ndarray
 ) -> jnp.ndarray:
     """ Pairwise Coulomb interaction with erf damping """
-    pairwise = kehalf * q[idx_i] * q[idx_j] * jax.scipy.special.erf(rij/(sigma*jnp.sqrt(2)))/rij
+    pairwise = kehalf * q[idx_i] * q[idx_j] * jax.scipy.special.erf(rij/sigma)/rij
     return pairwise
 
 @jax.jit
@@ -516,6 +516,7 @@ def sigma_cubic_fit(alpha):
 class ElectrostaticEnergySparse(BaseSubModule):
     prop_keys: Dict
     regression_dim: int = None
+    hirshfeld_ratios: Optional[Any] = None
     activation_fn: Callable[[Any], Any] = lambda u: u
     output_is_zero_at_init: bool = True
     module_name: str = 'electrostatic_energy'
@@ -714,7 +715,7 @@ class ElectrostaticEnergySparse(BaseSubModule):
         sigma_ij = sigma_cubic_fit(alpha_ij)
     
         # atomic_electrostatic_energy_ij = _coulomb(partial_charges, d_ij_all, i_pairs, j_pairs, self.kehalf, self.cuton, self.cutoff)
-        atomic_electrostatic_energy_ij = _coulomb_erf(partial_charges, d_ij_all, i_pairs, j_pairs, sigma_ij)
+        atomic_electrostatic_energy_ij = _coulomb_erf(partial_charges, d_ij_all, i_pairs, j_pairs, self.kehalf, sigma_ij)
 
         atomic_electrostatic_energy = segment_sum(
                 atomic_electrostatic_energy_ij,

@@ -419,7 +419,7 @@ def run_training(config: config_dict.ConfigDict, model: str = 'so3krates'):
         yaml.dump(config.to_dict(), yaml_file, default_flow_style=False)
 
     wandb.init(config=config.to_dict(), **config.training.wandb_init_args)
-    logging.mlff('Training is starting 13th March!')
+    logging.mlff('Training is starting 19th March!')
     if not tf_record_present:
         training_utils.fit(
             model=net,

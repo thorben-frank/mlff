@@ -99,9 +99,29 @@ def init_itp_net(
         ) if energy_activation_fn != 'identity' else lambda u: u,
     )
 
+    hirshfeld_ratios = HirshfeldSparse(
+        prop_keys=None,
+        output_is_zero_at_init=output_is_zero_at_init,
+        regression_dim=energy_regression_dim,
+        activation_fn=getattr(
+            nn.activation, energy_activation_fn
+        ) if energy_activation_fn != 'identity' else lambda u: u,
+    ) 
+
+    dispersion_energy = DispersionEnergySparse(
+        prop_keys=None,
+        output_is_zero_at_init=output_is_zero_at_init,
+        hirshfeld_ratios=hirshfeld_ratios,
+        regression_dim=energy_regression_dim,
+        activation_fn=getattr(
+            nn.activation, energy_activation_fn
+        ) if energy_activation_fn != 'identity' else lambda u: u,
+    )
+
     electrostatic_energy = ElectrostaticEnergySparse(
         prop_keys=None,
         output_is_zero_at_init=output_is_zero_at_init,
+        hirshfeld_ratios=hirshfeld_ratios,
         regression_dim=energy_regression_dim,
         activation_fn=getattr(
             nn.activation, energy_activation_fn
@@ -121,24 +141,6 @@ def init_itp_net(
         # return_partial_charges=True
     )
 
-    hirshfeld_ratios = HirshfeldSparse(
-        prop_keys=None,
-        output_is_zero_at_init=output_is_zero_at_init,
-        regression_dim=energy_regression_dim,
-        activation_fn=getattr(
-            nn.activation, energy_activation_fn
-        ) if energy_activation_fn != 'identity' else lambda u: u,
-    ) 
-
-    dispersion_energy = DispersionEnergySparse(
-        prop_keys=None,
-        output_is_zero_at_init=output_is_zero_at_init,
-        hirshfeld_ratios=hirshfeld_ratios,
-        regression_dim=energy_regression_dim,
-        activation_fn=getattr(
-            nn.activation, energy_activation_fn
-        ) if energy_activation_fn != 'identity' else lambda u: u,
-    )
     energy = EnergySparse(
         prop_keys=None,
         output_is_zero_at_init=output_is_zero_at_init,
