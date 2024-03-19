@@ -23,10 +23,12 @@ property_to_mask = {
 
 def print_metrics(epoch, eval_metrics):
     formatted_output = f"{epoch}: "
-    for key in list(eval_metrics.keys()):
-        formatted_output += f"{key}={eval_metrics[key]:.4f}, "
-    formatted_output = formatted_output.rstrip(", ")
-    return formatted_output
+    for key, value in eval_metrics.items():
+        if isinstance(value, np.ndarray) and value.size == 1:
+            formatted_output += f"{key}={value.item():.4f}, "
+        else:
+            formatted_output += f"{key}={', '.join(map('{:.4f}'.format, value))}, " if isinstance(value, np.ndarray) else f"{key}={value:.4f}, "
+    return formatted_output.rstrip(", ")
 
 def scaled_mse_loss(y, y_label, scale, mask):
     full_mask = ~jnp.isnan(y_label) & jnp.expand_dims(mask, [y_label.ndim - 1 - o for o in range(0, y_label.ndim - 1)])
