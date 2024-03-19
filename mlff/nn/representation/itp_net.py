@@ -2,7 +2,8 @@ import flax.linen as nn
 from mlff.nn.stacknet import StackNetSparse
 from mlff.nn.embed import GeometryEmbedE3x
 from mlff.nn.layer import ITPLayer
-from mlff.nn.observable import EnergySparse
+from mlff.nn.observable import EnergySparse, DipoleSparse, DipoleVecSparse, HirshfeldSparse, PartialChargesSparse, ElectrostaticEnergySparse, DispersionEnergySparse
+
 from .representation_utils import make_embedding_modules
 
 from typing import Optional
@@ -38,7 +39,9 @@ def init_itp_net(
         energy_activation_fn: str = 'identity',
         energy_learn_atomic_type_scales: bool = False,
         energy_learn_atomic_type_shifts: bool = False,
-        input_convention: str = 'positions'
+        input_convention: str = 'positions',
+        electrostatic_energy_bool: bool = False,
+        dispersion_energy_bool: bool = False,
 ):
     embedding_modules = make_embedding_modules(
         num_features=num_features,
@@ -76,6 +79,66 @@ def init_itp_net(
         include_pseudotensors=include_pseudotensors
     )]
 
+    dipole = DipoleSparse(
+        prop_keys=None,
+        output_is_zero_at_init=output_is_zero_at_init,
+        regression_dim=energy_regression_dim,
+        activation_fn=getattr(
+            nn.activation, energy_activation_fn
+        ) if energy_activation_fn != 'identity' else lambda u: u,
+        # learn_atomic_type_scales=energy_learn_atomic_type_scales,
+        # learn_atomic_type_shifts=energy_learn_atomic_type_shifts,
+    )
+
+    partial_charges = PartialChargesSparse(
+        prop_keys=None,
+        output_is_zero_at_init=output_is_zero_at_init,
+        regression_dim=energy_regression_dim,
+        activation_fn=getattr(
+            nn.activation, energy_activation_fn
+        ) if energy_activation_fn != 'identity' else lambda u: u,
+    )
+
+    electrostatic_energy = ElectrostaticEnergySparse(
+        prop_keys=None,
+        output_is_zero_at_init=output_is_zero_at_init,
+        regression_dim=energy_regression_dim,
+        activation_fn=getattr(
+            nn.activation, energy_activation_fn
+        ) if energy_activation_fn != 'identity' else lambda u: u,
+        partial_charges=partial_charges,
+        cutoff=cutoff,
+    )
+
+    dipole_vec = DipoleVecSparse(
+        prop_keys=None,
+        output_is_zero_at_init=output_is_zero_at_init,
+        regression_dim=energy_regression_dim,
+        activation_fn=getattr(
+            nn.activation, energy_activation_fn
+        ) if energy_activation_fn != 'identity' else lambda u: u,
+        partial_charges=partial_charges,
+        # return_partial_charges=True
+    )
+
+    hirshfeld_ratios = HirshfeldSparse(
+        prop_keys=None,
+        output_is_zero_at_init=output_is_zero_at_init,
+        regression_dim=energy_regression_dim,
+        activation_fn=getattr(
+            nn.activation, energy_activation_fn
+        ) if energy_activation_fn != 'identity' else lambda u: u,
+    ) 
+
+    dispersion_energy = DispersionEnergySparse(
+        prop_keys=None,
+        output_is_zero_at_init=output_is_zero_at_init,
+        hirshfeld_ratios=hirshfeld_ratios,
+        regression_dim=energy_regression_dim,
+        activation_fn=getattr(
+            nn.activation, energy_activation_fn
+        ) if energy_activation_fn != 'identity' else lambda u: u,
+    )
     energy = EnergySparse(
         prop_keys=None,
         output_is_zero_at_init=output_is_zero_at_init,
@@ -85,12 +148,16 @@ def init_itp_net(
         ) if energy_activation_fn != 'identity' else lambda u: u,
         learn_atomic_type_scales=energy_learn_atomic_type_scales,
         learn_atomic_type_shifts=energy_learn_atomic_type_shifts,
+        electrostatic_energy=electrostatic_energy,
+        dispersion_energy=dispersion_energy,
+        electrostatic_energy_bool=electrostatic_energy_bool,
+        dispersion_energy_bool=dispersion_energy_bool,
     )
 
     return StackNetSparse(
         geometry_embeddings=[geometry_embed],
         feature_embeddings=embedding_modules,
         layers=layers,
-        observables=[energy],
+        observables=[energy, dipole, dipole_vec, hirshfeld_ratios],
         prop_keys=None
     )
