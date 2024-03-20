@@ -342,10 +342,13 @@ class HirshfeldSparse(BaseSubModule):
 
         qk = (q * k / jnp.sqrt(k.shape[-1])).sum(axis=-1) 
         q_x_k = jnp.where(node_mask, qk, jnp.asarray(0., dtype=k.dtype))
+        #TODO: do not need this line?
 
         v_eff = v_shift + q_x_k  # shape: (n)
         hirshfeld_ratios = jnp.where(node_mask, jnp.abs(v_eff), jnp.asarray(0., dtype=v_eff.dtype))
         #TODO: better way to ensure positive values?
+        #TODO: Check whether hirshfeld ratios make sense
+        #TODO: remove abs() in further calls
 
         return dict(hirshfeld_ratios=hirshfeld_ratios)
 
@@ -497,7 +500,7 @@ def _coulomb(q: jnp.ndarray, rij: jnp.ndarray,
 @jax.jit
 def _coulomb_erf(q: jnp.ndarray, rij: jnp.ndarray, 
              idx_i: jnp.ndarray, idx_j: jnp.ndarray,
-             kehalf: float, sigma: jnp.ndarray
+             kehalf: float, sigma: float#, sigma: jnp.ndarray
 ) -> jnp.ndarray:
     """ Pairwise Coulomb interaction with erf damping """
     pairwise = kehalf * q[idx_i] * q[idx_j] * jax.scipy.special.erf(rij/sigma)/rij
@@ -702,20 +705,24 @@ class ElectrostaticEnergySparse(BaseSubModule):
         i_pairs = inputs['i_pairs']
         j_pairs = inputs['j_pairs']
 
-        hirshfeld_ratios = self.hirshfeld_ratios(inputs)['hirshfeld_ratios']
-        hirshfeld_ratios = jnp.clip(jnp.abs(hirshfeld_ratios), 0.5, 1.1)
+        # hirshfeld_ratios = self.hirshfeld_ratios(inputs)['hirshfeld_ratios']
+        # hirshfeld_ratios = jnp.clip(jnp.abs(hirshfeld_ratios), 0.5, 1.1)
 
-        # Getting atomic numbers (needed to link to the free-atom reference values)
-        atomic_numbers = inputs['atomic_numbers']  # (num_nodes)
+        # # Getting atomic numbers (needed to link to the free-atom reference values)
+        # atomic_numbers = inputs['atomic_numbers']  # (num_nodes)
 
-        # Calculate alpha_ij and C6_ij using mixing rules
-        alpha_ij, C6_ij = mixing_rules(atomic_numbers, i_pairs, j_pairs, hirshfeld_ratios)
+        # # Calculate alpha_ij and C6_ij using mixing rules
+        # alpha_ij, C6_ij = mixing_rules(atomic_numbers, i_pairs, j_pairs, hirshfeld_ratios)
         
-        # Use cubic fit for sigma
-        sigma_ij = sigma_cubic_fit(alpha_ij)
+        # # Use cubic fit for sigma
+        # sigma_ij = sigma_cubic_fit(alpha_ij)
     
         # atomic_electrostatic_energy_ij = _coulomb(partial_charges, d_ij_all, i_pairs, j_pairs, self.kehalf, self.cuton, self.cutoff)
-        atomic_electrostatic_energy_ij = _coulomb_erf(partial_charges, d_ij_all, i_pairs, j_pairs, self.kehalf, sigma_ij)
+        # atomic_electrostatic_energy_ij = _coulomb_erf(partial_charges, d_ij_all, i_pairs, j_pairs, self.kehalf, sigma_ij)
+        
+        atomic_electrostatic_energy_ij = _coulomb_erf(partial_charges, d_ij_all, i_pairs, j_pairs, self.kehalf, 1.67) 
+        #TODO: 1.67 comes from sigma_cubic_fit(5.0), multiplied by jnp.sqrt(2) 
+        #TODO: insert correct sigma_ij as defined above, check if hirshfeld_ratios are slowing the program
 
         atomic_electrostatic_energy = segment_sum(
                 atomic_electrostatic_energy_ij,
@@ -847,6 +854,7 @@ class DispersionEnergySparse(BaseSubModule):
         # cell_offsets = inputs.get('cell_offset')  # shape: (num_pairs, 3)
 
         hirshfeld_ratios = self.hirshfeld_ratios(inputs)['hirshfeld_ratios']
+        mask_hirsh = hirshfeld_ratios != 7
         hirshfeld_ratios = jnp.clip(jnp.abs(hirshfeld_ratios), 0.5, 1.1)
 
         # Getting atomic numbers (needed to link to the free-atom reference values)
