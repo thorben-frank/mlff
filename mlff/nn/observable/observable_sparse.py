@@ -11,7 +11,7 @@ from ase.units import Bohr, Hartree
 from ase.units import alpha as fine_structure
 from mlff.nn.observable.dispersion_ref_data import alphas, C6_coef
 from jax.scipy.special import factorial
-from jaxopt import Broyden
+from mlff.masking.mask import safe_scale
 
 @jax.jit
 def _switch_component(x: jnp.ndarray, ones: jnp.ndarray, zeros: jnp.ndarray) -> jnp.ndarray:
@@ -126,7 +126,7 @@ class EnergySparse(BaseSubModule):
         atomic_energy = atomic_energy * atomic_scales
         atomic_energy += energy_offset  # (num_nodes)
 
-        atomic_energy = jnp.where(node_mask, atomic_energy, jnp.asarray(0., dtype=atomic_energy.dtype))  # (num_nodes)
+        atomic_energy = safe_scale(atomic_energy, node_mask)
 
         if self.zbl_repulsion:
             raise NotImplementedError('ZBL Repulsion for sparse model not implemented yet.')
@@ -144,7 +144,7 @@ class EnergySparse(BaseSubModule):
                 segment_ids=batch_segments,
                 num_segments=num_graphs
             )  # (num_graphs)
-            energy = jnp.where(graph_mask, energy, jnp.asarray(0., dtype=energy.dtype))
+            energy = safe_scale(energy, graph_mask)
 
             return dict(energy=energy)
         elif self.output_convention == 'per_atom':
@@ -243,8 +243,7 @@ class DipoleSparse(BaseSubModule):
             )(x).squeeze(axis=-1)  # (num_nodes)
 
         #mask x_q from padding graph
-        x_q = jnp.where(node_mask, x_ + q_, jnp.asarray(0., dtype=x_.dtype))  # (num_nodes)
-        # x_q = safe_scale(x_ + q_, scale=point_mask)  # shape: (n)
+        x_q = safe_scale(x_ + q_, node_mask)
 
         total_charge_predicted = segment_sum(
             x_q,
@@ -265,7 +264,7 @@ class DipoleSparse(BaseSubModule):
             num_segments=num_graphs
         )  # (num_graphs, 3)
         dipole = jnp.linalg.norm(dipole, axis = 1)  # (num_graphs)
-        dipole = jnp.where(graph_mask, dipole, jnp.asarray(0., dtype=dipole.dtype))
+        dipole = safe_scale(dipole, graph_mask)
 
         return dict(dipole=dipole)
     
@@ -341,11 +340,9 @@ class HirshfeldSparse(BaseSubModule):
             )(x) # (num_nodes)
 
         qk = (q * k / jnp.sqrt(k.shape[-1])).sum(axis=-1) 
-        q_x_k = jnp.where(node_mask, qk, jnp.asarray(0., dtype=k.dtype))
-        #TODO: do not need this line?
 
-        v_eff = v_shift + q_x_k  # shape: (n)
-        hirshfeld_ratios = jnp.where(node_mask, jnp.abs(v_eff), jnp.asarray(0., dtype=v_eff.dtype))
+        v_eff = v_shift + qk  # shape: (n)
+        hirshfeld_ratios = safe_scale(jnp.abs(v_eff), node_mask)
         #TODO: better way to ensure positive values?
         #TODO: Check whether hirshfeld ratios make sense
         #TODO: remove abs() in further calls
@@ -411,8 +408,7 @@ class PartialChargesSparse(BaseSubModule):
             )(x).squeeze(axis=-1)  # (num_nodes)
 
         #mask x_q from padding graph
-        x_q = jnp.where(node_mask, x_ + q_, jnp.asarray(0., dtype=x_.dtype))  # (num_nodes)
-        # x_q = safe_scale(x_ + q_, scale=point_mask)  # shape: (n)
+        x_q = safe_scale(x_ + q_, node_mask)
 
         total_charge_predicted = segment_sum(
             x_q,
@@ -476,7 +472,7 @@ class DipoleVecSparse(BaseSubModule):
             num_segments=num_graphs
         )  # (num_graphs, 3)
 
-        dipole_vec = jnp.where(graph_mask_expanded, dipole, jnp.asarray(0., dtype=dipole.dtype))
+        dipole_vec = safe_scale(dipole, graph_mask_expanded)
 
         return dict(dipole_vec=dipole_vec)
 
@@ -731,8 +727,8 @@ class ElectrostaticEnergySparse(BaseSubModule):
                 num_segments=num_nodes
             )  # (num_graphs)
 
-        atomic_electrostatic_energy = jnp.where(node_mask, atomic_electrostatic_energy, jnp.asarray(0., dtype=atomic_electrostatic_energy.dtype))
-        
+        atomic_electrostatic_energy = safe_scale(atomic_electrostatic_energy, node_mask)
+
         return dict(electrostatic_energy=atomic_electrostatic_energy)
 
     def reset_output_convention(self, output_convention):
@@ -870,7 +866,7 @@ class DispersionEnergySparse(BaseSubModule):
         # Getting dispersion energy, positions are converted to to a.u.
         dispersion_energy_ij = vdw_QDO_disp_damp(d_ij_all / Bohr, gamma_ij, C6_ij)
 
-        dispersion_energy_ij = jnp.where(pair_mask, dispersion_energy_ij, jnp.asarray(0., dtype=dispersion_energy_ij.dtype))
+        dispersion_energy_ij = safe_scale(dispersion_energy_ij, pair_mask)
 
         atomic_dispersion_energy = segment_sum(
                 dispersion_energy_ij,

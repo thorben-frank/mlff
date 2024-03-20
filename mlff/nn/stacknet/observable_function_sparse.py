@@ -3,6 +3,7 @@ import jax
 
 from typing import (Any, Callable, Dict, Tuple)
 from flax.core.frozen_dict import FrozenDict
+from mlff.masking.mask import safe_scale
 
 Array = Any
 StackNetSparse = Any
@@ -198,7 +199,7 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
                       )
 
         energy = model.apply(params, inputs)['energy']  # (num_graphs)
-        energy = jnp.where(graph_mask, energy, jnp.asarray(0., dtype=energy.dtype))  # (num_graphs)
+        energy = safe_scale(energy, graph_mask)
         return -jnp.sum(energy), energy  # (), (num_graphs)
 
     # def energy_and_force_fn(params,
@@ -368,10 +369,10 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
         dipole = model.apply(params, inputs)['dipole']  # (num_graphs)
         dipole = jnp.where(graph_mask, dipole, jnp.asarray(0., dtype=dipole.dtype))  # (num_graphs)
         dipole_vec = model.apply(params, inputs)['dipole_vec']  # (num_graphs)
-        dipole_vec = jnp.where(graph_mask_expanded, dipole_vec, jnp.asarray(0., dtype=dipole_vec.dtype))  # (num_graphs)
+        dipole_vec = safe_scale(dipole_vec, graph_mask_expanded)
         hirshfeld_ratios = model.apply(params, inputs)['hirshfeld_ratios']  # (num_graphs)
-        hirshfeld_ratios = jnp.where(node_mask, hirshfeld_ratios, jnp.asarray(0., dtype=hirshfeld_ratios.dtype))  # (num_graphs)
-        hirshfeld_ratios = jnp.where(hirsh_bool_2, hirshfeld_ratios, jnp.asarray(0., dtype=hirshfeld_ratios.dtype))
+        hirshfeld_ratios = safe_scale(hirshfeld_ratios, node_mask)
+        hirshfeld_ratios = safe_scale(hirsh_bool_2, hirshfeld_ratios)
 
         return dict(energy=energy, forces=forces, dipole=dipole, dipole_vec=dipole_vec, hirshfeld_ratios = hirshfeld_ratios)
         
