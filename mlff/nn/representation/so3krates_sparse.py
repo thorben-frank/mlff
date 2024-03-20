@@ -114,11 +114,11 @@ def init_so3krates_sparse(
         prop_keys=None,
         output_is_zero_at_init=output_is_zero_at_init,
         regression_dim=energy_regression_dim,
-        hirshfeld_ratios=hirshfeld_ratios,
         activation_fn=getattr(
             nn.activation, energy_activation_fn
         ) if energy_activation_fn != 'identity' else lambda u: u,
         partial_charges=partial_charges,
+        # hirshfeld_ratios=hirshfeld_ratios,
         cutoff=cutoff,
     )
 

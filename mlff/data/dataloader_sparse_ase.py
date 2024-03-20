@@ -132,7 +132,7 @@ def ASE_to_jraph(
         try:
             hirshfeld_ratios = mol.arrays['hirsh_ratios']
         except:
-            hirshfeld_ratios = [1.] * n_atoms
+            hirshfeld_ratios = None
         try:
             dipole = mol.get_dipole_moment()
         except:
@@ -196,12 +196,15 @@ def ASE_to_jraph(
     n_node = np.array([mol.get_global_number_of_atoms()])
     n_edge = np.array([len(i)])
 
+    hirsh_bool = 0 if hirshfeld_ratios is None else 1
+
     global_context = {
         "energy": np.array([energy]).reshape(-1) if energy is not None else None,
         "stress": np.array(stress) if stress is not None else None,
         "dipole": np.array([np.linalg.norm(dipole)]) if dipole is not None else None,
         "dipole_vec": np.array(dipole.reshape(-1,3)) if dipole is not None else None,
         "total_charge": np.array([total_charge]) if total_charge is not None else None,
+        "hirsh_bool": np.array([hirsh_bool])
     }
 
     return jraph.GraphsTuple(

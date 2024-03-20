@@ -42,6 +42,7 @@ def get_observable_fn_sparse(model: StackNetSparse, observable: str = None):
                 displacements: jnp.ndarray = None,
                 graph_mask_expanded: jnp.ndarray = None,
                 total_charge: jnp.ndarray = None,
+                hirsh_bool: jnp.ndarray = None,
                 i_pairs: jnp.ndarray = None,
                 j_pairs: jnp.ndarray = None,
                 d_ij_all: jnp.ndarray = None,
@@ -73,6 +74,7 @@ def get_observable_fn_sparse(model: StackNetSparse, observable: str = None):
                 graph_mask=graph_mask,
                 graph_mask_expanded=graph_mask_expanded,
                 total_charge=total_charge,
+                hirsh_bool=hirsh_bool,
                 i_pairs=i_pairs,
                 j_pairs=j_pairs,
                 d_ij_all=d_ij_all,
@@ -97,6 +99,7 @@ def get_observable_fn_sparse(model: StackNetSparse, observable: str = None):
                 displacements: jnp.ndarray = None,
                 graph_mask_expanded: jnp.ndarray = None,
                 total_charge: jnp.ndarray = None,
+                hirsh_bool: jnp.ndarray = None,
                 i_pairs: jnp.ndarray = None,
                 j_pairs: jnp.ndarray = None,
                 d_ij_all: jnp.ndarray = None,
@@ -128,6 +131,7 @@ def get_observable_fn_sparse(model: StackNetSparse, observable: str = None):
                 graph_mask=graph_mask,
                 graph_mask_expanded=graph_mask_expanded,
                 total_charge=total_charge,
+                hirsh_bool=hirsh_bool,
                 i_pairs=i_pairs,
                 j_pairs=j_pairs,
                 d_ij_all=d_ij_all,
@@ -154,6 +158,7 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
                   graph_mask: jnp.ndarray = None,
                   graph_mask_expanded: jnp.ndarray = None,
                   total_charge: jnp.ndarray = None,
+                  hirsh_bool: jnp.ndarray = None,
                   i_pairs: jnp.ndarray = None,
                   j_pairs: jnp.ndarray = None,
                   d_ij_all: jnp.ndarray = None,
@@ -183,6 +188,7 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
                       graph_mask=graph_mask,
                       graph_mask_expanded=graph_mask_expanded,
                       total_charge=total_charge,
+                      hirsh_bool=hirsh_bool,
                       i_pairs=i_pairs,
                       j_pairs=j_pairs,
                       d_ij_all=d_ij_all,
@@ -192,8 +198,6 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
                       )
 
         energy = model.apply(params, inputs)['energy']  # (num_graphs)
-        # print(f"model.apply(params, inputs)['energy']: {model.apply(params, inputs)['energy']}")
-        # print(f"model.apply(params, inputs): {model.apply(params, inputs)}")
         energy = jnp.where(graph_mask, energy, jnp.asarray(0., dtype=energy.dtype))  # (num_graphs)
         return -jnp.sum(energy), energy  # (), (num_graphs)
 
@@ -294,6 +298,7 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
                             graph_mask: jnp.ndarray = None,
                             graph_mask_expanded: jnp.ndarray = None,
                             total_charge: jnp.ndarray = None,
+                            hirsh_bool: jnp.ndarray = None,
                             i_pairs: jnp.ndarray = None,
                             j_pairs: jnp.ndarray = None,
                             d_ij_all: jnp.ndarray = None,
@@ -317,6 +322,7 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
                           graph_mask,
                           graph_mask_expanded,
                           total_charge,
+                          hirsh_bool,
                           i_pairs,
                           j_pairs,
                           d_ij_all,
@@ -334,6 +340,7 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
             graph_mask_expanded = jnp.ones((1,3)).astype(jnp.bool_)  # (1,3)
             node_mask = jnp.ones((len(positions),)).astype(jnp.bool_)  # (num_nodes)
             batch_segments = jnp.zeros_like(atomic_numbers)  # (num_nodes) 
+        
         inputs = dict(positions=positions,
                 atomic_numbers=atomic_numbers,
                 idx_i=idx_i,
@@ -345,6 +352,7 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
                 graph_mask=graph_mask,
                 graph_mask_expanded=graph_mask_expanded,
                 total_charge=total_charge,
+                hirsh_bool=hirsh_bool,
                 i_pairs=i_pairs,
                 j_pairs=j_pairs,
                 d_ij_all=d_ij_all,
@@ -353,98 +361,18 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
                 dummmy = dummmy
                 )
 
+        _, number_of_atoms_in_molecule = jnp.unique(batch_segments, return_counts = True, size=len(graph_mask))
+        hirsh_bool_1 = jnp.repeat(hirsh_bool, number_of_atoms_in_molecule, total_repeat_length = len(node_mask))
+        hirsh_bool_2 = jax.lax.convert_element_type(hirsh_bool_1, jnp.bool_)
+
         dipole = model.apply(params, inputs)['dipole']  # (num_graphs)
         dipole = jnp.where(graph_mask, dipole, jnp.asarray(0., dtype=dipole.dtype))  # (num_graphs)
-
-        # partial_charges = model.apply(params, inputs)['partial_charges']  # (num_graphs)
-        # print(f"partial_charges: {partial_charges}")
         dipole_vec = model.apply(params, inputs)['dipole_vec']  # (num_graphs)
-        # print(f"dipole_vec: {dipole_vec}") #dipole_vec: Traced<ShapedArray(float32[50,3])>with<DynamicJaxprTrace(level=4/0)>
         dipole_vec = jnp.where(graph_mask_expanded, dipole_vec, jnp.asarray(0., dtype=dipole_vec.dtype))  # (num_graphs)
-        # print(f"dipole_vec: {dipole_vec}") #dipole_vec: Traced<ShapedArray(float32[50,3])>with<DynamicJaxprTrace(level=4/0)>
         hirshfeld_ratios = model.apply(params, inputs)['hirshfeld_ratios']  # (num_graphs)
         hirshfeld_ratios = jnp.where(node_mask, hirshfeld_ratios, jnp.asarray(0., dtype=hirshfeld_ratios.dtype))  # (num_graphs)
-        # partial_charges = model.apply(params, inputs)['partial_charges']  # (num_graphs)
+        hirshfeld_ratios = jnp.where(hirsh_bool_2, hirshfeld_ratios, jnp.asarray(0., dtype=hirshfeld_ratios.dtype))
 
         return dict(energy=energy, forces=forces, dipole=dipole, dipole_vec=dipole_vec, hirshfeld_ratios = hirshfeld_ratios)
         
-    # return energy_and_force_and_dipole_fn
     return energy_and_force_and_dipole_and_hirsh_fn
-
-
-# def get_energy_and_force_fn_sparse(model: StackNetSparse):
-#     def energy_fn(params,
-#                   positions: jnp.ndarray,
-#                   atomic_numbers: jnp.ndarray,
-#                   idx_i: jnp.ndarray,
-#                   idx_j: jnp.ndarray,
-#                   cell: jnp.ndarray = None,
-#                   cell_offset: jnp.ndarray = None,
-#                   batch_segments: jnp.ndarray = None,
-#                   node_mask: jnp.ndarray = None,
-#                   graph_mask: jnp.ndarray = None):
-#         if batch_segments is None:
-#             assert graph_mask is None
-#             assert node_mask is None
-#
-#             graph_mask = jnp.ones((1,)).astype(jnp.bool_)  # (1)
-#             node_mask = jnp.ones((len(positions),)).astype(jnp.bool_)  # (num_nodes)
-#             batch_segments = jnp.zeros_like(atomic_numbers)  # (num_nodes)
-#
-#         inputs = dict(positions=positions,
-#                       atomic_numbers=atomic_numbers,
-#                       idx_i=idx_i,
-#                       idx_j=idx_j,
-#                       cell=cell,
-#                       cell_offset=cell_offset,
-#                       batch_segments=batch_segments,
-#                       node_mask=node_mask,
-#                       graph_mask=graph_mask
-#                       )
-#
-#         energy = model.apply(params, inputs)['energy']  # (num_graphs)
-#         energy = jnp.where(graph_mask, energy, jnp.asarray(0., dtype=energy.dtype))  # (num_graphs)
-#         return -jnp.sum(energy), energy  # (), (num_graphs)
-#
-#     def energy_and_force_fn(params,
-#                             positions: jnp.ndarray,
-#                             atomic_numbers: jnp.ndarray,
-#                             idx_i: jnp.ndarray,
-#                             idx_j: jnp.ndarray,
-#                             cell: jnp.ndarray = None,
-#                             cell_offset: jnp.ndarray = None,
-#                             batch_segments: jnp.ndarray = None,
-#                             node_mask: jnp.ndarray = None,
-#                             graph_mask: jnp.ndarray = None,
-#                             *args,
-#                             **kwargs):
-#
-#         # _, energy = energy_fn(
-#         #     params,
-#         #     positions,
-#         #     atomic_numbers,
-#         #     idx_i,
-#         #     idx_j,
-#         #     cell,
-#         #     cell_offset,
-#         #     batch_segments,
-#         #     node_mask,
-#         #     graph_mask
-#         # )
-#
-#         forces, energy = jax.jacrev(energy_fn, argnums=1, has_aux=True)(
-#             params,
-#             positions,
-#             atomic_numbers,
-#             idx_i,
-#             idx_j,
-#             cell,
-#             cell_offset,
-#             batch_segments,
-#             node_mask,
-#             graph_mask
-#         )
-#
-#         return dict(energy=energy, forces=forces)
-#
-#     return energy_and_force_fn
