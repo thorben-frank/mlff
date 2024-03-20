@@ -407,9 +407,11 @@ def run_training(config: config_dict.ConfigDict, model: str = 'so3krates'):
 
         batch_max_num_nodes = data_stats['max_num_of_nodes'] * (config.training.batch_max_num_graphs - 1) + 1
         batch_max_num_edges = data_stats['max_num_of_edges'] * (config.training.batch_max_num_graphs - 1) + 1
+        batch_max_num_pairs = data_stats['max_num_of_nodes'] * (data_stats['max_num_of_nodes'] - 1) // 2 * (config.training.batch_max_num_graphs - 1) + 1
 
         config.training.batch_max_num_nodes = batch_max_num_nodes
         config.training.batch_max_num_edges = batch_max_num_edges
+        config.training.batch_max_num_pairs = batch_max_num_pairs
 
     with open(workdir / 'hyperparameters.json', 'w') as fp:
         # json_config = config.to_dict()
@@ -431,7 +433,8 @@ def run_training(config: config_dict.ConfigDict, model: str = 'so3krates'):
             batch_max_num_edges=config.training.batch_max_num_edges,
             batch_max_num_nodes=config.training.batch_max_num_nodes,
             batch_max_num_graphs=config.training.batch_max_num_graphs,
-            training_data=training_data,
+            batch_max_num_pairs=config.training.batch_max_num_pairs,
+        training_data=training_data,
             validation_data=validation_data,
             ckpt_dir=workdir / 'checkpoints',
             eval_every_num_steps=config.training.eval_every_num_steps,
@@ -604,55 +607,28 @@ def run_evaluation(
         if config.training.batch_max_num_nodes is None:
             assert config.training.batch_max_num_edges is None
 
-            batch_max_num_nodes = data_stats['max_num_of_nodes'] * (config.training.batch_max_num_graphs - 1) + 1
-            batch_max_num_edges = data_stats['max_num_of_edges'] * (config.training.batch_max_num_graphs - 1) + 1
+        batch_max_num_nodes = data_stats['max_num_of_nodes'] * (config.training.batch_max_num_graphs - 1) + 1
+        batch_max_num_edges = data_stats['max_num_of_edges'] * (config.training.batch_max_num_graphs - 1) + 1
 
-            config.training.batch_max_num_nodes = batch_max_num_nodes
-            config.training.batch_max_num_edges = batch_max_num_edges
+        config.training.batch_max_num_nodes = batch_max_num_nodes
+        config.training.batch_max_num_edges = batch_max_num_edges
+
+    ckpt_dir = Path(config.workdir) / 'checkpoints'
+    ckpt_dir = ckpt_dir.expanduser().resolve()
+    logging.mlff(f'Restore parameters from {ckpt_dir} ...')
+    ckpt_mngr = checkpoint.CheckpointManager(
+        ckpt_dir,
+        {'params': checkpoint.PyTreeCheckpointer()},
+        options=checkpoint.CheckpointManagerOptions(step_prefix='ckpt')
+    )
+    latest_step = ckpt_mngr.latest_step()
+    if latest_step is not None:
+        params = ckpt_mngr.restore(
+            latest_step,
+            items=None
+        )['params']
     else:
-        if config.data.shift_mode in ['custom', 'mean']:
-            raise NotImplementedError(
-                'For TFDSDataSets, energy shifting is not supported yet.'
-            )
-
-        # Convert the units.
-        testing_data = eval_data.map(
-            lambda graph: data.transformations.unit_conversion_graph(
-                graph,
-                energy_unit=energy_unit,
-                length_unit=length_unit
-            )
-        )
-
-    params = load_params_from_workdir(workdir=config.workdir)
-
-    # ckpt_dir = Path(config.workdir) / 'checkpoints'
-    # ckpt_dir = ckpt_dir.expanduser().resolve()
-    # logging.mlff(f'Restore parameters from {ckpt_dir} ...')
-    # ckpt_mngr = checkpoint.CheckpointManager(
-    #     ckpt_dir,
-    #     {'params': checkpoint.PyTreeCheckpointer()},
-    #     options=checkpoint.CheckpointManagerOptions(step_prefix='ckpt')
-    # )
-    # ckpt_mngr = checkpoint.CheckpointManager(
-    #     ckpt_dir,
-    #     item_names=('params',),
-    #     item_handlers={'params': checkpoint.StandardCheckpointHandler()},
-    #     options=checkpoint.CheckpointManagerOptions(step_prefix="ckpt"),
-    # )
-
-    # latest_step = ckpt_mngr.latest_step()
-    # if latest_step is not None:
-    #     params = ckpt_mngr.restore(
-    #         latest_step,
-    #         items=None
-    #     )['params']
-
-        # params = ckpt_mngr.restore(
-        #     latest_step,
-        # )['params']
-    # else:
-    #     raise FileNotFoundError(f'No checkpoint found at {ckpt_dir}.')
+        raise FileNotFoundError(f'No checkpoint found at {ckpt_dir}.')
     logging.mlff(f'... done.')
 
     if model == 'so3krates':
@@ -674,6 +650,7 @@ def run_evaluation(
         batch_max_num_nodes=config.training.batch_max_num_nodes,
         batch_max_num_edges=config.training.batch_max_num_edges,
         batch_max_num_graphs=config.training.batch_max_num_graphs,
+        batch_max_num_pairs=config.training.batch_max_num_pairs,
         write_batch_metrics_to=write_batch_metrics_to
     )
 
@@ -976,9 +953,11 @@ def run_fine_tuning(
 
         batch_max_num_nodes = data_stats['max_num_of_nodes'] * (config.training.batch_max_num_graphs - 1) + 1
         batch_max_num_edges = data_stats['max_num_of_edges'] * (config.training.batch_max_num_graphs - 1) + 1
+        batch_max_num_pairs = data_stats['max_num_of_nodes'] * (data_stats['max_num_of_nodes'] - 1) // 2 * (config.training.batch_max_num_graphs - 1) + 1
 
         config.training.batch_max_num_nodes = batch_max_num_nodes
         config.training.batch_max_num_edges = batch_max_num_edges
+        config.training.batch_max_num_pairs = batch_max_num_pairs
 
     with open(workdir / 'hyperparameters.json', 'w') as fp:
         # json_config = config.to_dict()
@@ -994,45 +973,25 @@ def run_fine_tuning(
     logging.mlff(
         f'Fine tuning model from {start_from_workdir} on {data_filepath}!'
     )
-    if not tf_record_present:
-        training_utils.fit(
-            model=net,
-            optimizer=opt,
-            loss_fn=loss_fn,
-            graph_to_batch_fn=jraph_utils.graph_to_batch_fn,
-            batch_max_num_edges=config.training.batch_max_num_edges,
-            batch_max_num_nodes=config.training.batch_max_num_nodes,
-            batch_max_num_graphs=config.training.batch_max_num_graphs,
-            training_data=training_data,
-            validation_data=validation_data,
-            params=params,
-            ckpt_dir=workdir / 'checkpoints',
-            eval_every_num_steps=config.training.eval_every_num_steps,
-            allow_restart=config.training.allow_restart,
-            num_epochs=config.training.num_epochs,
-            training_seed=config.training.training_seed,
-            model_seed=config.training.model_seed,
-            log_gradient_values=config.training.log_gradient_values
-        )
-    else:
-        training_utils.fit_from_iterator(
-            model=net,
-            optimizer=opt,
-            loss_fn=loss_fn,
-            graph_to_batch_fn=jraph_utils.graph_to_batch_fn,
-            batch_max_num_edges=config.training.batch_max_num_edges,
-            batch_max_num_nodes=config.training.batch_max_num_nodes,
-            batch_max_num_graphs=config.training.batch_max_num_graphs,
-            training_iterator=training_data,
-            validation_iterator=validation_data,
-            params=params,
-            ckpt_dir=workdir / 'checkpoints',
-            eval_every_num_steps=config.training.eval_every_num_steps,
-            allow_restart=config.training.allow_restart,
-            training_seed=config.training.training_seed,
-            model_seed=config.training.model_seed,
-            log_gradient_values=config.training.log_gradient_values
-        )
+    training_utils.fit(
+        model=net,
+        optimizer=opt,
+        loss_fn=loss_fn,
+        graph_to_batch_fn=jraph_utils.graph_to_batch_fn,
+        batch_max_num_edges=config.training.batch_max_num_edges,
+        batch_max_num_nodes=config.training.batch_max_num_nodes,
+        batch_max_num_graphs=config.training.batch_max_num_graphs,
+        training_data=training_data,
+        validation_data=validation_data,
+        params=params,
+        ckpt_dir=workdir / 'checkpoints',
+        eval_every_num_steps=config.training.eval_every_num_steps,
+        allow_restart=config.training.allow_restart,
+        num_epochs=config.training.num_epochs,
+        training_seed=config.training.training_seed,
+        model_seed=config.training.model_seed,
+        log_gradient_values=config.training.log_gradient_values
+    )
     logging.mlff('Training has finished!')
 
 

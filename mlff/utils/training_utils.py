@@ -218,6 +218,7 @@ def fit(
         batch_max_num_nodes,
         batch_max_num_edges,
         batch_max_num_graphs,
+        batch_max_num_pairs,
         params=None,
         num_epochs: int = 100,
         ckpt_dir: str = None,
@@ -291,14 +292,17 @@ def fit(
     for epoch in range(num_epochs):
         # Shuffle the training data.
         numpy_rng.shuffle(training_data)
-
+        # print(f"Epoch {epoch}")
+        # print(batch_max_num_nodes, batch_max_num_edges, batch_max_num_graphs, batch_max_num_pairs)
         # Create batched graphs from list of graphs.
         iterator_training = jraph.dynamically_batch(
             training_data,
             n_node=batch_max_num_nodes,
             n_edge=batch_max_num_edges,
             n_graph=batch_max_num_graphs,
-            n_pairs=batch_max_num_nodes*(batch_max_num_nodes-1)//(batch_max_num_graphs//2),
+            n_pairs=batch_max_num_pairs,
+            # n_pairs=batch_max_num_nodes*(batch_max_num_nodes-1)//(batch_max_num_graphs//2),
+            # n_pairs=batch_max_num_nodes*(batch_max_num_nodes-1)//(batch_max_num_graphs*jnp.sqrt(2)),
         )
 
         # Start iteration over batched graphs.
@@ -356,7 +360,9 @@ def fit(
                     n_node=batch_max_num_nodes,
                     n_edge=batch_max_num_edges,
                     n_graph=batch_max_num_graphs,
-                    n_pairs=batch_max_num_nodes*(batch_max_num_nodes-1)//(batch_max_num_graphs//2),
+                    n_pairs=batch_max_num_pairs,
+                    # n_pairs=batch_max_num_nodes*(batch_max_num_nodes-1)//(batch_max_num_graphs//2),
+                    # n_pairs=batch_max_num_nodes*(batch_max_num_nodes-1)//(batch_max_num_graphs*jnp.sqrt(2)),
                 )
 
                 # Start iteration over validation batches.
