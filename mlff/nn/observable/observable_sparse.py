@@ -716,8 +716,8 @@ class ElectrostaticEnergySparse(BaseSubModule):
         # atomic_electrostatic_energy_ij = _coulomb(partial_charges, d_ij_all, i_pairs, j_pairs, self.kehalf, self.cuton, self.cutoff)
         # atomic_electrostatic_energy_ij = _coulomb_erf(partial_charges, d_ij_all, i_pairs, j_pairs, self.kehalf, sigma_ij)
         
-        atomic_electrostatic_energy_ij = _coulomb_erf(partial_charges, d_ij_all, i_pairs, j_pairs, self.kehalf, 1.67) 
-        #TODO: 1.67 comes from sigma_cubic_fit(5.0), multiplied by jnp.sqrt(2) 
+        atomic_electrostatic_energy_ij = _coulomb_erf(partial_charges, d_ij_all, i_pairs, j_pairs, self.kehalf, 1.64) 
+        #TODO: 1.64 comes from sigma_cubic_fit(4.5), Hydrogen polarizability, multiplied by jnp.sqrt(2) 
         #TODO: insert correct sigma_ij as defined above, check if hirshfeld_ratios are slowing the program
 
         atomic_electrostatic_energy = segment_sum(
