@@ -134,7 +134,7 @@ def ASE_to_jraph(
         except:
             hirshfeld_ratios = [1.] * n_atoms
         try:
-            dipole = mol.info['dipole']
+            dipole = mol.get_dipole_moment()
         except:
             dipole = None
         try:

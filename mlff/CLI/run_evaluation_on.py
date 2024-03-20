@@ -77,7 +77,7 @@ def evaluate_so3krates_sparse_on():
         required=False,
         nargs='+',
         default=['forces'],
-        help='Targets for which the metrics should be calculated. Defaults to `energy`.'
+        help='Targets for which the metrics should be calculated. Defaults to `forces`.'
     )
     args = parser.parse_args()
 
