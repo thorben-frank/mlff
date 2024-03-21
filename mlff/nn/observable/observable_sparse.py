@@ -6,12 +6,14 @@ from typing import Any, Callable, Dict
 from mlff.nn.base.sub_module import BaseSubModule
 from typing import Optional
 from mlff.cutoff_function import add_cell_offsets_sparse
-from mlff.masking.mask import safe_norm
+from mlff.masking.mask import safe_mask, safe_norm
 from ase.units import Bohr, Hartree
 from ase.units import alpha as fine_structure
 from mlff.nn.observable.dispersion_ref_data import alphas, C6_coef
 from jax.scipy.special import factorial
 from mlff.masking.mask import safe_scale
+from mlff.nn.activation_function.activation_function import silu, softplus_inverse, softplus
+from jax.nn.initializers import constant
 
 @jax.jit
 def _switch_component(x: jnp.ndarray, ones: jnp.ndarray, zeros: jnp.ndarray) -> jnp.ndarray:
@@ -55,6 +57,9 @@ class EnergySparse(BaseSubModule):
     electrostatic_energy: Optional[Any] = None
     dispersion_energy_bool: bool = False
     dispersion_energy: Optional[Any] = None
+    zbl_repulsion_bool: bool = True
+    zbl_repulsion_shift: float = 0.
+    zbl_repulsion: Optional[Any] = None
 
     def setup(self):
         if self.output_is_zero_at_init:
@@ -128,8 +133,9 @@ class EnergySparse(BaseSubModule):
 
         atomic_energy = safe_scale(atomic_energy, node_mask)
 
-        if self.zbl_repulsion:
-            raise NotImplementedError('ZBL Repulsion for sparse model not implemented yet.')
+        if self.zbl_repulsion_bool:
+            repulsion_energy = self.zbl_repulsion(inputs)['zbl_repulsion']
+            atomic_energy += repulsion_energy
         
         if self.electrostatic_energy_bool:
             electrostatic_energy = self.electrostatic_energy(inputs)['electrostatic_energy']
@@ -277,6 +283,145 @@ class DipoleSparse(BaseSubModule):
                                    'prop_keys': self.prop_keys}        
                 }    
     
+
+@jax.jit
+def sigma(x):
+    return safe_mask(x > 0, fn=lambda u: jnp.exp(-1. / u), operand=x, placeholder=0)
+
+@jax.jit
+def switching_fn(x, x_on, x_off):
+    c = (x - x_on) / (x_off - x_on)
+    return sigma(1 - c) / (sigma(1 - c) + sigma(c))
+
+class ZBLRepulsionSparse(BaseSubModule):
+    """
+    Ziegler-Biersack-Littmark repulsion.
+    """
+    prop_keys: Dict
+    input_convention: str = 'positions'
+    output_convention: str = 'per_structure'
+    module_name: str = 'zbl_repulsion'
+    a0: float = 0.5291772105638411
+    ke: float = 14.399645351950548
+
+    # def setup(self):
+    #     self.energy_key = self.prop_keys[pn.energy]
+    #     self.atomic_type_key = self.prop_keys[pn.atomic_type]
+    #     self.atomic_position_key = self.prop_keys[pn.atomic_position]
+    #     if self.output_convention == 'per_atom':
+    #         self.atomic_energy_key = self.prop_keys[pn.atomic_energy]
+
+    @nn.compact
+    def __call__(self,
+                inputs: Dict,
+                *args,
+                **kwargs) -> Dict[str, jnp.ndarray]:
+        
+        # print("ZBL Repulsion")
+        # cell = inputs.get('cell')  # shape: (num_graphs, 3, 3)
+        # cell_offsets = inputs.get('cell_offset')  # shape: (num_pairs, 3)
+
+        a1 = softplus(self.param('a1', constant(softplus_inverse(3.20000)), (1,)))  # shape: (1)
+        a2 = softplus(self.param('a2', constant(softplus_inverse(0.94230)), (1,)))  # shape: (1)
+        a3 = softplus(self.param('a3', constant(softplus_inverse(0.40280)), (1,)))  # shape: (1)
+        a4 = softplus(self.param('a4', constant(softplus_inverse(0.20160)), (1,)))  # shape: (1)
+        c1 = softplus(self.param('c1', constant(softplus_inverse(0.18180)), (1,)))  # shape: (1)
+        c2 = softplus(self.param('c2', constant(softplus_inverse(0.50990)), (1,)))  # shape: (1)
+        c3 = softplus(self.param('c3', constant(softplus_inverse(0.28020)), (1,)))  # shape: (1)
+        c4 = softplus(self.param('c4', constant(softplus_inverse(0.02817)), (1,)))  # shape: (1)
+        p = softplus(self.param('p', constant(softplus_inverse(0.23)), (1,)))  # shape: (1)
+        d = softplus(self.param('d', constant(softplus_inverse(1 / (0.8854 * self.a0))), (1,)))  # shape: (1)
+
+        c_sum = c1 + c2 + c3 + c4
+        c1 = c1 / c_sum
+        c2 = c2 / c_sum
+        c3 = c3 / c_sum
+        c4 = c4 / c_sum
+
+        node_mask = inputs['node_mask']
+        num_nodes = len(node_mask)
+
+        phi_r_cut_ij = inputs['cut']
+        # print('phi_r_cut_ij: ', phi_r_cut_ij)
+
+        # d_ij = inputs['d_ij']  # shape: (P)
+        # d_ij = inputs['d_ij_all']  # shape: (P)
+        atomic_numbers = inputs['atomic_numbers']  # shape: (n)
+        # zf = z.astype(d_ij.dtype)  # shape: (n)
+
+        idx_i = inputs['idx_i']  # shape: (P)
+        idx_j = inputs['idx_j']  # shape: (P)
+        # idx_i = inputs['i_pairs']  # shape: (P)
+        # idx_j = inputs['j_pairs']  # shape: (P)
+        z_i = atomic_numbers[idx_i]
+        z_j = atomic_numbers[idx_j]
+
+        if self.input_convention == 'positions':
+            positions = inputs['positions']  # (N, 3)
+
+            # Calculate pairwise distance vectors
+            r_ij = jax.vmap(
+                lambda i, j: positions[j] - positions[i]
+            )(idx_i, idx_j)  # (num_pairs, 3)
+
+            # # Apply minimal image convention if needed.
+            # if cell is not None:
+            #     r_ij = add_cell_offsets_sparse(
+            #         r_ij=r_ij,
+            #         cell=cell,
+            #         cell_offsets=cell_offsets
+            #     )  # shape: (num_pairs,3)
+
+        d_ij = safe_norm(r_ij, axis=-1)  # shape : (num_pairs)
+
+        # print('z_i', z_i.shape)
+        # print('z_j', z_j.shape)
+        # print('z', z.shape)
+        # print('idx_i', idx_i.shape)
+        # print('phi_r_cut_ij', phi_r_cut_ij.shape)
+        # print('node_mask', node_mask.shape)
+        # print('d_ij', d_ij.shape)
+
+
+        z_d_ij = safe_mask(mask=d_ij != 0,
+                           operand=d_ij,
+                           fn=lambda u: z_i * z_j / u,
+                           placeholder=0.
+                           )  # shape: (P)
+
+        # print('z_d_ij', z_d_ij.shape)
+        # print('phi_r_cut_ij', phi_r_cut_ij.shape)
+        x = self.ke * phi_r_cut_ij * z_d_ij  # shape: (P)
+
+        rzd = d_ij * (jnp.power(z_i, p) + jnp.power(z_j, p)) * d  # shape: (P)
+        y = c1 * jnp.exp(-a1 * rzd) + c2 * jnp.exp(-a2 * rzd) + c3 * jnp.exp(-a3 * rzd) + c4 * jnp.exp(-a4 * rzd)
+        # shape: (P)
+
+        w = switching_fn(d_ij, x_on=0, x_off=1.5)  # shape: (P)
+
+        # print('w', w.shape)
+        # print('x', x.shape)
+        # print('y', y.shape)
+
+        e_rep_edge = w * x * y / jnp.asarray(2, dtype=d_ij.dtype)
+        e_rep_edge = segment_sum(e_rep_edge, segment_ids=idx_i, num_segments=num_nodes)
+        e_rep_edge = safe_scale(e_rep_edge, node_mask)
+
+        return dict(zbl_repulsion=e_rep_edge)
+
+        # e_rep_edge = safe_scale(w * x * y, scale=pair_mask) / jnp.asarray(2, dtype=d_ij.dtype)  # shape: (P)
+        # print('e_rep_edge', e_rep_edge)
+        
+        # if self.output_convention == 'per_atom':
+        #     return segment_sum(e_rep_edge, segment_ids=idx_i, num_segments=len(z))[:, None]  # shape: (n,1)
+        # elif self.output_convention == 'per_structure':
+        #     return e_rep_edge.sum(axis=0)  # shape: (1)
+        # else:
+        #     raise ValueError(f"{self.output_convention} is invalid argument for attribute `output_convention`.")
+        
+    def reset_output_convention(self, output_convention):
+        self.output_convention = output_convention
+
 class HirshfeldSparse(BaseSubModule):
     prop_keys: Dict
     regression_dim: int = None

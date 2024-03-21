@@ -6,6 +6,7 @@ from mlff.nn.layer import SO3kratesLayerSparse
 from mlff.nn.observable import EnergySparse, PartialChargeSparse
 from .representation_utils import make_embedding_modules
 from mlff.nn.observable import EnergySparse, DipoleSparse, DipoleVecSparse, HirshfeldSparse, PartialChargesSparse, ElectrostaticEnergySparse, DispersionEnergySparse
+from mlff.nn.observable import EnergySparse, DipoleSparse, DipoleVecSparse, HirshfeldSparse, PartialChargesSparse, ElectrostaticEnergySparse, DispersionEnergySparse, ZBLRepulsionSparse
 from typing import Sequence
 
 
@@ -38,6 +39,7 @@ def init_so3krates_sparse(
         input_convention: str = 'positions',
         electrostatic_energy_bool: bool = False,
         dispersion_energy_bool: bool = False,
+        zbl_repulsion_bool: bool = False,
 ):
     embedding_modules = make_embedding_modules(
         num_features=num_features,
@@ -132,6 +134,14 @@ def init_so3krates_sparse(
         partial_charges=partial_charges,
         # return_partial_charges=True
     )
+
+    zbl_repulsion = ZBLRepulsionSparse(
+        prop_keys=None,
+        # activation_fn=getattr(
+        #     nn.activation, energy_activation_fn
+        # ) if energy_activation_fn != 'identity' else lambda u: u,
+    )
+    
     energy = EnergySparse(
         prop_keys=None,
         output_is_zero_at_init=output_is_zero_at_init,
@@ -143,8 +153,10 @@ def init_so3krates_sparse(
         learn_atomic_type_shifts=energy_learn_atomic_type_shifts,
         electrostatic_energy=electrostatic_energy,
         dispersion_energy=dispersion_energy,
+        zbl_repulsion=zbl_repulsion,
         electrostatic_energy_bool=electrostatic_energy_bool,
         dispersion_energy_bool=dispersion_energy_bool,
+        zbl_repulsion_bool=zbl_repulsion_bool
     )
 
     return StackNetSparse(

@@ -62,7 +62,8 @@ def make_so3krates_sparse_from_config(config: config_dict.ConfigDict = None):
         energy_learn_atomic_type_scales=model_config.energy_learn_atomic_type_scales,
         energy_learn_atomic_type_shifts=model_config.energy_learn_atomic_type_shifts,
         electrostatic_energy_bool=model_config.electrostatic_energy_bool,
-        dispersion_energy_bool=model_config.dispersion_energy_bool
+        dispersion_energy_bool=model_config.dispersion_energy_bool,
+        zbl_repulsion_bool=model_config.zbl_repulsion_bool
     )
 
 
@@ -109,7 +110,8 @@ def make_itp_net_from_config(config: config_dict.ConfigDict):
         energy_learn_atomic_type_scales=model_config.energy_learn_atomic_type_scales,
         energy_learn_atomic_type_shifts=model_config.energy_learn_atomic_type_shifts,
         electrostatic_energy_bool=model_config.electrostatic_energy_bool,
-        dispersion_energy_bool=model_config.dispersion_energy_bool
+        dispersion_energy_bool=model_config.dispersion_energy_bool,
+        zbl_repulsion_bool=model_config.zbl_repulsion_bool
     )
 
 
