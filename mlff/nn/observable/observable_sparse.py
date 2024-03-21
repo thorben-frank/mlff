@@ -170,6 +170,7 @@ class EnergySparse(BaseSubModule):
                                    'prop_keys': self.prop_keys}
                 }
 
+#TODO: remove DipoleSparse
 class DipoleSparse(BaseSubModule):
     prop_keys: Dict
     regression_dim: int = None
