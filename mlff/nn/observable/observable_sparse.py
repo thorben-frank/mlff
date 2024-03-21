@@ -57,7 +57,7 @@ class EnergySparse(BaseSubModule):
     electrostatic_energy: Optional[Any] = None
     dispersion_energy_bool: bool = False
     dispersion_energy: Optional[Any] = None
-    zbl_repulsion_bool: bool = True
+    zbl_repulsion_bool: bool = False
     zbl_repulsion_shift: float = 0.
     zbl_repulsion: Optional[Any] = None
 
@@ -840,13 +840,21 @@ class ElectrostaticEnergySparse(BaseSubModule):
         graph_mask = inputs['graph_mask']  # (num_graphs)
         num_nodes = len(node_mask)
         partial_charges = self.partial_charges(inputs)['partial_charges'] # shape: (num_nodes)
-        d_ij_all = inputs['d_ij_all']  # shape: (num_pairs+1)
+        # d_ij_all = inputs['d_ij_all']  # shape: (num_pairs+1)
         cell = inputs.get('cell')
         batch_segments = inputs['batch_segments']  # (num_nodes)
         batch_segments_pairs = inputs['batch_segments_pairs']  # (num_pairs)
         i_pairs = inputs['i_pairs']
         j_pairs = inputs['j_pairs']
 
+        positions = inputs['positions']  # (N, 3)
+
+        # Calculate pairwise distance vectors
+        r_ij_all = jax.vmap(
+            lambda i, j: positions[j] - positions[i]
+        )(i_pairs, j_pairs)  # (num_pairs, 3)
+
+        d_ij_all = safe_norm(r_ij_all, axis=-1)  # shape : (num_pairs)
         # hirshfeld_ratios = self.hirshfeld_ratios(inputs)['hirshfeld_ratios']
         # hirshfeld_ratios = jnp.clip(jnp.abs(hirshfeld_ratios), 0.5, 1.1)
 
@@ -981,7 +989,7 @@ class DispersionEnergySparse(BaseSubModule):
         graph_mask = inputs['graph_mask']  # (num_graphs)
         # num_graphs = len(graph_mask)
         num_nodes = len(node_mask)
-        d_ij_all = inputs['d_ij_all']  # shape: (num_pairs+1)
+        # d_ij_all = inputs['d_ij_all']  # shape: (num_pairs+1)
         # batch_segments = inputs['batch_segments']  # (num_nodes)
         # batch_segments_pairs = inputs['batch_segments_pairs']  # (num_pairs)
         pair_mask = inputs['pair_mask']  # (num_pairs)
@@ -995,14 +1003,23 @@ class DispersionEnergySparse(BaseSubModule):
         # cell = inputs.get('cell')  # shape: (num_graphs, 3, 3)
         # cell_offsets = inputs.get('cell_offset')  # shape: (num_pairs, 3)
 
+        positions = inputs['positions']  # (N, 3)
+
+        # Calculate pairwise distance vectors
+        r_ij_all = jax.vmap(
+            lambda i, j: positions[j] - positions[i]
+        )(i_pairs, j_pairs)  # (num_pairs, 3)
+
+
+        d_ij_all = safe_norm(r_ij_all, axis=-1)  # shape : (num_pairs)
+
         hirshfeld_ratios = self.hirshfeld_ratios(inputs)['hirshfeld_ratios']
-        mask_hirsh = hirshfeld_ratios != 7
+        # mask_hirsh = hirshfeld_ratios != 7
         hirshfeld_ratios = jnp.clip(jnp.abs(hirshfeld_ratios), 0.5, 1.1)
 
         # Getting atomic numbers (needed to link to the free-atom reference values)
         atomic_numbers = inputs['atomic_numbers']  # (num_nodes)
         
-
         # Calculate alpha_ij and C6_ij using mixing rules
         alpha_ij, C6_ij = mixing_rules(atomic_numbers, i_pairs, j_pairs, hirshfeld_ratios)
         
