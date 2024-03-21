@@ -19,6 +19,7 @@ def evaluate(
         batch_max_num_nodes,
         batch_max_num_edges,
         batch_max_num_graphs,
+        batch_max_num_pairs,
         write_batch_metrics_to: str = None
 ):
     """Evaluate a model given its params on the testing data.
@@ -51,7 +52,8 @@ def evaluate(
         n_node=batch_max_num_nodes,
         n_edge=batch_max_num_edges,
         n_graph=batch_max_num_graphs,
-        n_pairs=batch_max_num_nodes*(batch_max_num_nodes-1)//(batch_max_num_graphs)
+        n_pairs=batch_max_num_pairs,
+        # n_pairs=batch_max_num_nodes*(batch_max_num_nodes-1)//(batch_max_num_graphs)
     )
 
     # Create a collections object for the test targets.

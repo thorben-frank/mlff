@@ -202,7 +202,7 @@ def ASE_to_jraph(
         "dipole": np.array([np.linalg.norm(dipole)]) if dipole is not None else None,
         "dipole_vec": np.array(dipole.reshape(-1,3)) if dipole is not None else None,
         "total_charge": np.array([total_charge]) if total_charge is not None else None,
-        "hirsh_bool": np.array([1]) if hirshfeld_ratios[0]==0. else np.array([0])
+        "hirsh_bool": np.array([0]) if hirshfeld_ratios[0]==0. else np.array([1])
         # "hirsh_bool": np.array([1]) if hirshfeld_ratios is not None else np.array([0])
     }
 
