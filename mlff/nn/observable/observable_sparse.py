@@ -488,7 +488,7 @@ class HirshfeldSparse(BaseSubModule):
         qk = (q * k / jnp.sqrt(k.shape[-1])).sum(axis=-1) 
 
         v_eff = v_shift + qk  # shape: (n)
-        hirshfeld_ratios = safe_scale(jnp.abs(v_eff), node_mask)
+        hirshfeld_ratios = safe_scale(v_eff, node_mask)
         #TODO: better way to ensure positive values?
         #TODO: Check whether hirshfeld ratios make sense
         #TODO: remove abs() in further calls
