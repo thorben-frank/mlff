@@ -488,7 +488,7 @@ class HirshfeldSparse(BaseSubModule):
         qk = (q * k / jnp.sqrt(k.shape[-1])).sum(axis=-1) 
 
         v_eff = v_shift + qk  # shape: (n)
-        hirshfeld_ratios = safe_scale(v_eff, node_mask)
+        hirshfeld_ratios = safe_scale(jnp.abs(v_eff), node_mask)
         #TODO: better way to ensure positive values?
         #TODO: Check whether hirshfeld ratios make sense
         #TODO: remove abs() in further calls
@@ -1015,7 +1015,7 @@ class DispersionEnergySparse(BaseSubModule):
 
         hirshfeld_ratios = self.hirshfeld_ratios(inputs)['hirshfeld_ratios']
         # mask_hirsh = hirshfeld_ratios != 7
-        hirshfeld_ratios = jnp.clip(jnp.abs(hirshfeld_ratios), 0.5, 1.1)
+        # hirshfeld_ratios = jnp.clip(hirshfeld_ratios, 0.5, 1.1)
 
         # Getting atomic numbers (needed to link to the free-atom reference values)
         atomic_numbers = inputs['atomic_numbers']  # (num_nodes)
