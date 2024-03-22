@@ -192,9 +192,17 @@ def ASE_to_jraph(
 
     senders = np.array(j)
     receivers = np.array(i)
+    
+    i_pairs, j_pairs = np.triu_indices(n_atoms, k=1)
+    i_pairs = np.array(i_pairs)
+    j_pairs = np.array(j_pairs)
+    # d_ij_all = mol.get_all_distances()[np.triu_indices(n_atoms, k = 1)]
+
+    n_node = np.array([n_atoms])
 
     n_node = np.array([mol.get_global_number_of_atoms()])
     n_edge = np.array([len(i)])
+    n_pairs = np.array([n_atoms * (n_atoms - 1) // 2])
 
     global_context = {
         "energy": np.array([energy]).reshape(-1) if energy is not None else None,
@@ -217,5 +225,5 @@ def ASE_to_jraph(
                 n_pairs = n_pairs,
                 i_pairs = i_pairs,
                 j_pairs = j_pairs,
-                d_ij_all = d_ij_all,
+                # d_ij_all = d_ij_all,
     )

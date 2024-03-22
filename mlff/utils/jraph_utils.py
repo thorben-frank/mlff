@@ -65,7 +65,7 @@ def graph_to_batch_fn(graph: jraph.GraphsTuple):
         hirshfeld_ratios=graph.nodes.get('hirshfeld_ratios'),
         i_pairs=graph.i_pairs,
         j_pairs=graph.j_pairs,
-        d_ij_all=graph.d_ij_all,
+        # d_ij_all=graph.d_ij_all,
         # dummmy=graph.globals.get('dummmy'),
     )
     batch_info = batch_info_fn(graph)
