@@ -183,8 +183,8 @@ def make_training_step_fn(optimizer, loss_fn, log_gradient_values):
         #     metrics['grad_norm'] = unfreeze(jax.tree_map(lambda x: jnp.linalg.norm(x.reshape(-1), axis=0), grads))
         updates, opt_state = optimizer.update(grads, opt_state, params)
         params = optax.apply_updates(params=params, updates=updates)
-        print('params', params)
-        print('number of parameters', sum(x.size for x in jax.tree_leaves(params)))
+        # print('params', params)
+        # print('number of parameters', sum(x.size for x in jax.tree_leaves(params)))
         metrics['grad_norm'] = optax.global_norm(grads)
         return params, opt_state, metrics
 
