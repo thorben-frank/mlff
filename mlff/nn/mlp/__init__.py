@@ -1,1 +1,1 @@
-from .mlp import MLP, ResidualMLP
+from .mlp import MLP, Residual, ResidualMLP

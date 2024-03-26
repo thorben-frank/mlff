@@ -2,12 +2,13 @@ import jax
 import jax.numpy as jnp
 
 from functools import partial
-from typing import (Any, Dict, Sequence)
+from typing import (Any, Callable, Dict, Sequence)
 
 import flax.linen as nn
 import e3x
 
 from mlff.nn.base.sub_module import BaseSubModule
+from mlff.nn.mlp import Residual
 from mlff.masking.mask import safe_mask
 from mlff.masking.mask import safe_norm
 from mlff.cutoff_function import add_cell_offsets_sparse
@@ -216,6 +217,173 @@ class AtomTypeEmbedSparse(BaseSubModule):
         """
         atomic_numbers = inputs['atomic_numbers']
         return nn.Embed(num_embeddings=self.zmax + 1, features=self.num_features)(atomic_numbers)
+
+    def __dict_repr__(self):
+        return {self.module_name: {'num_features': self.num_features,
+                                   'zmax': self.zmax,
+                                   'prop_keys': self.prop_keys}}
+
+
+class ChargeSpinEmbedSparse(nn.Module):
+    num_features: int
+    activation_fn: str = 'silu'
+    zmax: int = 118
+
+    @nn.compact
+    def __call__(self,
+                 atomic_numbers: jnp.ndarray,
+                 psi: jnp.ndarray,
+                 batch_segments: jnp.ndarray,
+                 graph_mask: jnp.ndarray,
+                 *args,
+                 **kwargs) -> jnp.ndarray:
+        """
+        Create atomic embeddings based on the total charge or the number of unpaired spins in the system, following the
+        embedding procedure introduced in SpookyNet. Returns per atom embeddings of dimension F.
+
+        Args:
+            z (Array): Atomic types, shape: (N)
+            psi (Array): Total charge or number of unpaired spins, shape: (num_graphs)
+            batch_segment (Array): (N)
+            graph_mask (Array): Mask for atom-wise operations, shape: (num_graphs)
+            *args ():
+            **kwargs ():
+
+        Returns: Per atom embedding, shape: (n,F)
+
+        """
+
+        q = nn.Embed(
+            num_embeddings=self.zmax + 1,
+            features=self.num_features
+        )(atomic_numbers)  # shape: (N,F)
+
+        psi_ = psi // jnp.inf  # -1 if psi < 0 and 0 otherwise
+        psi_ = psi_.astype(jnp.int32)  # shape: (num_graphs)
+
+        k = nn.Embed(
+            num_embeddings=2,
+            features=self.num_features
+        )(psi_)[batch_segments]  # shape: (N, F)
+
+        v = nn.Embed(
+            num_embeddings=2,
+            features=self.num_features
+        )(psi_)[batch_segments]  # shape: (N, F)
+
+        q_x_k = (q*k).sum(axis=-1) / jnp.sqrt(self.num_features)  # shape: (N)
+
+        y = nn.softplus(q_x_k)  # shape: (N)
+        denominator = jax.ops.segment_sum(
+            y,
+            segment_ids=batch_segments,
+            num_segments=len(graph_mask)
+        )  # (num_graphs)
+
+        denominator = jnp.where(
+            graph_mask,
+            denominator,
+            jnp.asarray(1., dtype=q.dtype)
+        )  # (num_graphs)
+
+        a = psi[batch_segments] * y / denominator[batch_segments]  # shape: (N)
+        e_psi = Residual(
+            use_bias=False,
+            activation_fn=getattr(jax.nn, self.activation_fn) if self.activation_fn is not 'identity' else lambda u: u
+        )(jnp.expand_dims(a, axis=-1) * v)  # shape: (N, F)
+
+        return e_psi
+
+
+class ChargeEmbedSparse(BaseSubModule):
+    prop_keys: Dict
+    num_features: int
+    activation_fn: str = 'silu'
+    zmax: int = 118
+    module_name: str = 'charge_embed_sparse'
+
+    @nn.compact
+    def __call__(self,
+                 inputs: Dict,
+                 *args,
+                 **kwargs):
+        """
+
+        Args:
+           inputs (Dict):
+                atomic_numbers (Array): atomic types, shape: (N)
+                total_charge (Array): total charge, shape: (num_graphs)
+                graph_mask (Array): (num_graphs)
+                batch_segments (Array): (N)
+            *args ():
+            **kwargs ():
+
+        Returns:
+
+        """
+        atomic_numbers = inputs['atomic_numbers']
+        Q = inputs['total_charge']
+        graph_mask = inputs['graph_mask']
+        batch_segments = inputs['batch_segments']
+
+        return ChargeSpinEmbedSparse(
+            zmax=self.zmax,
+            num_features=self.num_features,
+            activation_fn=self.activation_fn
+        )(
+            atomic_numbers=atomic_numbers,
+            psi=Q,
+            batch_segments=batch_segments,
+            graph_mask=graph_mask
+            )
+
+    def __dict_repr__(self):
+        return {self.module_name: {'num_features': self.num_features,
+                                   'zmax': self.zmax,
+                                   'prop_keys': self.prop_keys}}
+
+
+class SpinEmbedSparse(BaseSubModule):
+    prop_keys: Dict
+    num_features: int
+    activation_fn: str = 'silu'
+    zmax: int = 118
+    module_name: str = 'spin_embed_sparse'
+
+    @nn.compact
+    def __call__(self,
+                 inputs: Dict,
+                 *args,
+                 **kwargs):
+        """
+
+        Args:
+           inputs (Dict):
+                atomic_numbers (Array): atomic types, shape: (N)
+                num_unpaired_electrons (Array): total charge, shape: (num_graphs)
+                graph_mask (Array): (num_graphs)
+                batch_segments (Array): (N)
+            *args ():
+            **kwargs ():
+
+        Returns:
+
+        """
+        atomic_numbers = inputs['atomic_numbers']
+        S = inputs['num_unpaired_electrons']
+        graph_mask = inputs['graph_mask']
+        batch_segments = inputs['batch_segments']
+
+        return ChargeSpinEmbedSparse(
+            zmax=self.zmax,
+            num_features=self.num_features,
+            activation_fn=self.activation_fn
+        )(
+            atomic_numbers=atomic_numbers,
+            psi=S,
+            batch_segments=batch_segments,
+            graph_mask=graph_mask
+            )
 
     def __dict_repr__(self):
         return {self.module_name: {'num_features': self.num_features,
