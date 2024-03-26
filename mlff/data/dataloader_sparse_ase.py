@@ -141,6 +141,10 @@ def ASE_to_jraph(
             total_charge = mol.info['charge']
         except:
             total_charge = 0.
+        try:
+            multiplicity = mol.info['multiplicity']
+        except:
+            multiplicity = 1
 
     else:
         energy = None
@@ -149,6 +153,8 @@ def ASE_to_jraph(
         hirshfeld_ratios = None
         dipole = None
         total_charge = None
+        multiplicity = None
+
 
     total_charge = mol.info.get('total_charge')
     multiplicity = mol.info.get('multiplicity')
@@ -204,13 +210,16 @@ def ASE_to_jraph(
     n_edge = np.array([len(i)])
     n_pairs = np.array([n_atoms * (n_atoms - 1) // 2])
 
+    num_unpaired_electrons = int(multiplicity - 1)
+
     global_context = {
-        "energy": np.array([energy]).reshape(-1) if energy is not None else None,
+        "energy": np.array([energy]) if energy is not None else None,
         "stress": np.array(stress) if stress is not None else None,
         "dipole": np.array([np.linalg.norm(dipole)]) if dipole is not None else None,
         "dipole_vec": np.array(dipole.reshape(-1,3)) if dipole is not None else None,
-        "total_charge": np.array([total_charge]) if total_charge is not None else None,
-        "hirsh_bool": np.array([0]) if hirshfeld_ratios[0]==0. else np.array([1])
+        "total_charge": np.array(total_charge, dtype=np.int16).reshape(-1) if total_charge is not None else None,
+        "hirsh_bool": np.array([0]) if hirshfeld_ratios[0]==0. else np.array([1]),
+        "num_unpaired_electrons": np.array(num_unpaired_electrons, dtype=np.int16).reshape(-1) if num_unpaired_electrons is not None else None
         # "hirsh_bool": np.array([1]) if hirshfeld_ratios is not None else np.array([0])
     }
 

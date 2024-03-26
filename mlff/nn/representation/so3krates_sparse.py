@@ -3,9 +3,7 @@ import jax
 from mlff.nn.stacknet import StackNetSparse
 from mlff.nn.embed import GeometryEmbedSparse, AtomTypeEmbedSparse, ChargeEmbedSparse, SpinEmbedSparse
 from mlff.nn.layer import SO3kratesLayerSparse
-from mlff.nn.observable import EnergySparse, PartialChargeSparse
 from .representation_utils import make_embedding_modules
-from mlff.nn.observable import EnergySparse, DipoleSparse, DipoleVecSparse, HirshfeldSparse, PartialChargesSparse, ElectrostaticEnergySparse, DispersionEnergySparse
 from mlff.nn.observable import EnergySparse, DipoleSparse, DipoleVecSparse, HirshfeldSparse, PartialChargesSparse, ElectrostaticEnergySparse, DispersionEnergySparse, ZBLRepulsionSparse
 from typing import Sequence
 

@@ -49,7 +49,6 @@ def graph_to_batch_fn(graph: jraph.GraphsTuple):
     batch = dict(
         positions=graph.nodes.get('positions'),
         atomic_numbers=graph.nodes.get('atomic_numbers'),
-        total_charge=graph.globals.get('total_charge'),
         num_unpaired_electrons=graph.globals.get('num_unpaired_electrons'),
         idx_i=graph.receivers,
         idx_j=graph.senders,
