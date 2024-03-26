@@ -252,6 +252,7 @@ class ChargeSpinEmbedSparse(nn.Module):
         Returns: Per atom embedding, shape: (n,F)
 
         """
+        assert psi.ndim == 1
 
         q = nn.Embed(
             num_embeddings=self.zmax + 1,
@@ -289,7 +290,7 @@ class ChargeSpinEmbedSparse(nn.Module):
         a = psi[batch_segments] * y / denominator[batch_segments]  # shape: (N)
         e_psi = Residual(
             use_bias=False,
-            activation_fn=getattr(jax.nn, self.activation_fn) if self.activation_fn is not 'identity' else lambda u: u
+            activation_fn=getattr(jax.nn, self.activation_fn) if self.activation_fn != 'identity' else lambda u: u
         )(jnp.expand_dims(a, axis=-1) * v)  # shape: (N, F)
 
         return e_psi
@@ -325,6 +326,11 @@ class ChargeEmbedSparse(BaseSubModule):
         Q = inputs['total_charge']
         graph_mask = inputs['graph_mask']
         batch_segments = inputs['batch_segments']
+
+        if Q is None:
+            raise ValueError(
+                f'ChargeEmbedSparse requires to pass `total_charge != None`.'
+            )
 
         return ChargeSpinEmbedSparse(
             zmax=self.zmax,
@@ -373,6 +379,11 @@ class SpinEmbedSparse(BaseSubModule):
         S = inputs['num_unpaired_electrons']
         graph_mask = inputs['graph_mask']
         batch_segments = inputs['batch_segments']
+
+        if S is None:
+            raise ValueError(
+                f'SpinEmbedSparse requires to pass `num_unpaired_electrons != None`.'
+            )
 
         return ChargeSpinEmbedSparse(
             zmax=self.zmax,

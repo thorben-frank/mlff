@@ -1,9 +1,10 @@
 import flax.linen as nn
 import jax
 from mlff.nn.stacknet import StackNetSparse
-from mlff.nn.embed import GeometryEmbedSparse, AtomTypeEmbedSparse
+from mlff.nn.embed import GeometryEmbedSparse, AtomTypeEmbedSparse, ChargeEmbedSparse, SpinEmbedSparse
 from mlff.nn.layer import SO3kratesLayerSparse
 from mlff.nn.observable import EnergySparse
+from .representation_utils import make_embedding_modules
 from typing import Sequence
 
 
@@ -27,16 +28,20 @@ def init_so3krates_sparse(
         activation_fn: str = 'silu',
         layers_behave_like_identity_fn_at_init: bool = False,
         output_is_zero_at_init: bool = True,
+        use_charge_embed: bool = False,
+        use_spin_embed: bool = False,
         energy_regression_dim: int = 128,
         energy_activation_fn: str = 'identity',
         energy_learn_atomic_type_scales: bool = False,
         energy_learn_atomic_type_shifts: bool = False,
         input_convention: str = 'positions'
 ):
-    atom_type_embed = AtomTypeEmbedSparse(
+    embedding_modules = make_embedding_modules(
         num_features=num_features,
-        prop_keys=None
+        use_spin_embed=use_spin_embed,
+        use_charge_embed=use_charge_embed
     )
+
     geometry_embed = GeometryEmbedSparse(
         degrees=degrees,
         radial_basis_fn=radial_basis_fn,
@@ -76,7 +81,7 @@ def init_so3krates_sparse(
 
     return StackNetSparse(
         geometry_embeddings=[geometry_embed],
-        feature_embeddings=[atom_type_embed],
+        feature_embeddings=embedding_modules,
         layers=layers,
         observables=[energy],
         prop_keys=None
