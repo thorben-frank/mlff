@@ -27,6 +27,8 @@ model:
   include_pseudotensors: false
   message_normalization: avg_num_neighbors # How to normalize the message function. Options are (identity, sqrt_num_features, avg_num_neighbors)
   output_is_zero_at_init: true  # The output of the full network is zero at initialization.
+  use_charge_embed: false  # Use embedding module for total charge.
+  use_spin_embed: false  # Use embedding module for number of unpaired electrons.
   energy_regression_dim: 128  # Dimension to which final features are projected, before atomic energies are calculated.
   energy_activation_fn: silu  # Activation function to use on the energy_regression_dim before atomic energies are calculated.
   energy_learn_atomic_type_scales: false

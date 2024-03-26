@@ -54,10 +54,12 @@ def make_so3krates_sparse_from_config(config: config_dict.ConfigDict = None):
         layers_behave_like_identity_fn_at_init=model_config.layers_behave_like_identity_fn_at_init,
         output_is_zero_at_init=model_config.output_is_zero_at_init,
         input_convention=model_config.input_convention,
+        use_charge_embed=model_config.use_charge_embed,
+        use_spin_embed=model_config.use_spin_embed,
         energy_regression_dim=model_config.energy_regression_dim,
         energy_activation_fn=model_config.energy_activation_fn,
         energy_learn_atomic_type_scales=model_config.energy_learn_atomic_type_scales,
-        energy_learn_atomic_type_shifts=model_config.energy_learn_atomic_type_shifts
+        energy_learn_atomic_type_shifts=model_config.energy_learn_atomic_type_shifts,
     )
 
 
@@ -95,10 +97,12 @@ def make_itp_net_from_config(config: config_dict.ConfigDict):
         avg_num_neighbors=config.data.avg_num_neighbors if config.model.message_normalization == 'avg_num_neighbors' else None,
         output_is_zero_at_init=model_config.output_is_zero_at_init,
         input_convention=model_config.input_convention,
+        use_charge_embed=model_config.use_charge_embed,
+        use_spin_embed=model_config.use_spin_embed,
         energy_regression_dim=model_config.energy_regression_dim,
         energy_activation_fn=model_config.energy_activation_fn,
         energy_learn_atomic_type_scales=model_config.energy_learn_atomic_type_scales,
-        energy_learn_atomic_type_shifts=model_config.energy_learn_atomic_type_shifts
+        energy_learn_atomic_type_shifts=model_config.energy_learn_atomic_type_shifts,
     )
 
 

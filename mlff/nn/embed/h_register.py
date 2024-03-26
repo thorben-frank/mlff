@@ -9,13 +9,19 @@ from .embed import (
 from .embed_sparse import (
     GeometryEmbedSparse,
     GeometryEmbedE3x,
-    AtomTypeEmbedSparse
+    AtomTypeEmbedSparse,
+    SpinEmbedSparse,
+    ChargeEmbedSparse
 )
 
 
 def get_embedding_module(name: str, h: Dict):
     if name == 'atom_type_embed':
         return AtomTypeEmbed(**h)
+    elif name == 'spin_embed_sparse':
+        return SpinEmbedSparse(**h)
+    elif name == 'charge_embed_sparse':
+        return ChargeEmbedSparse(**h)
     elif name == 'atom_type_embed_sparse':
         return AtomTypeEmbedSparse(**h)
     elif name == 'geometry_embed':

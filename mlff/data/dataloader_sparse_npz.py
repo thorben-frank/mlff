@@ -83,6 +83,8 @@ def entry_to_jraph(
 
     atomic_numbers = entry['atomic_numbers']
     positions = entry['positions']
+    total_charge = entry.get('total_charge')
+    num_unpaired_electrons = entry.get('num_unpaired_electrons')
     forces = entry.get('forces')
     energy = entry.get('energy')
     stress = entry.get('stress')
@@ -107,7 +109,7 @@ def entry_to_jraph(
         "positions": np.array(positions),
         "atomic_numbers": np.array(atomic_numbers, dtype=np.int64),
         "forces": np.array(forces),
-            }
+    }
 
     senders = np.array(j)
     receivers = np.array(i)
@@ -116,8 +118,10 @@ def entry_to_jraph(
     n_edge = np.array([len(i)])
 
     global_context = {
-        "energy": np.array(energy) if energy is not None else None,
-        "stress": np.array(stress) if stress is not None else None
+        "energy": np.array(energy).reshape(-1) if energy is not None else None,
+        "stress": np.array(stress) if stress is not None else None,
+        "total_charge": np.array(total_charge, dtype=np.int16).reshape(-1) if total_charge is not None else None,
+        "num_unpaired_electrons": np.array(num_unpaired_electrons, dtype=np.int16).reshape(-1) if num_unpaired_electrons is not None else None
     }
 
     return jraph.GraphsTuple(

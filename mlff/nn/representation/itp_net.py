@@ -4,6 +4,8 @@ from mlff.nn.stacknet import StackNetSparse
 from mlff.nn.embed import GeometryEmbedE3x, AtomTypeEmbedSparse
 from mlff.nn.layer import ITPLayer
 from mlff.nn.observable import EnergySparse
+from .representation_utils import make_embedding_modules
+
 from typing import Optional, Sequence
 
 
@@ -29,16 +31,20 @@ def init_itp_net(
         feature_collection_over_layers: str = 'final',
         include_pseudotensors: bool = False,
         output_is_zero_at_init: bool = True,
+        use_charge_embed: bool = False,
+        use_spin_embed: bool = False,
         energy_regression_dim: int = 128,
         energy_activation_fn: str = 'identity',
         energy_learn_atomic_type_scales: bool = False,
         energy_learn_atomic_type_shifts: bool = False,
         input_convention: str = 'positions'
 ):
-    atom_type_embed = AtomTypeEmbedSparse(
+    embedding_modules = make_embedding_modules(
         num_features=num_features,
-        prop_keys=None
+        use_spin_embed=use_spin_embed,
+        use_charge_embed=use_charge_embed
     )
+
     geometry_embed = GeometryEmbedE3x(
         max_degree=mp_max_degree,
         radial_basis_fn=radial_basis_fn,
@@ -80,7 +86,7 @@ def init_itp_net(
 
     return StackNetSparse(
         geometry_embeddings=[geometry_embed],
-        feature_embeddings=[atom_type_embed],
+        feature_embeddings=embedding_modules,
         layers=layers,
         observables=[energy],
         prop_keys=None
