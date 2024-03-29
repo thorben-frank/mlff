@@ -6,4 +6,5 @@ from .dataloader_sparse_ase import AseDataLoaderSparse
 from .dataloader_sparse_npz import NpzDataLoaderSparse
 from .dataloader_sparse_spice import SpiceDataLoaderSparse
 from .dataloader_sparse_tfrecord import TFRecordDataLoaderSparse
+from .data_loader_qcml import QCMLLoaderSparse
 from . import transformations
