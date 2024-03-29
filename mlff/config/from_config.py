@@ -14,6 +14,7 @@ from typing import Sequence
 import wandb
 import yaml
 import logging
+import os
 from functools import partial, partialmethod
 
 logging.MLFF = 35
@@ -155,6 +156,20 @@ def run_training(config: config_dict.ConfigDict, model: str = 'so3krates'):
                 f'Loader assumes that SPICE is in hdf5 format. Found {data_filepath.suffix} as'
                 f'suffix.')
         loader = data.SpiceDataLoaderSparse(input_file=data_filepath)
+    elif data_filepath.is_dir():
+        tf_record_present = len([1 for x in os.scandir(data_filepath) if Path(x).suffix[:9] == '.tfrecord']) > 0
+        if tf_record_present:
+            loader = data.TFRecordDataLoaderSparse(
+                input_file=data_filepath,
+                # We need to do the inverse transforms, since in config everything is in ASE default units.
+                min_distance_filter=config.data.filter.min_distance / length_unit,
+                max_force_filter=config.data.filter.max_force / energy_unit * length_unit,
+            )
+        else:
+            raise ValueError(
+                f"Specifying a directory for `data_filepath` is only supported for directories that contain .tfrecord "
+                f"files. No .tfrecord files found at {data_filepath}."
+            )
     else:
         loader = data.AseDataLoaderSparse(input_file=data_filepath)
 
@@ -174,7 +189,8 @@ def run_training(config: config_dict.ConfigDict, model: str = 'so3krates'):
     all_indices = np.arange(num_data)
     numpy_rng.shuffle(all_indices)
     # We sort the indices after extracting them from the shuffled list, since we iteratively load the data with the
-    # data loader.
+    # data loader. This will ensure that the index i at the n-th entry in training_and_validation_indices corresponds
+    # to the n-th entry in training_and_validation_data which is the i-th data entry in the loaded data.
     training_and_validation_indices = np.sort(all_indices[:(num_train+num_valid)])
     test_indices = np.sort(all_indices[(num_train+num_valid):])
 
@@ -191,8 +207,13 @@ def run_training(config: config_dict.ConfigDict, model: str = 'so3krates'):
     internal_train_indices = split_indices[:num_train]
     internal_validation_indices = split_indices[num_train:]
 
-    training_data = [training_and_validation_data[i_train] for i_train in internal_train_indices]
-    validation_data = [training_and_validation_data[i_val] for i_val in internal_validation_indices]
+    # Entries are None when filtered out.
+    training_data = [
+        training_and_validation_data[i_train] for i_train in internal_train_indices if training_and_validation_data[i_train] is not None
+    ]
+    validation_data = [
+        training_and_validation_data[i_val] for i_val in internal_validation_indices if training_and_validation_data[i_val] is not None
+    ]
     del training_and_validation_data
 
     assert len(internal_train_indices) == num_train
@@ -338,6 +359,9 @@ def run_evaluation(
     Returns:
         The metrics on `testing_targets`.
     """
+    energy_unit = eval(config.data.energy_unit)
+    length_unit = eval(config.data.length_unit)
+
     data_filepath = config.data.filepath
     data_filepath = Path(data_filepath).expanduser().absolute().resolve()
 
@@ -352,13 +376,25 @@ def run_evaluation(
                 f'Loader assumes that SPICE is in hdf5 format. Found {data_filepath.suffix} as'
                 f'suffix.')
         loader = data.SpiceDataLoaderSparse(input_file=data_filepath)
+    elif data_filepath.is_dir():
+        tf_record_present = len([1 for x in os.scandir(data_filepath) if Path(x).suffix[:9] == '.tfrecord']) > 0
+        if tf_record_present:
+            loader = data.TFRecordDataLoaderSparse(
+                input_file=data_filepath,
+                # We need to do the inverse transforms, since in config everything is in ASE default units.
+                min_distance_filter=config.data.filter.min_distance / length_unit,
+                max_force_filter=config.data.filter.max_force / energy_unit * length_unit,
+            )
+        else:
+            raise ValueError(
+                f"Specifying a directory for `data_filepath` is only supported for directories that contain .tfrecord "
+                f"files. No .tfrecord files found at {data_filepath}."
+            )
     else:
         loader = data.AseDataLoaderSparse(input_file=data_filepath)
 
-    energy_unit = eval(config.data.energy_unit)
-    length_unit = eval(config.data.length_unit)
-
     eval_data, data_stats = loader.load(
+        # We need to do the inverse transforms, since in config everything is in ASE default units.
         cutoff=config.model.cutoff / length_unit, pick_idx=pick_idx
     )
 

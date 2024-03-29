@@ -2,10 +2,13 @@ workdir: first_experiment  # Working directory. Checkpoints and hyperparameters 
 data:
   filepath: null  # Path to the data file. Either ASE digestible or .npz with appropriate column names are supported.
   energy_unit: eV  # Energy unit.
-  length_unit: Angstrom  # Length unit.
+  length_unit: Angstrom  # Length unit. Is converted to the data set units internally.
   shift_mode: null  # Options are null, mean, custom.
   energy_shifts: null  # Energy shifts to subtract.
   split_seed: 0  # Seed using for splitting the data into training, validation and test.
+  filter:
+    min_distance: 0.75  # Minimal allowed distance in Angstrom. Is converted to the data set units internally.
+    max_force: 25.  # Maximal allowed force component in eV/Angstrom. Is converted to the data set units internally.
 model:
   num_layers: 2  # Number of message passing layers.
   num_features: 128  # Number of invariant features.

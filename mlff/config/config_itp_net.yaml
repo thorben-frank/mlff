@@ -6,6 +6,9 @@ data:
   shift_mode: null  # Options are null, mean, custom.
   energy_shifts: null  # Energy shifts to subtract.
   split_seed: 0  # Seed using for splitting the data into training, validation and test.
+  filter:
+    min_distance: 0.75  # Minimal allowed distance in Angstrom. Is converted to the data set units internally.
+    max_force: 25.  # Maximal allowed force component in eV/Angstrom. Is converted to the data set units internally.
 model:
   num_features: 128  # Number of invariant features.
   radial_basis_fn: reciprocal_bernstein  # Radial basis function to use.
