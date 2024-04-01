@@ -156,18 +156,18 @@ def run_training(config: config_dict.ConfigDict, model: str = 'so3krates'):
                 f'Loader assumes that SPICE is in hdf5 format. Found {data_filepath.suffix} as'
                 f'suffix.')
         loader = data.SpiceDataLoaderSparse(input_file=data_filepath)
-    elif data_filepath.stem[:4].lower() == 'qcml':
-        logging.mlff(f'Found QCML dataset at {data_filepath}.')
-        if data_filepath.suffix != '.hdf5':
-            raise ValueError(
-                f'Loader assumes that QCML is in hdf5 format. Found {data_filepath.suffix} as'
-                f'suffix.')
-        loader = data.QCMLLoaderSparse(
-            input_file=data_filepath,
-            # We need to do the inverse transforms, since in config everything is in ASE default units.
-            min_distance_filter=config.data.filter.min_distance / length_unit,
-            max_force_filter=config.data.filter.max_force / energy_unit * length_unit,
-        )
+    # elif data_filepath.stem[:4].lower() == 'qcml':
+    #     logging.mlff(f'Found QCML dataset at {data_filepath}.')
+    #     if data_filepath.suffix != '.hdf5':
+    #         raise ValueError(
+    #             f'Loader assumes that QCML is in hdf5 format. Found {data_filepath.suffix} as'
+    #             f'suffix.')
+    #     loader = data.QCMLLoaderSparse(
+    #         input_file=data_filepath,
+    #         # We need to do the inverse transforms, since in config everything is in ASE default units.
+    #         min_distance_filter=config.data.filter.min_distance / length_unit,
+    #         max_force_filter=config.data.filter.max_force / energy_unit * length_unit,
+    #     )
     elif data_filepath.is_dir():
         tf_record_present = len([1 for x in os.scandir(data_filepath) if Path(x).suffix[:9] == '.tfrecord']) > 0
         if tf_record_present:
@@ -388,18 +388,18 @@ def run_evaluation(
                 f'Loader assumes that SPICE is in hdf5 format. Found {data_filepath.suffix} as'
                 f'suffix.')
         loader = data.SpiceDataLoaderSparse(input_file=data_filepath)
-    elif data_filepath.stem[:4].lower() == 'qcml':
-        logging.mlff(f'Found QCML dataset at {data_filepath}.')
-        if data_filepath.suffix != '.hdf5':
-            raise ValueError(
-                f'Loader assumes that QCML is in hdf5 format. Found {data_filepath.suffix} as'
-                f'suffix.')
-        loader = data.QCMLLoaderSparse(
-            input_file=data_filepath,
-            # We need to do the inverse transforms, since in config everything is in ASE default units.
-            min_distance_filter=config.data.filter.min_distance / length_unit,
-            max_force_filter=config.data.filter.max_force / energy_unit * length_unit,
-        )
+    # elif data_filepath.stem[:4].lower() == 'qcml':
+    #     logging.mlff(f'Found QCML dataset at {data_filepath}.')
+    #     if data_filepath.suffix != '.hdf5':
+    #         raise ValueError(
+    #             f'Loader assumes that QCML is in hdf5 format. Found {data_filepath.suffix} as'
+    #             f'suffix.')
+    #     loader = data.QCMLLoaderSparse(
+    #         input_file=data_filepath,
+    #         # We need to do the inverse transforms, since in config everything is in ASE default units.
+    #         min_distance_filter=config.data.filter.min_distance / length_unit,
+    #         max_force_filter=config.data.filter.max_force / energy_unit * length_unit,
+    #     )
     elif data_filepath.is_dir():
         tf_record_present = len([1 for x in os.scandir(data_filepath) if Path(x).suffix[:9] == '.tfrecord']) > 0
         if tf_record_present:

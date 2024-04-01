@@ -63,40 +63,42 @@ class QCMLLoaderSparse:
         for k in tqdm(data):
             if keep(i):
                 positions = np.array(data[k]['positions'])
-                atomic_numbers = data[k]['atomic_numbers']
+                atomic_numbers = np.array(data[k]['atomic_numbers'])
                 forces = data[k]['forces']
                 energy = data[k]['energy']
                 charge = data[k]['charge']
                 multiplicity = data[k]['multiplicity']
-
-                senders, receivers, minimal_distance = compute_senders_and_receivers_np(
-                    positions,
-                    cutoff=cutoff
-                )
-
-                if (
-                        minimal_distance < self.min_distance_filter or
-                        np.abs(forces).max() > self.max_force_filter
-                ):
-                    g = None
-                else:
-                    g = jraph.GraphsTuple(
-                        n_node=np.array([len(atomic_numbers)]),
-                        n_edge=np.array([len(receivers)]),
-                        globals=dict(
-                            energy=np.array(energy).reshape(-1),
-                            total_charge=np.array(charge).reshape(-1),
-                            num_unpaired_electrons=np.array(multiplicity).reshape(-1) - 1
-                        ),
-                        nodes=dict(
-                            atomic_numbers=np.array(atomic_numbers).reshape(-1).astype(np.int16),
-                            positions=positions,
-                            forces=np.array(forces)
-                        ),
-                        edges=dict(cell=None, cell_offsets=None),
-                        receivers=np.array(senders),  # opposite convention in mlff
-                        senders=np.array(receivers)
+                if len(atomic_numbers) > 1:
+                    senders, receivers, minimal_distance = compute_senders_and_receivers_np(
+                        positions,
+                        cutoff=cutoff
                     )
+
+                    if (
+                            minimal_distance < self.min_distance_filter or
+                            np.abs(forces).max() > self.max_force_filter
+                    ):
+                        g = None
+                    else:
+                        g = jraph.GraphsTuple(
+                            n_node=np.array([len(atomic_numbers)]),
+                            n_edge=np.array([len(receivers)]),
+                            globals=dict(
+                                energy=np.array(energy).reshape(-1),
+                                total_charge=np.array(charge).reshape(-1),
+                                num_unpaired_electrons=np.array(multiplicity).reshape(-1) - 1
+                            ),
+                            nodes=dict(
+                                atomic_numbers=atomic_numbers.reshape(-1).astype(np.int16),
+                                positions=positions,
+                                forces=np.array(forces)
+                            ),
+                            edges=dict(cell=None, cell_offsets=None),
+                            receivers=np.array(senders),  # opposite convention in mlff
+                            senders=np.array(receivers)
+                        )
+                else:
+                    g = None
 
                 loaded_data += [g]
                 if g is not None:
