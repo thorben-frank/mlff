@@ -4,6 +4,22 @@ import numpy as np
 from typing import Dict, Sequence
 
 
+def unit_conversion_graph(
+        g,
+        energy_unit: float = units.eV,
+        length_unit: float = units.Angstrom
+):
+    _energy_unit = np.asarray(energy_unit)
+    _length_unit = np.asarray(length_unit)
+
+    g.globals['energy'] = g.globals.get('energy') * _energy_unit
+    g.nodes['forces'] = g.nodes.get('forces') * _energy_unit / _length_unit
+    g.nodes['positions'] = g.nodes.get('positions') * _length_unit
+    if g.globals.get('stress') is not None:
+        raise NotImplementedError('Unit conversion for stress not implemented yet.')
+    return g
+
+
 def unit_conversion(
         x: Sequence[jraph.GraphsTuple],
         energy_unit: float = units.eV,

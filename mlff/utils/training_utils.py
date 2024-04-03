@@ -386,6 +386,196 @@ def fit(
     ckpt_mngr.wait_until_finished()
 
 
+def fit_from_iterator(
+        model,
+        optimizer,
+        loss_fn,
+        graph_to_batch_fn,
+        training_iterator,
+        validation_iterator,
+        batch_max_num_nodes,
+        batch_max_num_edges,
+        batch_max_num_graphs,
+        params=None,
+        ckpt_dir: str = None,
+        ckpt_manager_options: dict = None,
+        eval_every_num_steps: int = 1000,
+        allow_restart: bool = False,
+        training_seed: int = 0,
+        model_seed: int = 0,
+        use_wandb: bool = True,
+        log_gradient_values: bool = False
+):
+    """
+    Fit model.
+
+    Args:
+        model: flax module.
+        optimizer: optax optimizer.
+        loss_fn (Callable): The loss function. Gradient is computed wrt to this function.
+        graph_to_batch_fn (Callable): Function that takes a batched graph and returns a batch for the loss_fn.
+        training_iterator (): Iterator yielding jraph.GraphTuples.
+        validation_iterator (): Iterator yielding jraph.GraphTuples.
+        batch_max_num_nodes (int): Maximal number of nodes per batch.
+        batch_max_num_edges (int): Maximal number of edges per batch.
+        batch_max_num_graphs (int): Maximal number of graphs per batch.
+        params: Parameters to start from during training. If not given, either new parameters are initialized randomly
+            or loaded from ckpt_dir if the checkpoint already exists and `allow_restart=True`.
+        ckpt_dir (str): Checkpoint path.
+        ckpt_manager_options (dict): Checkpoint manager options.
+        eval_every_num_steps (int): Evaluate the metrics every num-th step
+        allow_restart: Restarts from existing checkpoints are allowed.
+        training_seed (int): Random seed for shuffling of training data.
+        model_seed (int): Random seed for model initialization.
+        use_wandb (bool): Log statistics to WeightsAndBias. If true, wandb.init() must be called before call to fit().
+        log_gradient_values (bool): Gradient values for each set of weights is logged.
+    Returns:
+
+    """
+    # numpy_rng = np.random.RandomState(seed=training_seed)
+    jax_rng = jax.random.PRNGKey(seed=model_seed)
+
+    # Create checkpoint directory.
+    ckpt_dir = Path(ckpt_dir).expanduser().resolve()
+    ckpt_dir.mkdir(exist_ok=True)
+
+    # Create orbax CheckpointManager.
+    if ckpt_manager_options is None:
+        ckpt_manager_options = {'max_to_keep': 1}
+
+    options = checkpoint.CheckpointManagerOptions(
+        best_fn=lambda u: u['loss'],
+        best_mode='min',
+        step_prefix='ckpt',
+        **ckpt_manager_options
+    )
+
+    ckpt_mngr = checkpoint.CheckpointManager(
+        ckpt_dir,
+        item_names=('params', ),
+        options=options
+    )
+
+    training_step_fn = make_training_step_fn(optimizer, loss_fn, log_gradient_values)
+    validation_step_fn = make_validation_step_fn(loss_fn)
+
+    processed_graphs = 0
+    processed_nodes = 0
+    step = 0
+
+    opt_state = None
+
+    # Create batched graphs from iterator over single graphs.
+    training_iterator_batched = jraph.dynamically_batch(
+        training_iterator.as_numpy_iterator(),
+        n_node=batch_max_num_nodes,
+        n_edge=batch_max_num_edges,
+        n_graph=batch_max_num_graphs
+    )
+
+    # Start iteration over batched graphs.
+    for graph_batch_training in training_iterator_batched:
+        batch_training = graph_to_batch_fn(graph_batch_training)
+        processed_graphs += batch_training['num_of_non_padded_graphs']
+        processed_nodes += batch_max_num_nodes - jraph.get_number_of_padding_with_graphs_nodes(graph_batch_training)
+        # Training data is numpy arrays so we now transform them to jax.numpy arrays.
+        batch_training = jax.tree_map(jnp.array, batch_training)
+
+        # If params are None (in the first step), initialize the parameters or load from existing checkpoint.
+        if params is None:
+            # Check if checkpoint already exists.
+            latest_step = ckpt_mngr.latest_step()
+            if latest_step is not None:
+                if allow_restart:
+                    params = ckpt_mngr.restore(
+                        latest_step,
+                        args=checkpoint.args.Composite(params=checkpoint.args.StandardRestore())
+                    )['params']
+                    step += latest_step
+                    print(f'Re-start training from {latest_step}.')
+                else:
+                    raise RuntimeError(f'{ckpt_dir} already exists at step {latest_step}. If you want to re-start '
+                                       f'training, set `allow_restart=True`.')
+            else:
+                params = model.init(jax_rng, batch_training)
+
+        # If optimizer state is None (in the first step), initialize from the parameter pyTree.
+        if opt_state is None:
+            opt_state = optimizer.init(params)
+
+        # Make sure parameters and opt_state are set.
+        assert params is not None
+        assert opt_state is not None
+
+        params, opt_state, train_metrics = training_step_fn(params, opt_state, batch_training)
+        step += 1
+        train_metrics_np = jax.device_get(train_metrics)
+
+        # Log training metrics.
+        if use_wandb:
+            wandb.log(
+                {f'train_{k}': v for (k, v) in train_metrics_np.items()},
+                step=step
+            )
+
+        # Start validation process.
+        if step % eval_every_num_steps == 0:
+            validation_iterator_batched = jraph.dynamically_batch(
+                validation_iterator.as_numpy_iterator(),
+                n_node=batch_max_num_nodes,
+                n_edge=batch_max_num_edges,
+                n_graph=batch_max_num_graphs
+            )
+
+            # Start iteration over validation batches.
+            eval_metrics: Any = None
+            eval_collection: Any = None
+            for graph_batch_validation in validation_iterator_batched:
+                batch_validation = graph_to_batch_fn(graph_batch_validation)
+                batch_validation = jax.tree_map(jnp.array, batch_validation)
+
+                eval_out = validation_step_fn(
+                    params,
+                    batch_validation
+                )
+                # The metrics are created dynamically during the first evaluation batch, since we aim to support
+                # all kinds of targets beyond energies and forces at some point.
+                if eval_collection is None:
+                    eval_collection = clu_metrics.Collection.create(
+                        **{k: clu_metrics.Average.from_output(f'{k}') for k in eval_out.keys()})
+
+                eval_metrics = (
+                    eval_collection.single_from_model_output(**eval_out)
+                    if eval_metrics is None
+                    else eval_metrics.merge(eval_collection.single_from_model_output(**eval_out))
+                )
+
+            eval_metrics = eval_metrics.compute()
+
+            # Convert to dict to log with weights and bias.
+            eval_metrics = {
+                f'eval_{k}': float(v) for k, v in eval_metrics.items()
+            }
+
+            # Save checkpoint.
+            ckpt_mngr.save(
+                step,
+                args=checkpoint.args.Composite(params=checkpoint.args.StandardSave(params)),
+                metrics={'loss': eval_metrics['eval_loss']}
+            )
+
+            # Log to weights and bias.
+            if use_wandb:
+                wandb.log(
+                    eval_metrics,
+                    step=step
+                )
+        # Finished validation process.
+
+    # Wait until checkpoint manager completes all save operations.
+    ckpt_mngr.wait_until_finished()
+
+
 def make_optimizer(
         name: str = 'adam',
         learning_rate: float = 1e-3,

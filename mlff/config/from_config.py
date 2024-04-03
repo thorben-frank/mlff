@@ -141,11 +141,17 @@ def run_training(config: config_dict.ConfigDict, model: str = 'so3krates'):
     Returns:
 
     """
-    energy_unit = eval(config.data.energy_unit)
-    length_unit = eval(config.data.length_unit)
+    workdir = Path(config.workdir).expanduser().resolve()
+    workdir.mkdir(exist_ok=config.training.allow_restart)
 
     data_filepath = config.data.filepath
     data_filepath = Path(data_filepath).expanduser().resolve()
+
+    energy_unit = eval(config.data.energy_unit)
+    length_unit = eval(config.data.length_unit)
+
+    # TFDSDataSets need to be processed in a special manner.
+    tf_record_present = False
 
     if data_filepath.suffix == '.npz':
         loader = data.NpzDataLoaderSparse(input_file=data_filepath)
@@ -171,12 +177,18 @@ def run_training(config: config_dict.ConfigDict, model: str = 'so3krates'):
     elif data_filepath.is_dir():
         tf_record_present = len([1 for x in os.scandir(data_filepath) if Path(x).suffix[:9] == '.tfrecord']) > 0
         if tf_record_present:
-            loader = data.TFRecordDataLoaderSparse(
+            loader = data.TFDSDataLoaderSparse(
                 input_file=data_filepath,
-                # We need to do the inverse transforms, since in config everything is in ASE default units.
-                min_distance_filter=config.data.filter.min_distance / length_unit,
-                max_force_filter=config.data.filter.max_force / energy_unit * length_unit,
+                split='train',
+                max_force_filter=config.data.filter.max_force / energy_unit * length_unit
             )
+
+            # loader = data.TFRecordDataLoaderSparse(
+            #     input_file=data_filepath,
+            #     # We need to do the inverse transforms, since in config everything is in ASE default units.
+            #     min_distance_filter=config.data.filter.min_distance / length_unit,
+            #     max_force_filter=config.data.filter.max_force / energy_unit * length_unit,
+            # )
         else:
             raise ValueError(
                 f"Specifying a directory for `data_filepath` is only supported for directories that contain .tfrecord "
@@ -195,46 +207,81 @@ def run_training(config: config_dict.ConfigDict, model: str = 'so3krates'):
                          f" in {data_filepath}.")
 
     split_seed = config.data.split_seed
-    numpy_rng = np.random.RandomState(split_seed)
+    if not tf_record_present:
+        numpy_rng = np.random.RandomState(split_seed)
 
-    # Choose the data points that are used training (training + validation data).
-    all_indices = np.arange(num_data)
-    numpy_rng.shuffle(all_indices)
-    # We sort the indices after extracting them from the shuffled list, since we iteratively load the data with the
-    # data loader. This will ensure that the index i at the n-th entry in training_and_validation_indices corresponds
-    # to the n-th entry in training_and_validation_data which is the i-th data entry in the loaded data.
-    training_and_validation_indices = np.sort(all_indices[:(num_train+num_valid)])
-    test_indices = np.sort(all_indices[(num_train+num_valid):])
+        # Choose the data points that are used training (training + validation data).
+        all_indices = np.arange(num_data)
+        numpy_rng.shuffle(all_indices)
+        # We sort the indices after extracting them from the shuffled list, since we iteratively load the data with the
+        # data loader. This will ensure that the index i at the n-th entry in training_and_validation_indices
+        # corresponds to the n-th entry in training_and_validation_data which is the i-th data entry in the loaded data.
+        training_and_validation_indices = np.sort(all_indices[:(num_train+num_valid)])
+        test_indices = np.sort(all_indices[(num_train+num_valid):])
 
-    # Cutoff is in Angstrom, so we have to divide the cutoff by the length unit.
-    training_and_validation_data, data_stats = loader.load(
-        cutoff=config.model.cutoff / length_unit,
-        pick_idx=training_and_validation_indices
-    )
-    # Since the training and validation indices are sorted, the index i at the n-th entry in
-    # training_and_validation_indices corresponds to the n-th entry in training_and_validation_data which is the i-th
-    # data entry in the loaded data.
-    split_indices = np.arange(num_train + num_valid)
-    numpy_rng.shuffle(split_indices)
-    internal_train_indices = split_indices[:num_train]
-    internal_validation_indices = split_indices[num_train:]
+        # Cutoff is in Angstrom, so we have to divide the cutoff by the length unit.
+        training_and_validation_data, data_stats = loader.load(
+            cutoff=config.model.cutoff / length_unit,
+            pick_idx=training_and_validation_indices
+        )
+        # Since the training and validation indices are sorted, the index i at the n-th entry in
+        # training_and_validation_indices corresponds to the n-th entry in training_and_validation_data which is the
+        # i-th data entry in the loaded data.
+        split_indices = np.arange(num_train + num_valid)
+        numpy_rng.shuffle(split_indices)
+        internal_train_indices = split_indices[:num_train]
+        internal_validation_indices = split_indices[num_train:]
 
-    # Entries are None when filtered out.
-    training_data = [
-        training_and_validation_data[i_train] for i_train in internal_train_indices if training_and_validation_data[i_train] is not None
-    ]
-    validation_data = [
-        training_and_validation_data[i_val] for i_val in internal_validation_indices if training_and_validation_data[i_val] is not None
-    ]
-    del training_and_validation_data
+        # Entries are None when filtered out.
+        training_data = [
+            training_and_validation_data[i_train] for i_train in internal_train_indices if training_and_validation_data[i_train] is not None
+        ]
+        validation_data = [
+            training_and_validation_data[i_val] for i_val in internal_validation_indices if training_and_validation_data[i_val] is not None
+        ]
+        del training_and_validation_data
 
-    assert len(internal_train_indices) == num_train
-    assert len(internal_validation_indices) == num_valid
+        assert len(internal_train_indices) == num_train
+        assert len(internal_validation_indices) == num_valid
+
+        # internal_*_indices only run from [0, num_train+num_valid]. To get their original position in the full data set
+        # we collect them from training_and_validation_indices. Since we will load training and validation data as
+        # training_and_validation_data[internal_*_indices], we need to make sure that training_and_validation_indices
+        # and training_and_validation_data have the same order in the sense of referencing indices. This is achieved by
+        # sorting the indices as described above.
+        train_indices = training_and_validation_indices[internal_train_indices]
+        validation_indices = training_and_validation_indices[internal_validation_indices]
+
+        assert len(train_indices) == num_train
+        assert len(validation_indices) == num_valid
+
+        # Save the splits.
+        with open(workdir / 'data_splits.json', 'w') as fp:
+            j = dict(
+                training=train_indices.tolist(),
+                validation=validation_indices.tolist(),
+                test=test_indices.tolist()
+            )
+            json.dump(j, fp)
+    else:
+        training_data, validation_data = loader.load(
+            cutoff=config.model.cutoff / length_unit,
+            num_train=num_train,
+            num_valid=num_valid
+        )
+        # Save the splits.
+        with open(workdir / 'data_splits.json', 'w') as fp:
+            j = dict(
+                training='tfds',
+                validation='tfds',
+                test='tfds',
+            )
+            json.dump(j, fp)
 
     if config.data.shift_mode == 'mean':
         config.data.energy_shifts = config_dict.placeholder(dict)
-        energy_mean = data.transformations.calculate_energy_mean(training_data) * energy_unit
-        num_nodes = data.transformations.calculate_average_number_of_nodes(training_data)
+        energy_mean = np.array(data.transformations.calculate_energy_mean(training_data)).item() * energy_unit
+        num_nodes = np.array(data.transformations.calculate_average_number_of_nodes(training_data)).item()
         energy_shifts = {str(a): float(energy_mean / num_nodes) for a in range(119)}
         config.data.energy_shifts = energy_shifts
     elif config.data.shift_mode == 'custom':
@@ -244,29 +291,88 @@ def run_training(config: config_dict.ConfigDict, model: str = 'so3krates'):
         config.data.energy_shifts = {str(a): 0. for a in range(119)}
 
     # If messages are normalized by the average number of neighbors, we need to calculate this quantity from the
-    # training data.
+    # training data or read it from the config when provided.
     if config.model.message_normalization == 'avg_num_neighbors':
-        config.data.avg_num_neighbors = config_dict.placeholder(float)
-        avg_num_neighbors = data.transformations.calculate_average_number_of_neighbors(training_data)
-        config.data.avg_num_neighbors = np.array(avg_num_neighbors).item()
+        try:
+            config.data.avg_num_neighbors
+        except AttributeError:
+            logging.warning(
+                'Passing a config without data.avg_num_neighbors is deprecated and will raise an error in the future.'
+                'Add data.avg_num_neighbors: null to the config to disable the warning. For now, we automatically set '
+                'data.avg_num_neighbors: null.'
+            )
+            config.data.avg_num_neighbors = config_dict.placeholder(float)
+            config.data.avg_num_neighbors = None
 
-    training_data = list(data.transformations.subtract_atomic_energy_shifts(
-        data.transformations.unit_conversion(
-            training_data,
-            energy_unit=energy_unit,
-            length_unit=length_unit
-        ),
-        atomic_energy_shifts={int(k): v for (k, v) in config.data.energy_shifts.items()}
-    ))
+        if config.data.avg_num_neighbors is not None:
+            logging.mlff(
+                f'Read average number of neighbors = {config.data.avg_num_neighbors} from config.'
+            )
+        else:
+            logging.mlff('Calculate average number of neighbors ...')
+            avg_num_neighbors = np.array(data.transformations.calculate_average_number_of_neighbors(training_data))
+            config.data.avg_num_neighbors = np.array(avg_num_neighbors).item()
+            logging.mlff('... done.')
 
-    validation_data = list(data.transformations.subtract_atomic_energy_shifts(
-        data.transformations.unit_conversion(
-            validation_data,
-            energy_unit=energy_unit,
-            length_unit=length_unit
-        ),
-        atomic_energy_shifts={int(k): v for (k, v) in config.data.energy_shifts.items()}
-    ))
+    if not tf_record_present:
+        training_data = list(data.transformations.subtract_atomic_energy_shifts(
+            data.transformations.unit_conversion(
+                training_data,
+                energy_unit=energy_unit,
+                length_unit=length_unit
+            ),
+            atomic_energy_shifts={int(k): v for (k, v) in config.data.energy_shifts.items()}
+        ))
+
+        validation_data = list(data.transformations.subtract_atomic_energy_shifts(
+            data.transformations.unit_conversion(
+                validation_data,
+                energy_unit=energy_unit,
+                length_unit=length_unit
+            ),
+            atomic_energy_shifts={int(k): v for (k, v) in config.data.energy_shifts.items()}
+        ))
+    else:
+        if config.data.shift_mode in ['custom', 'mean']:
+            raise NotImplementedError(
+                'For TFDSDataSets, energy shifting is not supported yet.'
+            )
+
+        # Convert the units.
+        training_data = training_data.map(
+            lambda graph: data.transformations.unit_conversion_graph(
+                graph,
+                energy_unit=energy_unit,
+                length_unit=length_unit
+            )
+        )
+        validation_data = validation_data.map(
+            lambda graph: data.transformations.unit_conversion_graph(
+                graph,
+                energy_unit=energy_unit,
+                length_unit=length_unit
+            )
+        )
+        #
+        # # Subtract energy shifts.
+        # train_ds = train_ds.map(
+        #     lambda graph: subtract_atomic_energy_shift_graph(
+        #         graph,
+        #         atomic_energy_shifts=np.zeros((119,), dtype=float)
+        #     )
+        # )
+        # valid_ds = valid_ds.map(
+        #     lambda graph: subtract_atomic_energy_shift_graph(
+        #         graph,
+        #         atomic_energy_shifts=np.zeros((119,), dtype=float)
+        #     )
+        # )
+
+        training_data = training_data.shuffle(
+            buffer_size=10_000,
+            reshuffle_each_iteration=True,
+            seed=config.training.training_seed
+        ).repeat(config.training.num_epochs)
 
     opt = make_optimizer_from_config(config)
     if model == 'so3krates':
@@ -283,34 +389,20 @@ def run_training(config: config_dict.ConfigDict, model: str = 'so3krates'):
         weights=config.training.loss_weights
     )
 
-    workdir = Path(config.workdir).expanduser().resolve()
-    workdir.mkdir(exist_ok=config.training.allow_restart)
-
     if config.training.batch_max_num_nodes is None:
         assert config.training.batch_max_num_edges is None
+        if tf_record_present:
+            raise ValueError(
+                'When reading TFDSDataSet, max_num_nodes and max_num_edges can not be auto-'
+                'determined. Please set the corresponding values in the config file via '
+                'training.batch_max_num_nodes and training.batch_max_num_edges.'
+            )
 
         batch_max_num_nodes = data_stats['max_num_of_nodes'] * (config.training.batch_max_num_graphs - 1) + 1
         batch_max_num_edges = data_stats['max_num_of_edges'] * (config.training.batch_max_num_graphs - 1) + 1
 
         config.training.batch_max_num_nodes = batch_max_num_nodes
         config.training.batch_max_num_edges = batch_max_num_edges
-
-    # internal_*_indices only run from [0, num_train+num_valid]. To get their original position in the full data set
-    # we collect them from training_and_validation_indices. Since we will load training and validation data as
-    # training_and_validation_data[internal_*_indices], we need to make sure that training_and_validation_indices
-    # and training_and_validation_data have the same order in the sense of referencing indices. This is achieved by
-    # sorting the indices as described above.
-    train_indices = training_and_validation_indices[internal_train_indices]
-    validation_indices = training_and_validation_indices[internal_validation_indices]
-    assert len(train_indices) == num_train
-    assert len(validation_indices) == num_valid
-    with open(workdir / 'data_splits.json', 'w') as fp:
-        j = dict(
-            training=train_indices.tolist(),
-            validation=validation_indices.tolist(),
-            test=test_indices.tolist()
-        )
-        json.dump(j, fp)
 
     with open(workdir / 'hyperparameters.json', 'w') as fp:
         # json_config = config.to_dict()
@@ -323,24 +415,43 @@ def run_training(config: config_dict.ConfigDict, model: str = 'so3krates'):
 
     wandb.init(config=config.to_dict(), **config.training.wandb_init_args)
     logging.mlff('Training is starting!')
-    training_utils.fit(
-        model=net,
-        optimizer=opt,
-        loss_fn=loss_fn,
-        graph_to_batch_fn=jraph_utils.graph_to_batch_fn,
-        batch_max_num_edges=config.training.batch_max_num_edges,
-        batch_max_num_nodes=config.training.batch_max_num_nodes,
-        batch_max_num_graphs=config.training.batch_max_num_graphs,
-        training_data=training_data,
-        validation_data=validation_data,
-        ckpt_dir=workdir / 'checkpoints',
-        eval_every_num_steps=config.training.eval_every_num_steps,
-        allow_restart=config.training.allow_restart,
-        num_epochs=config.training.num_epochs,
-        training_seed=config.training.training_seed,
-        model_seed=config.training.model_seed,
-        log_gradient_values=config.training.log_gradient_values
-    )
+    if not tf_record_present:
+        training_utils.fit(
+            model=net,
+            optimizer=opt,
+            loss_fn=loss_fn,
+            graph_to_batch_fn=jraph_utils.graph_to_batch_fn,
+            batch_max_num_edges=config.training.batch_max_num_edges,
+            batch_max_num_nodes=config.training.batch_max_num_nodes,
+            batch_max_num_graphs=config.training.batch_max_num_graphs,
+            training_data=training_data,
+            validation_data=validation_data,
+            ckpt_dir=workdir / 'checkpoints',
+            eval_every_num_steps=config.training.eval_every_num_steps,
+            allow_restart=config.training.allow_restart,
+            num_epochs=config.training.num_epochs,
+            training_seed=config.training.training_seed,
+            model_seed=config.training.model_seed,
+            log_gradient_values=config.training.log_gradient_values
+        )
+    else:
+        training_utils.fit_from_iterator(
+            model=net,
+            optimizer=opt,
+            loss_fn=loss_fn,
+            graph_to_batch_fn=jraph_utils.graph_to_batch_fn,
+            batch_max_num_edges=config.training.batch_max_num_edges,
+            batch_max_num_nodes=config.training.batch_max_num_nodes,
+            batch_max_num_graphs=config.training.batch_max_num_graphs,
+            training_iterator=training_data,
+            validation_iterator=validation_data,
+            ckpt_dir=workdir / 'checkpoints',
+            eval_every_num_steps=config.training.eval_every_num_steps,
+            allow_restart=config.training.allow_restart,
+            training_seed=config.training.training_seed,
+            model_seed=config.training.model_seed,
+            log_gradient_values=config.training.log_gradient_values
+        )
     logging.mlff('Training has finished!')
 
 
