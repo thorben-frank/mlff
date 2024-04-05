@@ -41,6 +41,7 @@ model:
   input_convention: positions  # Input convention.
 optimizer:
   name: adam  # Name of the optimizer. See https://optax.readthedocs.io/en/latest/api.html#common-optimizers for available ones.
+  optimizer_args: null
   learning_rate: 0.001  # Learning rate to use.
   learning_rate_schedule: exponential_decay  # Which learning rate schedule to use. See https://optax.readthedocs.io/en/latest/api.html#optimizer-schedules for available ones.
   learning_rate_schedule_args:  # Arguments passed to the learning rate schedule. See https://optax.readthedocs.io/en/latest/api.html#optimizer-schedules.

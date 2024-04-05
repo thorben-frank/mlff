@@ -124,6 +124,7 @@ def make_optimizer_from_config(config: config_dict.ConfigDict = None):
         opt_config = config.optimizer
         return training_utils.make_optimizer(
             name=opt_config.name,
+            optimizer_args=opt_config.optimizer_args if opt_config.optimizer_args is not None else dict(),
             learning_rate_schedule=opt_config.learning_rate_schedule,
             learning_rate=opt_config.learning_rate,
             learning_rate_schedule_args=opt_config.learning_rate_schedule_args if opt_config.learning_rate_schedule_args is not None else dict(),

@@ -130,12 +130,14 @@ def test_apply(
 @pytest.mark.parametrize("_ipt_num_features", [None, 13])
 @pytest.mark.parametrize("_itp_growth_rate", [14])
 @pytest.mark.parametrize("_itp_dense_final_concatenation", [True])
+@pytest.mark.parametrize("_include_pseudotensors", [False, True])
 def test_apply_dense(
         ipt_connectivity,
         feature_collection_over_layers,
         _ipt_num_features,
         _itp_growth_rate,
-        _itp_dense_final_concatenation
+        _itp_dense_final_concatenation,
+        _include_pseudotensors
 ):
     layer = ITPLayer(
         mp_max_degree=2,
@@ -152,7 +154,7 @@ def test_apply_dense(
         itp_dense_final_concatenation=_itp_dense_final_concatenation,
         itp_connectivity=ipt_connectivity,
         feature_collection_over_layers=feature_collection_over_layers,
-        include_pseudotensors=False
+        include_pseudotensors=_include_pseudotensors
     )
 
     params = layer.init(

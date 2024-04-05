@@ -578,6 +578,7 @@ def fit_from_iterator(
 
 def make_optimizer(
         name: str = 'adam',
+        optimizer_args: Dict = dict(),
         learning_rate: float = 1e-3,
         learning_rate_schedule: str = 'constant_schedule',
         learning_rate_schedule_args: Dict = dict(),
@@ -589,6 +590,7 @@ def make_optimizer(
 
     Args:
         name (str): Name of the optimizer. Defaults to the Adam optimizer.
+        optimizer_args (dict): Arguments passed to the optimizer.
         learning_rate (float): Learning rate.
         learning_rate_schedule (str): Learning rate schedule. Defaults to no schedule, meaning learning rate is
             held constant.
@@ -603,7 +605,7 @@ def make_optimizer(
     lr_schedule = getattr(optax, learning_rate_schedule)
 
     lr_schedule = lr_schedule(learning_rate, **learning_rate_schedule_args)
-    opt = opt(lr_schedule)
+    opt = opt(lr_schedule, **optimizer_args)
 
     clip_transform = getattr(optax, gradient_clipping)
     clip_transform = clip_transform(**gradient_clipping_args)

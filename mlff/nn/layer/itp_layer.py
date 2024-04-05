@@ -139,7 +139,15 @@ class ITPLayer(BaseSubModule):
             dst_idx=idx_i,
             src_idx=idx_j,
             num_segments=len(x)
-        )
+        )  # (N, 1, (max_degree + 1)^2, num_features)  always has 1 for parity axis, since x is invariant and parity 1
+        # and basis is parity 1 and equivariant.
+
+        # For concatenation of dense, add the pseudotensor dimension explicitly.
+        if self.include_pseudotensors and self.itp_connectivity == 'dense':
+            y = e3x.nn.change_max_degree_or_type(
+                y,
+                include_pseudotensors=True
+            )  # (N, 2, (max_degree + 1)^2, num_features)
 
         if self.message_normalization == 'avg_num_neighbors':
             y = jnp.divide(y,
