@@ -15,7 +15,7 @@ num_edges = 10
 
 num_features = 31
 ipt_num_features = 17
-ipt_num_updates = 3
+ipt_num_updates = 4
 
 x = jnp.ones((num_nodes, num_features))
 basis = jnp.ones((num_edges, 1, 9, 15))
@@ -56,7 +56,11 @@ def test_init(ipt_connectivity, feature_collection_over_layers):
 @pytest.mark.parametrize("ipt_connectivity", ['dense', 'skip', 'independent'])
 @pytest.mark.parametrize("feature_collection_over_layers", ['last', 'summation'])
 @pytest.mark.parametrize("_ipt_num_features", [None, 13])
-def test_apply(ipt_connectivity, feature_collection_over_layers, _ipt_num_features):
+def test_apply(
+        ipt_connectivity,
+        feature_collection_over_layers,
+        _ipt_num_features,
+):
     layer = ITPLayer(
         mp_max_degree=2,
         filter_num_layers=2,
@@ -94,6 +98,7 @@ def test_apply(ipt_connectivity, feature_collection_over_layers, _ipt_num_featur
         npt.assert_equal(output.get('x').shape, x.shape)
     elif feature_collection_over_layers == 'last':
         if ipt_connectivity == 'dense':
+            raise NotImplementedError('This test must be re-written!')
             if _ipt_num_features is None:
                 npt.assert_equal(
                     output.get('x').shape,
@@ -118,6 +123,82 @@ def test_apply(ipt_connectivity, feature_collection_over_layers, _ipt_num_featur
             raise RuntimeError
     else:
         raise RuntimeError
+
+
+@pytest.mark.parametrize("ipt_connectivity", ['dense'])
+@pytest.mark.parametrize("feature_collection_over_layers", ['last', 'summation'])
+@pytest.mark.parametrize("_ipt_num_features", [None, 13])
+@pytest.mark.parametrize("_itp_growth_rate", [14])
+@pytest.mark.parametrize("_itp_dense_final_concatenation", [True])
+def test_apply_dense(
+        ipt_connectivity,
+        feature_collection_over_layers,
+        _ipt_num_features,
+        _itp_growth_rate,
+        _itp_dense_final_concatenation
+):
+    layer = ITPLayer(
+        mp_max_degree=2,
+        filter_num_layers=2,
+        filter_activation_fn='silu',
+        mp_post_res_block=True,
+        mp_post_res_block_activation_fn='silu',
+        itp_max_degree=2,
+        itp_num_features=_ipt_num_features,
+        itp_num_updates=ipt_num_updates,
+        itp_post_res_block=True,
+        itp_post_res_block_activation_fn='identity',
+        itp_growth_rate=_itp_growth_rate,
+        itp_dense_final_concatenation=_itp_dense_final_concatenation,
+        itp_connectivity=ipt_connectivity,
+        feature_collection_over_layers=feature_collection_over_layers,
+        include_pseudotensors=False
+    )
+
+    params = layer.init(
+        jax.random.PRNGKey(0),
+        x=x,
+        basis=basis,
+        cut=cut,
+        idx_i=idx_i,
+        idx_j=idx_j,
+    )
+
+    output = layer.apply(
+        params,
+        x=x,
+        basis=basis,
+        cut=cut,
+        idx_i=idx_i,
+        idx_j=idx_j,
+    )
+    if feature_collection_over_layers == 'summation':
+        npt.assert_equal(output.get('x').shape, x.shape)
+    elif feature_collection_over_layers == 'last':
+        if ipt_connectivity == 'dense':
+            if _itp_dense_final_concatenation:
+                if _ipt_num_features is None:
+                    npt.assert_equal(
+                        output.get('x').shape,
+                        (len(x), num_features + _itp_growth_rate * ipt_num_updates)
+                    )
+                else:
+                    npt.assert_equal(
+                        output.get('x').shape,
+                        (len(x), _ipt_num_features + _itp_growth_rate * ipt_num_updates)
+                    )
+            else:
+                if _ipt_num_features is None:
+                    npt.assert_equal(
+                        output.get('x').shape,
+                        (len(x), num_features + (_itp_growth_rate - 1) * ipt_num_updates)
+                    )
+                else:
+                    npt.assert_equal(
+                        output.get('x').shape,
+                        (len(x), _ipt_num_features + (_itp_growth_rate - 1) * ipt_num_updates)
+                    )
+
 
 #
 #

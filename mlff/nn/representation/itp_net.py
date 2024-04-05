@@ -1,12 +1,11 @@
 import flax.linen as nn
-import jax
 from mlff.nn.stacknet import StackNetSparse
-from mlff.nn.embed import GeometryEmbedE3x, AtomTypeEmbedSparse
+from mlff.nn.embed import GeometryEmbedE3x
 from mlff.nn.layer import ITPLayer
 from mlff.nn.observable import EnergySparse
 from .representation_utils import make_embedding_modules
 
-from typing import Optional, Sequence
+from typing import Optional
 
 
 def init_itp_net(
@@ -26,6 +25,8 @@ def init_itp_net(
         itp_post_res_block: bool = True,
         itp_post_res_block_activation_fn: str = 'identity',
         itp_connectivity: str = 'dense',
+        itp_growth_rate: int = Optional[None],
+        itp_dense_final_concatenation: bool = False,
         message_normalization: Optional[str] = None,
         avg_num_neighbors: Optional[float] = None,
         feature_collection_over_layers: str = 'final',
@@ -67,6 +68,8 @@ def init_itp_net(
         itp_post_res_block=itp_post_res_block,
         itp_post_res_block_activation_fn=itp_post_res_block_activation_fn,
         itp_connectivity=itp_connectivity,
+        itp_growth_rate=itp_growth_rate,
+        itp_dense_final_concatenation=itp_dense_final_concatenation,
         message_normalization=message_normalization,
         avg_num_neighbors=avg_num_neighbors,
         feature_collection_over_layers=feature_collection_over_layers,

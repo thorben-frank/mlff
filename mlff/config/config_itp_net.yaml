@@ -26,6 +26,8 @@ model:
   itp_post_res_block: true
   itp_post_res_block_activation_fn: silu
   itp_connectivity: dense
+  itp_growth_rate: 16
+  itp_dense_final_concatenation: true
   feature_collection_over_layers: last
   include_pseudotensors: false
   message_normalization: avg_num_neighbors # How to normalize the message function. Options are (identity, sqrt_num_features, avg_num_neighbors)

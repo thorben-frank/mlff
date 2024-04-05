@@ -52,6 +52,8 @@ class ITPLayer(BaseSubModule):
     itp_post_res_block: bool = False
     itp_post_res_block_activation_fn: str = 'identity'
     itp_connectivity: str = 'skip'  # dense, independent
+    itp_growth_rate: Optional[int] = None
+    itp_dense_final_concatenation: bool = False
 
     message_normalization: Optional[str] = None  # avg_num_neighbors
     avg_num_neighbors: Optional[float] = None
@@ -74,6 +76,18 @@ class ITPLayer(BaseSubModule):
                 raise ValueError(
                     f'For {self.message_normalization=} average number of neighbors is required, but it is'
                     f'{self.avg_num_neighbors}.'
+                )
+        if self.itp_growth_rate is not None:
+            if self.itp_connectivity != 'dense':
+                raise ValueError(
+                    f'For {self.itp_connectivity =} the growth_rate can not be set. Use self.itp_connectivity = dense '
+                    f'to use growth rate.'
+                )
+
+        if self.itp_dense_final_concatenation is True:
+            if self.itp_connectivity != 'dense':
+                raise ValueError(
+                    f'For {self.itp_dense_final_concatenation =} self.itp_connectivity must be set to `dense`.'
                 )
 
     @nn.compact
@@ -151,13 +165,14 @@ class ITPLayer(BaseSubModule):
 
         features.append(y)
 
+        aggregation = aggregation_from_connectivity(self.itp_connectivity)
         for i in range(self.itp_num_updates):
-            aggregation = aggregation_from_connectivity(self.itp_connectivity)
             x_pre_itp = partial(aggregate_from_features, aggregation=aggregation)(features)
 
             x_itp = e3x.nn.TensorDense(
                 include_pseudotensors=False if i == self.itp_num_updates - 1 else self.include_pseudotensors,
-                max_degree=0 if i == self.itp_num_updates - 1 else self.itp_max_degree
+                max_degree=0 if i == self.itp_num_updates - 1 else self.itp_max_degree,
+                features=self.itp_growth_rate
             )(x_pre_itp)
 
             if self.itp_post_res_block:
@@ -166,7 +181,7 @@ class ITPLayer(BaseSubModule):
                 )(x_itp)
 
             if self.itp_connectivity == 'skip':
-                if i == self.itp_num_updates - 1:
+                if i == (self.itp_num_updates - 1):
                     x_pre_itp = e3x.nn.change_max_degree_or_type(
                         x_pre_itp,
                         max_degree=0,
@@ -174,6 +189,23 @@ class ITPLayer(BaseSubModule):
                     )
 
                 x_itp = e3x.nn.add(x_pre_itp, x_itp)
+
+            # Nasty but necessary for backward compatibility for now.
+            if self.itp_dense_final_concatenation:
+                assert self.itp_connectivity == 'dense'
+
+                if i == (self.itp_num_updates - 1):
+                    x_pre_itp = e3x.nn.change_max_degree_or_type(
+                        x_pre_itp,
+                        include_pseudotensors=False,
+                        max_degree=0
+                    )
+                    # In the final layer, the output of the ITP is max_degree = 0. Thus, we make the pre-ITP embeddings
+                    # also max_degree = 0. The pre-ITP embeddings are a concatenation of all features up to the last
+                    # ITP, so it has dimension itp_num_features + (num_itp_updates - 1) * growth_rate. The final output
+                    x_itp = partial(aggregate_from_features, aggregation=aggregation)(
+                        [x_pre_itp, x_itp]
+                    )
 
             features.append(x_itp)
 

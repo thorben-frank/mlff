@@ -92,6 +92,8 @@ def make_itp_net_from_config(config: config_dict.ConfigDict):
         itp_post_res_block=model_config.itp_post_res_block,
         itp_post_res_block_activation_fn=model_config.itp_post_res_block_activation_fn,
         itp_connectivity=model_config.itp_connectivity,
+        itp_growth_rate=model_config.itp_growth_rate,
+        itp_dense_final_concatenation=model_config.itp_dense_final_concatenation,
         feature_collection_over_layers=model_config.feature_collection_over_layers,
         include_pseudotensors=model_config.include_pseudotensors,
         message_normalization=config.model.message_normalization,
