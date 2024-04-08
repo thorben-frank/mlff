@@ -111,7 +111,7 @@ class TFDSDataLoaderSparse:
 
         # Split into train and valid.
         train_ds, valid_ds = builder.as_dataset(
-            split=[f'{self.split}[:{num_train}]', f'{self.split}[{num_train}:{num_train+num_valid}]']
+            split=[f'{self.split}[:{num_train}]', f'{self.split}[{-num_valid}:]']
         )
 
         # Filter single atoms.
