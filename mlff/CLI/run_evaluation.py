@@ -31,7 +31,12 @@ def evaluate_so3krates_sparse():
 
     pick_idx = splits[args.on_split] if args.on_split != 'full' else None
 
-    metrics = from_config.run_evaluation(config=cfg, num_test=args.num_test, pick_idx=pick_idx)
+    metrics = from_config.run_evaluation(
+        config=cfg,
+        num_test=args.num_test,
+        pick_idx=pick_idx,
+        on_split=args.on_split
+    )
     print(metrics)
 
 

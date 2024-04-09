@@ -3,6 +3,7 @@ import logging
 import jraph
 
 from functools import partial, partialmethod
+from typing import Optional
 
 try:
     import tensorflow as tf
@@ -103,16 +104,34 @@ class TFDSDataLoaderSparse:
             self,
             cutoff: float,
             num_train: int,
-            num_valid: int
+            num_valid: int,
+            num_test: Optional[int] = None,
+            return_test: bool = False
     ):
         builder = tfds.builder_from_directory(
             self.input_file
         )
 
-        # Split into train and valid.
-        train_ds, valid_ds = builder.as_dataset(
-            split=[f'{self.split}[:{num_train}]', f'{self.split}[{-num_valid}:]']
-        )
+        test_string = f'{self.split}[{num_train}:{-num_valid}]' if num_test is None else f'{self.split}[{-(num_valid+num_test)}:{-num_valid}]'
+
+        test_ds = None
+        if return_test:
+            # Split into train, valid and test.
+            train_ds, test_ds, valid_ds = builder.as_dataset(
+                split=[
+                    f'{self.split}[:{num_train}]',
+                    test_string,
+                    f'{self.split}[{-num_valid}:]'
+                ]
+            )
+        else:
+            # Split into train and valid.
+            train_ds, valid_ds = builder.as_dataset(
+                split=[
+                    f'{self.split}[:{num_train}]',
+                    f'{self.split}[{-num_valid}:]'
+                ]
+            )
 
         # Filter single atoms.
         train_ds = train_ds.filter(
@@ -121,6 +140,10 @@ class TFDSDataLoaderSparse:
         valid_ds = valid_ds.filter(
             lambda element: tf.math.greater(tf.shape(element['atomic_numbers'])[0], tf.constant(1))
         )
+        if return_test:
+            test_ds = test_ds.filter(
+                lambda element: tf.math.greater(tf.shape(element['atomic_numbers'])[0], tf.constant(1))
+            )
 
         # Create GraphTuples.
         train_ds = train_ds.map(
@@ -129,6 +152,10 @@ class TFDSDataLoaderSparse:
         valid_ds = valid_ds.map(
             lambda element: create_graph_tuple_tf(element, cutoff=cutoff)
         )
+        if return_test:
+            test_ds = test_ds.map(
+                lambda element: create_graph_tuple_tf(element, cutoff=cutoff)
+            )
 
         # Filter max forces.
         train_ds = train_ds.filter(
@@ -137,5 +164,13 @@ class TFDSDataLoaderSparse:
         valid_ds = valid_ds.filter(
             lambda graph: tf.math.less(tf.math.reduce_max(graph.nodes['forces']), tf.constant(self.max_force_filter))
         )
+        if return_test:
+            test_ds = test_ds.filter(
+                lambda graph: tf.math.less(tf.math.reduce_max(graph.nodes['forces']),
+                                           tf.constant(self.max_force_filter))
+            )
 
-        return train_ds, valid_ds
+        if return_test:
+            return train_ds, valid_ds, test_ds
+        else:
+            return train_ds, valid_ds

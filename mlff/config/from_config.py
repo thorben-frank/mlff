@@ -464,6 +464,7 @@ def run_evaluation(
         num_test: int = None,
         testing_targets: Sequence[str] = None,
         pick_idx: np.ndarray = None,
+        on_split: str = None,
         write_batch_metrics_to: str = None
 ):
     """Run evaluation, given the config and additional args.
@@ -477,6 +478,8 @@ def run_evaluation(
         testing_targets (): Targets used for computing metrics. Defaults to the ones found in
             config.training.loss_weights.
         pick_idx (): Indices to evaluate the model on. Loads only the data at the given indices.
+        on_split (): On which split to evaluate (training, validation, test). Only needed for TFDS data set since it does not
+            support efficient loading from indices yet.
         write_batch_metrics_to (str): Path to file where metrics per batch should be written to. If not given,
             batch metrics are not written to a file. Note, that the metrics are written per batch, so one-to-one
             correspondence to the original data set can only be achieved when `batch_max_num_nodes = 2` which allows
@@ -492,6 +495,9 @@ def run_evaluation(
     data_filepath = Path(data_filepath).expanduser().absolute().resolve()
 
     targets = testing_targets if testing_targets is not None else list(config.training.loss_weights.keys())
+
+    # TFDSDataSets need to be processed in a special manner.
+    tf_record_present = False
 
     if data_filepath.suffix == '.npz':
         loader = data.NpzDataLoaderSparse(input_file=data_filepath)
@@ -517,68 +523,132 @@ def run_evaluation(
     elif data_filepath.is_dir():
         tf_record_present = len([1 for x in os.scandir(data_filepath) if Path(x).suffix[:9] == '.tfrecord']) > 0
         if tf_record_present:
-            loader = data.TFRecordDataLoaderSparse(
+            loader = data.TFDSDataLoaderSparse(
                 input_file=data_filepath,
-                # We need to do the inverse transforms, since in config everything is in ASE default units.
-                min_distance_filter=config.data.filter.min_distance / length_unit,
-                max_force_filter=config.data.filter.max_force / energy_unit * length_unit,
+                split='train',
+                max_force_filter=config.data.filter.max_force / energy_unit * length_unit
             )
         else:
             raise ValueError(
                 f"Specifying a directory for `data_filepath` is only supported for directories that contain .tfrecord "
                 f"files. No .tfrecord files found at {data_filepath}."
             )
+        # if tf_record_present:
+        #     loader = data.TFRecordDataLoaderSparse(
+        #         input_file=data_filepath,
+        #         # We need to do the inverse transforms, since in config everything is in ASE default units.
+        #         min_distance_filter=config.data.filter.min_distance / length_unit,
+        #         max_force_filter=config.data.filter.max_force / energy_unit * length_unit,
+        #     )
     else:
         loader = data.AseDataLoaderSparse(input_file=data_filepath)
 
-    eval_data, data_stats = loader.load(
-        # We need to do the inverse transforms, since in config everything is in ASE default units.
-        cutoff=config.model.cutoff / length_unit, pick_idx=pick_idx
-    )
+    if not tf_record_present:
+        eval_data, data_stats = loader.load(
+            # We need to do the inverse transforms, since in config everything is in ASE default units.
+            cutoff=config.model.cutoff / length_unit, pick_idx=pick_idx
+        )
+    else:
+        training_data, validation_data, test_data = loader.load(
+            cutoff=config.model.cutoff / length_unit,
+            num_train=config.training.num_train,
+            num_valid=config.training.num_valid,
+            num_test=num_test,
+            return_test=True,
+        )
+        assert on_split is not None
+        if on_split == 'training':
+            eval_data = training_data
+        elif on_split == 'validation':
+            eval_data = validation_data
+        elif on_split == 'test':
+            eval_data = test_data
+        elif on_split == 'full':
+            raise NotImplementedError(
+                'on_split=full is not supported for TFDS data set yet.'
+            )
+        else:
+            raise ValueError(
+                f'{on_split} is not a valid split string. Choose one of (training, validation, test).'
+            )
 
-    num_data = len(eval_data)
+    if not tf_record_present:
+        num_data = len(eval_data)
+    else:
+        num_data = len([1 for _ in eval_data.as_numpy_iterator()])
+
     if num_test is not None:
         if num_test > num_data:
             raise RuntimeError(f'num_test = {num_test} > num_data = {num_data} in data set {data_filepath}.')
 
-        # Only shuffle when num_test is not None, since one is then evaluating on a subset of the data.
-        numpy_rng = np.random.RandomState(0)
-        numpy_rng.shuffle(eval_data)
+        # We assume the tensorflow data set is already shuffled.
+        if not tf_record_present:
+            # Only shuffle when num_test is not None, since one is then evaluating on a subset of the data.
+            numpy_rng = np.random.RandomState(0)
+            numpy_rng.shuffle(eval_data)
 
-    testing_data = data.transformations.subtract_atomic_energy_shifts(
-        data.transformations.unit_conversion(
-            eval_data[:num_test],
-            energy_unit=energy_unit,
-            length_unit=length_unit
-        ),
-        atomic_energy_shifts={int(k): v for (k, v) in config.data.energy_shifts.items()}
-    )
+    if not tf_record_present:
+        testing_data = data.transformations.subtract_atomic_energy_shifts(
+            data.transformations.unit_conversion(
+                eval_data[:num_test],
+                energy_unit=energy_unit,
+                length_unit=length_unit
+            ),
+            atomic_energy_shifts={int(k): v for (k, v) in config.data.energy_shifts.items()}
+        )
 
-    if config.training.batch_max_num_nodes is None:
-        assert config.training.batch_max_num_edges is None
+        if config.training.batch_max_num_nodes is None:
+            assert config.training.batch_max_num_edges is None
 
-        batch_max_num_nodes = data_stats['max_num_of_nodes'] * (config.training.batch_max_num_graphs - 1) + 1
-        batch_max_num_edges = data_stats['max_num_of_edges'] * (config.training.batch_max_num_graphs - 1) + 1
+            batch_max_num_nodes = data_stats['max_num_of_nodes'] * (config.training.batch_max_num_graphs - 1) + 1
+            batch_max_num_edges = data_stats['max_num_of_edges'] * (config.training.batch_max_num_graphs - 1) + 1
 
-        config.training.batch_max_num_nodes = batch_max_num_nodes
-        config.training.batch_max_num_edges = batch_max_num_edges
-
-    ckpt_dir = Path(config.workdir) / 'checkpoints'
-    ckpt_dir = ckpt_dir.expanduser().resolve()
-    logging.mlff(f'Restore parameters from {ckpt_dir} ...')
-    ckpt_mngr = checkpoint.CheckpointManager(
-        ckpt_dir,
-        {'params': checkpoint.PyTreeCheckpointer()},
-        options=checkpoint.CheckpointManagerOptions(step_prefix='ckpt')
-    )
-    latest_step = ckpt_mngr.latest_step()
-    if latest_step is not None:
-        params = ckpt_mngr.restore(
-            latest_step,
-            items=None
-        )['params']
+            config.training.batch_max_num_nodes = batch_max_num_nodes
+            config.training.batch_max_num_edges = batch_max_num_edges
     else:
-        raise FileNotFoundError(f'No checkpoint found at {ckpt_dir}.')
+        if config.data.shift_mode in ['custom', 'mean']:
+            raise NotImplementedError(
+                'For TFDSDataSets, energy shifting is not supported yet.'
+            )
+
+        # Convert the units.
+        testing_data = eval_data.map(
+            lambda graph: data.transformations.unit_conversion_graph(
+                graph,
+                energy_unit=energy_unit,
+                length_unit=length_unit
+            )
+        )
+
+    params = load_params_from_workdir(workdir=config.workdir)
+
+    # ckpt_dir = Path(config.workdir) / 'checkpoints'
+    # ckpt_dir = ckpt_dir.expanduser().resolve()
+    # logging.mlff(f'Restore parameters from {ckpt_dir} ...')
+    # ckpt_mngr = checkpoint.CheckpointManager(
+    #     ckpt_dir,
+    #     {'params': checkpoint.PyTreeCheckpointer()},
+    #     options=checkpoint.CheckpointManagerOptions(step_prefix='ckpt')
+    # )
+    # ckpt_mngr = checkpoint.CheckpointManager(
+    #     ckpt_dir,
+    #     item_names=('params',),
+    #     item_handlers={'params': checkpoint.StandardCheckpointHandler()},
+    #     options=checkpoint.CheckpointManagerOptions(step_prefix="ckpt"),
+    # )
+
+    # latest_step = ckpt_mngr.latest_step()
+    # if latest_step is not None:
+    #     params = ckpt_mngr.restore(
+    #         latest_step,
+    #         items=None
+    #     )['params']
+
+        # params = ckpt_mngr.restore(
+        #     latest_step,
+        # )['params']
+    # else:
+    #     raise FileNotFoundError(f'No checkpoint found at {ckpt_dir}.')
     logging.mlff(f'... done.')
 
     if model == 'so3krates':
@@ -678,6 +748,11 @@ def run_fine_tuning(
     data_filepath = config.data.filepath
     data_filepath = Path(data_filepath).expanduser().resolve()
 
+    # Get the units of the data.
+    energy_unit = eval(config.data.energy_unit)
+    length_unit = eval(config.data.length_unit)
+
+    tf_record_present = False
     if data_filepath.suffix == '.npz':
         loader = data.NpzDataLoaderSparse(input_file=data_filepath)
     elif data_filepath.stem[:5].lower() == 'spice':
@@ -687,12 +762,21 @@ def run_fine_tuning(
                 f'Loader assumes that SPICE is in hdf5 format. Found {data_filepath.suffix} as'
                 f'suffix.')
         loader = data.SpiceDataLoaderSparse(input_file=data_filepath)
+    elif data_filepath.is_dir():
+        tf_record_present = len([1 for x in os.scandir(data_filepath) if Path(x).suffix[:9] == '.tfrecord']) > 0
+        if tf_record_present:
+            loader = data.TFDSDataLoaderSparse(
+                input_file=data_filepath,
+                split='train',
+                max_force_filter=config.data.filter.max_force / energy_unit * length_unit
+            )
+        else:
+            raise ValueError(
+                f"Specifying a directory for `data_filepath` is only supported for directories that contain .tfrecord "
+                f"files. No .tfrecord files found at {data_filepath}."
+            )
     else:
         loader = data.AseDataLoaderSparse(input_file=data_filepath)
-
-    # Get the units of the data.
-    energy_unit = eval(config.data.energy_unit)
-    length_unit = eval(config.data.length_unit)
 
     # Get the total number of data points.
     num_data = loader.cardinality()
@@ -702,37 +786,68 @@ def run_fine_tuning(
     if num_train + num_valid > num_data:
         raise ValueError(f"num_train + num_valid = {num_train + num_valid} exceeds the number of data points {num_data}"
                          f" in {data_filepath}.")
+    if not tf_record_present:
+        split_seed = config.data.split_seed
+        numpy_rng = np.random.RandomState(split_seed)
 
-    split_seed = config.data.split_seed
-    numpy_rng = np.random.RandomState(split_seed)
+        # Choose the data points that are used training (training + validation data).
+        all_indices = np.arange(num_data)
+        numpy_rng.shuffle(all_indices)
+        # We sort the indices after extracting them from the shuffled list, since we iteratively load the data with the
+        # data loader.
+        training_and_validation_indices = np.sort(all_indices[:(num_train + num_valid)])
+        test_indices = np.sort(all_indices[(num_train + num_valid):])
 
-    # Choose the data points that are used training (training + validation data).
-    all_indices = np.arange(num_data)
-    numpy_rng.shuffle(all_indices)
-    # We sort the indices after extracting them from the shuffled list, since we iteratively load the data with the
-    # data loader.
-    training_and_validation_indices = np.sort(all_indices[:(num_train + num_valid)])
-    test_indices = np.sort(all_indices[(num_train + num_valid):])
+        # Cutoff is in Angstrom, so we have to divide the cutoff by the length unit.
+        training_and_validation_data, data_stats = loader.load(
+            cutoff=config.model.cutoff / length_unit,
+            pick_idx=training_and_validation_indices
+        )
+        # Since the training and validation indices are sorted, the index i at the n-th entry in
+        # training_and_validation_indices corresponds to the n-th entry in training_and_validation_data which is
+        # the i-th data entry in the loaded data.
+        split_indices = np.arange(num_train + num_valid)
+        numpy_rng.shuffle(split_indices)
+        internal_train_indices = split_indices[:num_train]
+        internal_validation_indices = split_indices[num_train:]
 
-    # Cutoff is in Angstrom, so we have to divide the cutoff by the length unit.
-    training_and_validation_data, data_stats = loader.load(
-        cutoff=config.model.cutoff / length_unit,
-        pick_idx=training_and_validation_indices
-    )
-    # Since the training and validation indices are sorted, the index i at the n-th entry in
-    # training_and_validation_indices corresponds to the n-th entry in training_and_validation_data which is the i-th
-    # data entry in the loaded data.
-    split_indices = np.arange(num_train + num_valid)
-    numpy_rng.shuffle(split_indices)
-    internal_train_indices = split_indices[:num_train]
-    internal_validation_indices = split_indices[num_train:]
+        training_data = [training_and_validation_data[i_train] for i_train in internal_train_indices]
+        validation_data = [training_and_validation_data[i_val] for i_val in internal_validation_indices]
+        del training_and_validation_data
 
-    training_data = [training_and_validation_data[i_train] for i_train in internal_train_indices]
-    validation_data = [training_and_validation_data[i_val] for i_val in internal_validation_indices]
-    del training_and_validation_data
+        assert len(internal_train_indices) == num_train
+        assert len(internal_validation_indices) == num_valid
 
-    assert len(internal_train_indices) == num_train
-    assert len(internal_validation_indices) == num_valid
+        # internal_*_indices only run from [0, num_train+num_valid]. To get their original position in the full data set
+        # we collect them from training_and_validation_indices. Since we will load training and validation data as
+        # training_and_validation_data[internal_*_indices], we need to make sure that training_and_validation_indices
+        # and training_and_validation_data have the same order in the sense of referencing indices. This is achieved by
+        # sorting the indices as described above.
+        train_indices = training_and_validation_indices[internal_train_indices]
+        validation_indices = training_and_validation_indices[internal_validation_indices]
+        assert len(train_indices) == num_train
+        assert len(validation_indices) == num_valid
+        with open(workdir / 'data_splits.json', 'w') as fp:
+            j = dict(
+                training=train_indices.tolist(),
+                validation=validation_indices.tolist(),
+                test=test_indices.tolist()
+            )
+            json.dump(j, fp)
+    else:
+        training_data, validation_data = loader.load(
+            cutoff=config.model.cutoff / length_unit,
+            num_train=num_train,
+            num_valid=num_valid
+        )
+        # Save the splits.
+        with open(workdir / 'data_splits.json', 'w') as fp:
+            j = dict(
+                training='tfds',
+                validation='tfds',
+                test='tfds',
+            )
+            json.dump(j, fp)
 
     if config.data.shift_mode == 'mean':
         config.data.energy_shifts = config_dict.placeholder(dict)
@@ -746,30 +861,78 @@ def run_fine_tuning(
     else:
         config.data.energy_shifts = {str(a): 0. for a in range(119)}
 
-    # If messages are normalized by the average number of neighbors, we need to calculate this quantity from the
-    # training data.
+    # Message normalization must not change for fine tuning.
+    hyperparams_path = start_from_workdir / 'hyperparameters.json'
+    with open(hyperparams_path, mode='r') as fp:
+        config_start_from_workdir = config_dict.ConfigDict(json.load(fp=fp))
+
+    if config_start_from_workdir.model.message_normalization != config.model.message_normalization:
+        raise ValueError(
+            f'Message normalization must be the same. '
+            f'Found {config_start_from_workdir.model.message_normalization} for the original config '
+            f'and {config.model.message_normalization} for the fine tuning config.'
+        )
+
+    # If messages are normalized by the average number of neighbors, we need to load it from the old config file.
     if config.model.message_normalization == 'avg_num_neighbors':
-        config.data.avg_num_neighbors = config_dict.placeholder(float)
-        avg_num_neighbors = data.transformations.calculate_average_number_of_neighbors(training_data)
-        config.data.avg_num_neighbors = np.array(avg_num_neighbors).item()
+        if config.data.avg_num_neighbors is not None:
+            logging.warning(
+                'Running fine tuning with config.model.message_normalization: avg_num_neighbors does not allow to '
+                'reset the avg_num_neighbors in the fine tuning config and must be set to null. It will be loaded from'
+                'the config in the workdir that is starting point for the fine tuning.'
+            )
 
-    training_data = list(data.transformations.subtract_atomic_energy_shifts(
-        data.transformations.unit_conversion(
-            training_data,
-            energy_unit=energy_unit,
-            length_unit=length_unit
-        ),
-        atomic_energy_shifts={int(k): v for (k, v) in config.data.energy_shifts.items()}
-    ))
+        config.data.avg_num_neighbors = config_start_from_workdir.data.avg_num_neighbors
+        logging.mlff(
+            f'Read average number of neighbors = {config.data.avg_num_neighbors} from original config at'
+            f'{start_from_workdir}.'
+        )
 
-    validation_data = list(data.transformations.subtract_atomic_energy_shifts(
-        data.transformations.unit_conversion(
-            validation_data,
-            energy_unit=energy_unit,
-            length_unit=length_unit
-        ),
-        atomic_energy_shifts={int(k): v for (k, v) in config.data.energy_shifts.items()}
-    ))
+    if not tf_record_present:
+        training_data = list(data.transformations.subtract_atomic_energy_shifts(
+            data.transformations.unit_conversion(
+                training_data,
+                energy_unit=energy_unit,
+                length_unit=length_unit
+            ),
+            atomic_energy_shifts={int(k): v for (k, v) in config.data.energy_shifts.items()}
+        ))
+
+        validation_data = list(data.transformations.subtract_atomic_energy_shifts(
+            data.transformations.unit_conversion(
+                validation_data,
+                energy_unit=energy_unit,
+                length_unit=length_unit
+            ),
+            atomic_energy_shifts={int(k): v for (k, v) in config.data.energy_shifts.items()}
+        ))
+    else:
+        if config.data.shift_mode in ['custom', 'mean']:
+            raise NotImplementedError(
+                'For TFDSDataSets, energy shifting is not supported yet.'
+            )
+
+        # Convert the units.
+        training_data = training_data.map(
+            lambda graph: data.transformations.unit_conversion_graph(
+                graph,
+                energy_unit=energy_unit,
+                length_unit=length_unit
+            )
+        )
+        validation_data = validation_data.map(
+            lambda graph: data.transformations.unit_conversion_graph(
+                graph,
+                energy_unit=energy_unit,
+                length_unit=length_unit
+            )
+        )
+
+        training_data = training_data.shuffle(
+            buffer_size=10_000,
+            reshuffle_each_iteration=True,
+            seed=config.training.training_seed
+        ).repeat(config.training.num_epochs)
 
     opt = make_optimizer_from_config(config)
 
@@ -800,29 +963,18 @@ def run_fine_tuning(
 
     if config.training.batch_max_num_nodes is None:
         assert config.training.batch_max_num_edges is None
+        if tf_record_present:
+            raise ValueError(
+                'When reading TFDSDataSet, max_num_nodes and max_num_edges can not be auto-'
+                'determined. Please set the corresponding values in the config file via '
+                'training.batch_max_num_nodes and training.batch_max_num_edges.'
+            )
 
         batch_max_num_nodes = data_stats['max_num_of_nodes'] * (config.training.batch_max_num_graphs - 1) + 1
         batch_max_num_edges = data_stats['max_num_of_edges'] * (config.training.batch_max_num_graphs - 1) + 1
 
         config.training.batch_max_num_nodes = batch_max_num_nodes
         config.training.batch_max_num_edges = batch_max_num_edges
-
-    # internal_*_indices only run from [0, num_train+num_valid]. To get their original position in the full data set
-    # we collect them from training_and_validation_indices. Since we will load training and validation data as
-    # training_and_validation_data[internal_*_indices], we need to make sure that training_and_validation_indices
-    # and training_and_validation_data have the same order in the sense of referencing indices. This is achieved by
-    # sorting the indices as described above.
-    train_indices = training_and_validation_indices[internal_train_indices]
-    validation_indices = training_and_validation_indices[internal_validation_indices]
-    assert len(train_indices) == num_train
-    assert len(validation_indices) == num_valid
-    with open(workdir / 'data_splits.json', 'w') as fp:
-        j = dict(
-            training=train_indices.tolist(),
-            validation=validation_indices.tolist(),
-            test=test_indices.tolist()
-        )
-        json.dump(j, fp)
 
     with open(workdir / 'hyperparameters.json', 'w') as fp:
         # json_config = config.to_dict()
@@ -838,25 +990,45 @@ def run_fine_tuning(
     logging.mlff(
         f'Fine tuning model from {start_from_workdir} on {data_filepath}!'
     )
-    training_utils.fit(
-        model=net,
-        optimizer=opt,
-        loss_fn=loss_fn,
-        graph_to_batch_fn=jraph_utils.graph_to_batch_fn,
-        batch_max_num_edges=config.training.batch_max_num_edges,
-        batch_max_num_nodes=config.training.batch_max_num_nodes,
-        batch_max_num_graphs=config.training.batch_max_num_graphs,
-        training_data=training_data,
-        validation_data=validation_data,
-        params=params,
-        ckpt_dir=workdir / 'checkpoints',
-        eval_every_num_steps=config.training.eval_every_num_steps,
-        allow_restart=config.training.allow_restart,
-        num_epochs=config.training.num_epochs,
-        training_seed=config.training.training_seed,
-        model_seed=config.training.model_seed,
-        log_gradient_values=config.training.log_gradient_values
-    )
+    if not tf_record_present:
+        training_utils.fit(
+            model=net,
+            optimizer=opt,
+            loss_fn=loss_fn,
+            graph_to_batch_fn=jraph_utils.graph_to_batch_fn,
+            batch_max_num_edges=config.training.batch_max_num_edges,
+            batch_max_num_nodes=config.training.batch_max_num_nodes,
+            batch_max_num_graphs=config.training.batch_max_num_graphs,
+            training_data=training_data,
+            validation_data=validation_data,
+            params=params,
+            ckpt_dir=workdir / 'checkpoints',
+            eval_every_num_steps=config.training.eval_every_num_steps,
+            allow_restart=config.training.allow_restart,
+            num_epochs=config.training.num_epochs,
+            training_seed=config.training.training_seed,
+            model_seed=config.training.model_seed,
+            log_gradient_values=config.training.log_gradient_values
+        )
+    else:
+        training_utils.fit_from_iterator(
+            model=net,
+            optimizer=opt,
+            loss_fn=loss_fn,
+            graph_to_batch_fn=jraph_utils.graph_to_batch_fn,
+            batch_max_num_edges=config.training.batch_max_num_edges,
+            batch_max_num_nodes=config.training.batch_max_num_nodes,
+            batch_max_num_graphs=config.training.batch_max_num_graphs,
+            training_iterator=training_data,
+            validation_iterator=validation_data,
+            params=params,
+            ckpt_dir=workdir / 'checkpoints',
+            eval_every_num_steps=config.training.eval_every_num_steps,
+            allow_restart=config.training.allow_restart,
+            training_seed=config.training.training_seed,
+            model_seed=config.training.model_seed,
+            log_gradient_values=config.training.log_gradient_values
+        )
     logging.mlff('Training has finished!')
 
 
@@ -882,16 +1054,21 @@ def load_params_from_workdir(workdir):
 
     loaded_mngr = checkpoint.CheckpointManager(
         load_path,
-        {
-            "params": checkpoint.PyTreeCheckpointer(),
-        },
+        item_names=('params',),
+        item_handlers={'params': checkpoint.StandardCheckpointHandler()},
         options=checkpoint.CheckpointManagerOptions(step_prefix="ckpt"),
     )
+
+    # loaded_mngr = checkpoint.CheckpointManager(
+    #     load_path,
+    #     {
+    #         "params": checkpoint.PyTreeCheckpointer(),
+    #     },
+    #     options=checkpoint.CheckpointManagerOptions(step_prefix="ckpt"),
+    # )
     mgr_state = loaded_mngr.restore(
         loaded_mngr.latest_step(),
-        {
-            "params": checkpoint.PyTreeCheckpointer(),
-        })
+    )
     params = mgr_state.get("params")
 
     if params is None:

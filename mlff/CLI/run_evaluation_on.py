@@ -109,10 +109,11 @@ def evaluate_so3krates_sparse_on():
         args.write_batch_metrics_to
     ).expanduser().resolve() if args.write_batch_metrics_to is not None else None
 
-    if write_batch_metrics_to.suffix == '.csv':
-        pass
-    else:
-        write_batch_metrics_to = f'{write_batch_metrics_to}.csv'
+    if write_batch_metrics_to is not None:
+        if write_batch_metrics_to.suffix == '.csv':
+            pass
+        else:
+            write_batch_metrics_to = f'{write_batch_metrics_to}.csv'
 
     metrics = from_config.run_evaluation(
         config=cfg,
