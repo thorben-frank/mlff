@@ -11,9 +11,12 @@ from functools import partial, partialmethod
 try:
     import tensorflow as tf
 except ModuleNotFoundError:
-    raise RuntimeWarning(
-        "For using TFRecordDataLoaderSparse please install tensorflow."
+    logging.warning(
+        "For using TFDSDataLoader please install tensorflow."
     )
+    # raise RuntimeWarning(
+    #     "For using TFRecordDataLoaderSparse please install tensorflow."
+    # )
 
 logging.MLFF = 35
 logging.addLevelName(logging.MLFF, 'MLFF')

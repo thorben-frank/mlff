@@ -8,15 +8,21 @@ from typing import Optional
 try:
     import tensorflow as tf
 except ModuleNotFoundError:
-    raise RuntimeWarning(
+    logging.warning(
         "For using TFDSDataLoader please install tensorflow."
     )
+    # raise RuntimeWarning(
+    #     "For using TFDSDataLoader please install tensorflow."
+    # )
 try:
     import tensorflow_datasets as tfds
 except ModuleNotFoundError:
-    raise RuntimeWarning(
+    logging.warning(
         "For using TFDSDataLoader please install tensorflow_datasets."
     )
+    # raise RuntimeWarning(
+    #     "For using TFDSDataLoader please install tensorflow_datasets."
+    # )
 
 
 logging.MLFF = 35
