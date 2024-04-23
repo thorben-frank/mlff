@@ -128,7 +128,9 @@ def ASE_to_jraph(
             stress = mol.get_stress()
         except PropertyNotImplementedError:
             stress = None
-        #TODO: Read Hirshfeld ratios only when they are needed, i.e. hirsh_ratios weight is not 0
+        #TODO: Read Hirshfeld ratios only when they are needed, 
+        #Now they are set to 0 if not present 
+        #hirsh_bool is used in observable_funnction_sparse.py before passing values to loss function
         try:
             hirshfeld_ratios = mol.arrays['hirsh_ratios']
         except:
@@ -199,10 +201,9 @@ def ASE_to_jraph(
     senders = np.array(j)
     receivers = np.array(i)
     
-    i_pairs, j_pairs = np.triu_indices(n_atoms, k=1)
-    i_pairs = np.array(i_pairs)
-    j_pairs = np.array(j_pairs)
-    # d_ij_all = mol.get_all_distances()[np.triu_indices(n_atoms, k = 1)]
+    idx_i_lr, idx_j_lr = np.triu_indices(n_atoms, k=1)
+    idx_i_lr = np.array(idx_i_lr)
+    idx_j_lr = np.array(idx_j_lr)
 
     n_node = np.array([n_atoms])
 
@@ -219,7 +220,6 @@ def ASE_to_jraph(
         "total_charge": np.array(total_charge, dtype=np.int16).reshape(-1) if total_charge is not None else None,
         "hirsh_bool": np.array([0]) if hirshfeld_ratios[0]==0. else np.array([1]),
         "num_unpaired_electrons": np.array(num_unpaired_electrons, dtype=np.int16).reshape(-1) if num_unpaired_electrons is not None else None
-        # "hirsh_bool": np.array([1]) if hirshfeld_ratios is not None else np.array([0])
     }
 
     return jraph.GraphsTuple(
@@ -231,7 +231,6 @@ def ASE_to_jraph(
                 n_edge=n_edge,
                 globals=global_context,
                 n_pairs = n_pairs,
-                i_pairs = i_pairs,
-                j_pairs = j_pairs,
-                # d_ij_all = d_ij_all,
+                idx_i_lr = idx_i_lr,
+                idx_j_lr = idx_j_lr
     )

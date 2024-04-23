@@ -143,8 +143,8 @@ class MLFFPotentialSparse(MachineLearningPotential):
                 'idx_i': graph.centers,
                 'idx_j': graph.others,
                 'total_charge': graph.total_charge,
-                'i_pairs': graph.i_pairs,
-                'j_pairs': graph.j_pairs
+                'idx_i_lr': graph.idx_i_lr,
+                'idx_j_lr': graph.idx_j_lr
             }
 
             return x

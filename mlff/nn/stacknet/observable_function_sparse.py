@@ -43,8 +43,8 @@ def get_observable_fn_sparse(model: StackNetSparse, observable: str = None):
                 total_charge: jnp.ndarray = None,
                 num_unpaired_electrons: jnp.ndarray = None,
                 hirsh_bool: jnp.ndarray = None,
-                i_pairs: jnp.ndarray = None,
-                j_pairs: jnp.ndarray = None,
+                idx_i_lr: jnp.ndarray = None,
+                idx_j_lr: jnp.ndarray = None,
         ):
             if batch_segments is None:
                 assert graph_mask is None
@@ -71,9 +71,8 @@ def get_observable_fn_sparse(model: StackNetSparse, observable: str = None):
                 total_charge=total_charge,
                 num_unpaired_electrons=num_unpaired_electrons,
                 hirsh_bool=hirsh_bool,
-                i_pairs=i_pairs,
-                j_pairs=j_pairs,
-                # d_ij_all=d_ij_all
+                idx_i_lr=idx_i_lr,
+                idx_j_lr=idx_j_lr
             )
             return model.apply(params, inputs)
     else:
@@ -93,8 +92,8 @@ def get_observable_fn_sparse(model: StackNetSparse, observable: str = None):
                 total_charge: jnp.ndarray = None,
                 num_unpaired_electrons: jnp.ndarray = None,
                 hirsh_bool: jnp.ndarray = None,
-                i_pairs: jnp.ndarray = None,
-                j_pairs: jnp.ndarray = None,
+                idx_i_lr: jnp.ndarray = None,
+                idx_j_lr: jnp.ndarray = None,
         ):
             if batch_segments is None:
                 assert graph_mask is None
@@ -121,8 +120,8 @@ def get_observable_fn_sparse(model: StackNetSparse, observable: str = None):
                 total_charge=total_charge,
                 num_unpaired_electrons=num_unpaired_electrons,
                 hirsh_bool=hirsh_bool,
-                i_pairs=i_pairs,
-                j_pairs=j_pairs
+                idx_i_lr=idx_i_lr,
+                idx_j_lr=idx_j_lr
             )
             return dict(observable=model.apply(params, inputs)[observable])
 
@@ -144,8 +143,8 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
                   total_charge: jnp.ndarray = None,
                   num_unpaired_electrons: jnp.ndarray = None,
                   hirsh_bool: jnp.ndarray = None,
-                  i_pairs: jnp.ndarray = None,
-                  j_pairs: jnp.ndarray = None):
+                  idx_i_lr: jnp.ndarray = None,
+                  idx_j_lr: jnp.ndarray = None):
         if batch_segments is None:
             assert graph_mask is None
             assert graph_mask_expanded is None
@@ -169,8 +168,8 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
                       total_charge=total_charge,
                       num_unpaired_electrons=num_unpaired_electrons,
                       hirsh_bool=hirsh_bool,
-                      i_pairs=i_pairs,
-                      j_pairs=j_pairs
+                      idx_i_lr=idx_i_lr,
+                      idx_j_lr=idx_j_lr
                       )
 
         energy = model.apply(params, inputs)['energy']  # (num_graphs)
@@ -191,8 +190,8 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
                             total_charge: jnp.ndarray = None,
                             num_unpaired_electrons: jnp.ndarray = None,
                             hirsh_bool: jnp.ndarray = None,
-                            i_pairs: jnp.ndarray = None,
-                            j_pairs: jnp.ndarray = None,
+                            idx_i_lr: jnp.ndarray = None,
+                            idx_j_lr: jnp.ndarray = None,
                             *args,
                             **kwargs):
         (_, energy), forces = jax.value_and_grad(
@@ -212,8 +211,8 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
                           total_charge,
                           num_unpaired_electrons,
                           hirsh_bool,
-                          i_pairs,
-                          j_pairs
+                          idx_i_lr,
+                          idx_j_lr
                           )
 
         if batch_segments is None:
@@ -239,8 +238,8 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
                 total_charge=total_charge,
                 num_unpaired_electrons=num_unpaired_electrons,
                 hirsh_bool=hirsh_bool,
-                i_pairs=i_pairs,
-                j_pairs=j_pairs
+                idx_i_lr=idx_i_lr,
+                idx_j_lr=idx_j_lr
                 )
 
         _, number_of_atoms_in_molecule = jnp.unique(batch_segments, return_counts = True, size=len(graph_mask))

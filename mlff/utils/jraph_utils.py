@@ -54,8 +54,8 @@ def graph_to_batch_fn(graph: jraph.GraphsTuple):
         dipole=graph.globals.get('dipole'),
         dipole_vec=graph.globals.get('dipole_vec'),
         hirshfeld_ratios=graph.nodes.get('hirshfeld_ratios'),
-        i_pairs=graph.i_pairs,
-        j_pairs=graph.j_pairs,
+        idx_i_lr=graph.idx_i_lr,
+        idx_j_lr=graph.idx_j_lr,
     )
     batch_info = batch_info_fn(graph)
     batch.update(batch_info)

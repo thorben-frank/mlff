@@ -20,7 +20,7 @@ except ImportError:
 SpatialPartitioning = namedtuple(
     "SpatialPartitioning", ("allocate_fn", "update_fn", "cutoff", "skin", "capacity_multiplier")
 )
-Pairs = namedtuple("Pairs", ("i_pairs", "j_pairs"))
+Pairs = namedtuple("Pairs", ("idx_i_lr", "idx_j_lr"))
 
 logging.basicConfig(level=logging.INFO)
 
@@ -287,13 +287,13 @@ def neighbor_list(positions: jnp.ndarray, cutoff: float, skin: float, cell: jnp.
                                           capacity_multiplier=capacity_multiplier)
 
 def compute_pairs(N):
-    i_pairs = jnp.arange(N) 
-    j_pairs = []
+    idx_i_lr = jnp.arange(N) 
+    idx_j_lr = []
     for i in range(1, N):
         # Rotate the array
-        rotated = i_pairs[i:]
-        rotated = jnp.concatenate([rotated, i_pairs[:i]])
+        rotated = idx_i_lr[i:]
+        rotated = jnp.concatenate([rotated, idx_i_lr[:i]])
         # Concatenate the rotated array to the result
-        j_pairs.extend(rotated)
-    i_pairs = jnp.repeat(i_pairs, N-1)
-    return  Pairs(jnp.array(i_pairs, dtype=jnp.int32), jnp.array(j_pairs, dtype=jnp.int32))
+        idx_j_lr.extend(rotated)
+    idx_i_lr = jnp.repeat(idx_i_lr, N-1)
+    return  Pairs(jnp.array(idx_i_lr, dtype=jnp.int32), jnp.array(idx_j_lr, dtype=jnp.int32))

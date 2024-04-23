@@ -572,8 +572,8 @@ class ElectrostaticEnergySparse(BaseSubModule):
         partial_charges = self.partial_charges(inputs)['partial_charges'] # shape: (num_nodes)
         cell = inputs.get('cell')
         cell_offsets = inputs.get('cell_offset') 
-        i_pairs = inputs['i_pairs']
-        j_pairs = inputs['j_pairs']        
+        idx_i_lr = inputs['idx_i_lr']
+        idx_j_lr = inputs['idx_j_lr']        
 
         if self.input_convention == 'positions':
             positions = inputs['positions']  # (N, 3)
@@ -581,7 +581,7 @@ class ElectrostaticEnergySparse(BaseSubModule):
             # Calculate pairwise distance vectors
             r_ij_all = jax.vmap(
                 lambda i, j: positions[j] - positions[i]
-            )(i_pairs, j_pairs)  # (num_pairs, 3)
+            )(idx_i_lr, idx_j_lr)  # (num_pairs, 3)
 
             # Apply minimal image convention if needed.
             if cell is not None:
@@ -597,12 +597,12 @@ class ElectrostaticEnergySparse(BaseSubModule):
 
         d_ij_all = safe_norm(r_ij_all, axis=-1)  # shape : (num_pairs)
        
-        atomic_electrostatic_energy_ij = _coulomb_erf(partial_charges, d_ij_all, i_pairs, j_pairs, self.kehalf, 1.64) 
+        atomic_electrostatic_energy_ij = _coulomb_erf(partial_charges, d_ij_all, idx_i_lr, idx_j_lr, self.kehalf, 1.64) 
         #TODO: 1.64 comes from sigma_cubic_fit(4.5), Hydrogen polarizability, multiplied by jnp.sqrt(2) 
 
         atomic_electrostatic_energy = segment_sum(
                 atomic_electrostatic_energy_ij,
-                segment_ids=i_pairs,
+                segment_ids=idx_i_lr,
                 num_segments=num_nodes
             )  # (num_nodes)
 
@@ -632,8 +632,8 @@ class DispersionEnergySparse(BaseSubModule):
     def __call__(self, inputs: Dict, *args, **kwargs) -> jnp.ndarray:  
         node_mask = inputs['node_mask']  # (num_nodes)
         num_nodes = len(node_mask)
-        i_pairs = inputs['i_pairs']
-        j_pairs = inputs['j_pairs']
+        idx_i_lr = inputs['idx_i_lr']
+        idx_j_lr = inputs['idx_j_lr']
         cell = inputs.get('cell')  # shape: (num_graphs, 3, 3)
         cell_offsets = inputs.get('cell_offset')  # shape: (num_pairs, 3)
 
@@ -643,7 +643,7 @@ class DispersionEnergySparse(BaseSubModule):
             # Calculate pairwise distance vectors
             r_ij_all = jax.vmap(
                 lambda i, j: positions[j] - positions[i]
-            )(i_pairs, j_pairs)  # (num_pairs, 3)
+            )(idx_i_lr, idx_j_lr)  # (num_pairs, 3)
 
             # Apply minimal image convention if needed.
             if cell is not None:
@@ -665,7 +665,7 @@ class DispersionEnergySparse(BaseSubModule):
         atomic_numbers = inputs['atomic_numbers']  # (num_nodes)
         
         # Calculate alpha_ij and C6_ij using mixing rules
-        alpha_ij, C6_ij = mixing_rules(atomic_numbers, i_pairs, j_pairs, hirshfeld_ratios)
+        alpha_ij, C6_ij = mixing_rules(atomic_numbers, idx_i_lr, idx_j_lr, hirshfeld_ratios)
         
         # Use cubic fit for gamma
         gamma_ij = gamma_cubic_fit(alpha_ij)
@@ -675,7 +675,7 @@ class DispersionEnergySparse(BaseSubModule):
 
         atomic_dispersion_energy = segment_sum(
                 dispersion_energy_ij,
-                segment_ids=i_pairs,
+                segment_ids=idx_i_lr,
                 num_segments=num_nodes
             )  # (num_nodes)
         
