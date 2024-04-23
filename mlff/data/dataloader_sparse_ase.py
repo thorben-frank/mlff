@@ -75,9 +75,9 @@ class AseDataLoaderSparse:
                     num_nodes = len(graph.nodes['atomic_numbers'])
                     num_edges = len(graph.receivers)
                     num_pairs = num_nodes * (num_nodes - 1) // 2
-                max_num_of_nodes = max_num_of_nodes if num_nodes <= max_num_of_nodes else num_nodes
+                    max_num_of_nodes = max_num_of_nodes if num_nodes <= max_num_of_nodes else num_nodes
                     max_num_of_edges = max_num_of_edges if num_edges <= max_num_of_edges else num_edges
-                max_num_of_pairs = max_num_of_pairs if num_pairs <= max_num_of_pairs else num_pairs
+                    max_num_of_pairs = max_num_of_pairs if num_pairs <= max_num_of_pairs else num_pairs
             else:
                 pass
             i += 1
@@ -205,9 +205,9 @@ def ASE_to_jraph(
     idx_i_lr = np.array(idx_i_lr)
     idx_j_lr = np.array(idx_j_lr)
 
+    # n_node = np.array([mol.get_global_number_of_atoms()])
     n_node = np.array([n_atoms])
 
-    n_node = np.array([mol.get_global_number_of_atoms()])
     n_edge = np.array([len(i)])
     n_pairs = np.array([n_atoms * (n_atoms - 1) // 2])
 
