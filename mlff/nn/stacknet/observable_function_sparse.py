@@ -145,8 +145,7 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
                   num_unpaired_electrons: jnp.ndarray = None,
                   hirsh_bool: jnp.ndarray = None,
                   i_pairs: jnp.ndarray = None,
-                  j_pairs: jnp.ndarray = None,
-                  dummmy: jnp.ndarray = None):
+                  j_pairs: jnp.ndarray = None):
         if batch_segments is None:
             assert graph_mask is None
             assert graph_mask_expanded is None
@@ -171,8 +170,7 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
                       num_unpaired_electrons=num_unpaired_electrons,
                       hirsh_bool=hirsh_bool,
                       i_pairs=i_pairs,
-                      j_pairs=j_pairs,
-                      dummmy = dummmy
+                      j_pairs=j_pairs
                       )
 
         energy = model.apply(params, inputs)['energy']  # (num_graphs)
@@ -195,7 +193,6 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
                             hirsh_bool: jnp.ndarray = None,
                             i_pairs: jnp.ndarray = None,
                             j_pairs: jnp.ndarray = None,
-                            dummmy: jnp.ndarray = None,
                             *args,
                             **kwargs):
         (_, energy), forces = jax.value_and_grad(
@@ -216,8 +213,7 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
                           num_unpaired_electrons,
                           hirsh_bool,
                           i_pairs,
-                          j_pairs,
-                          dummmy
+                          j_pairs
                           )
 
         if batch_segments is None:
@@ -244,8 +240,7 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
                 num_unpaired_electrons=num_unpaired_electrons,
                 hirsh_bool=hirsh_bool,
                 i_pairs=i_pairs,
-                j_pairs=j_pairs,
-                dummmy = dummmy
+                j_pairs=j_pairs
                 )
 
         _, number_of_atoms_in_molecule = jnp.unique(batch_segments, return_counts = True, size=len(graph_mask))

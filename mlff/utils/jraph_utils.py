@@ -22,6 +22,7 @@ def batch_info_fn(batched_graph: jraph.GraphsTuple):
     num_of_non_padded_graphs = len(graph_mask) - jraph.get_number_of_padding_with_graphs_graphs(batched_graph)
     if len(graph_mask) == 1:
         raise RuntimeError('Only batched `jraph.GraphsTuple` should be passed to `batch_info_fn`.')
+    
     batch_segments = jnp.repeat(
         jnp.arange(len(graph_mask)),
         repeats=batched_graph.n_node,
@@ -55,8 +56,6 @@ def graph_to_batch_fn(graph: jraph.GraphsTuple):
         hirshfeld_ratios=graph.nodes.get('hirshfeld_ratios'),
         i_pairs=graph.i_pairs,
         j_pairs=graph.j_pairs,
-        # d_ij_all=graph.d_ij_all,
-        # dummmy=graph.globals.get('dummmy'),
     )
     batch_info = batch_info_fn(graph)
     batch.update(batch_info)
