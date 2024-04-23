@@ -20,6 +20,7 @@ except ImportError:
 SpatialPartitioning = namedtuple(
     "SpatialPartitioning", ("allocate_fn", "update_fn", "cutoff", "skin", "capacity_multiplier")
 )
+Pairs = namedtuple("Pairs", ("i_pairs", "j_pairs"))
 
 logging.basicConfig(level=logging.INFO)
 
@@ -90,8 +91,8 @@ class mlffCalculatorSparse(Calculator):
             '\'eV\' and \'Ang\' as units.'
         )
         if calculate_stress:
-            def energy_fn(system, strain: jnp.ndarray, neighbors):
-                graph = system_to_graph(system, neighbors)
+            def energy_fn(system, strain: jnp.ndarray, neighbors, pairs):
+                graph = system_to_graph(system, neighbors, pairs)
                 graph = strain_graph(graph, strain)
 
                 out, aux = potential(graph, has_aux=has_aux)
@@ -104,7 +105,7 @@ class mlffCalculatorSparse(Calculator):
                     return atomic_energy.sum()
 
             @jax.jit
-            def calculate_fn(system: System, neighbors):
+            def calculate_fn(system: System, neighbors, pairs):
                 strain = get_strain()
                 out, grads = jax.value_and_grad(
                     energy_fn,
@@ -114,11 +115,13 @@ class mlffCalculatorSparse(Calculator):
                 )(
                     system,
                     strain,
-                    neighbors
+                    neighbors,
+                    pairs
                   )
 
                 forces = - grads[0].R
-                stress = grads[1]
+                volume_factor = jnp.abs(jnp.dot(jnp.cross(system.cell[0], system.cell[1]), system.cell[2]))
+                stress = grads[1] / volume_factor
 
                 if isinstance(out, tuple):
                     if not has_aux:
@@ -129,8 +132,8 @@ class mlffCalculatorSparse(Calculator):
                     return {'energy': out, 'forces': forces, 'stress': stress}
 
         else:
-            def energy_fn(system, neighbors):
-                graph = system_to_graph(system, neighbors)
+            def energy_fn(system, neighbors, pairs):
+                graph = system_to_graph(system, neighbors, pairs)
                 out = potential(graph, has_aux=has_aux)
                 if isinstance(out, tuple):
                     if not has_aux:
@@ -144,14 +147,15 @@ class mlffCalculatorSparse(Calculator):
                     return atomic_energy.sum()
 
             @jax.jit
-            def calculate_fn(system, neighbors):
+            def calculate_fn(system, neighbors,  pairs):
                 out, grads = jax.value_and_grad(
                     energy_fn,
                     allow_int=True,
                     has_aux=has_aux
                 )(
                     system,
-                    neighbors
+                    neighbors,
+                    pairs
                 )
                 forces = - grads.R
 
@@ -168,7 +172,7 @@ class mlffCalculatorSparse(Calculator):
         self.neighbors = None
         self.spatial_partitioning = None
         self.capacity_multiplier = capacity_multiplier
-
+        self.pairs = None
         self.cutoff = potential.cutoff
 
         self.dtype = dtype
@@ -176,8 +180,7 @@ class mlffCalculatorSparse(Calculator):
     def calculate(self, atoms=None, *args, **kwargs):
         super(mlffCalculatorSparse, self).calculate(atoms, *args, **kwargs)
 
-        R = jnp.array(atoms.get_positions(), dtype=self.dtype)  # shape: (n,3)
-        z = jnp.array(atoms.get_atomic_numbers(), dtype=jnp.int16)  # shape: (n)
+        system = atoms_to_system(atoms)
 
         if atoms.get_pbc().any():
             cell = jnp.array(np.array(atoms.get_cell()), dtype=self.dtype).T  # (3,3)
@@ -185,22 +188,29 @@ class mlffCalculatorSparse(Calculator):
             cell = None
 
         if self.spatial_partitioning is None:
-            self.neighbors, self.spatial_partitioning = neighbor_list(positions=R,
+            self.neighbors, self.spatial_partitioning = neighbor_list(positions=system.R,
                                                                       cell=cell,
                                                                       cutoff=self.cutoff,
                                                                       skin=0.,
                                                                       capacity_multiplier=self.capacity_multiplier)
-
-        neighbors = self.spatial_partitioning.update_fn(R, self.neighbors)
+        neighbors = self.spatial_partitioning.update_fn(system.R, self.neighbors, cell)
         if neighbors.overflow:
             raise RuntimeError('Spatial overflow.')
         else:
             self.neighbors = neighbors
+        if neighbors.cell_list is not None:
+            # If cell list needs to be reallocated, then reallocate neighbors
+            if neighbors.cell_list.reallocate:
+                self.neighbors, self.spatial_partitioning = neighbor_list(positions=system.R,
+                                                                      cell=cell,
+                                                                      cutoff=self.cutoff,
+                                                                      skin=0.,
+                                                                      capacity_multiplier=self.capacity_multiplier)
+        if self.pairs is None:
+            self.pairs = compute_pairs(system.R.shape[0])
 
-        output = self.calculate_fn(System(R=R, Z=z, cell=cell), neighbors=neighbors)  # note different cell convention
-
+        output = self.calculate_fn(system, neighbors, self.pairs)  # note different cell convention
         self.results = jax.tree_map(lambda x: np.array(x), output)
-
 
 def to_displacement(cell):
     """
@@ -267,13 +277,23 @@ def neighbor_list(positions: jnp.ndarray, cutoff: float, skin: float, cell: jnp.
         raise ImportError('For neighborhood list, please install the glp package from ...')
 
     allocate, update = quadratic_neighbor_list(
-        cell, cutoff, skin, capacity_multiplier=capacity_multiplier
+        cell, cutoff, skin, capacity_multiplier=capacity_multiplier, use_cell_list=True
     )
-
     neighbors = allocate(positions)
-
     return neighbors, SpatialPartitioning(allocate_fn=allocate,
                                           update_fn=jax.jit(update),
                                           cutoff=cutoff,
                                           skin=skin,
                                           capacity_multiplier=capacity_multiplier)
+
+def compute_pairs(N):
+    i_pairs = jnp.arange(N) 
+    j_pairs = []
+    for i in range(1, N):
+        # Rotate the array
+        rotated = i_pairs[i:]
+        rotated = jnp.concatenate([rotated, i_pairs[:i]])
+        # Concatenate the rotated array to the result
+        j_pairs.extend(rotated)
+    i_pairs = jnp.repeat(i_pairs, N-1)
+    return  Pairs(jnp.array(i_pairs, dtype=jnp.int32), jnp.array(j_pairs, dtype=jnp.int32))
