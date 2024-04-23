@@ -107,8 +107,6 @@ def init_so3krates_sparse(
             nn.activation, energy_activation_fn
         ) if energy_activation_fn != 'identity' else lambda u: u,
         partial_charges=partial_charges,
-        # hirshfeld_ratios=hirshfeld_ratios,
-        cutoff=cutoff,
     )
 
     dipole_vec = DipoleVecSparse(
@@ -150,6 +148,6 @@ def init_so3krates_sparse(
         geometry_embeddings=[geometry_embed],
         feature_embeddings=embedding_modules,
         layers=layers,
-        observables=[energy, dipole, dipole_vec, hirshfeld_ratios],
+        observables=[energy, dipole_vec, hirshfeld_ratios],
         prop_keys=None
     )

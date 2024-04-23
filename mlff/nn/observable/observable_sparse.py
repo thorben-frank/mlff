@@ -268,7 +268,7 @@ class ZBLRepulsionSparse(BaseSubModule):
     """
     prop_keys: Dict
     input_convention: str = 'positions'
-    output_convention: str = 'per_structure'
+    # output_convention: str = 'per_atom'
     module_name: str = 'zbl_repulsion'
     a0: float = 0.5291772105638411
     ke: float = 14.399645351950548
@@ -543,6 +543,7 @@ class ElectrostaticEnergySparse(BaseSubModule):
     activation_fn: Callable[[Any], Any] = lambda u: u
     output_is_zero_at_init: bool = True
     module_name: str = 'electrostatic_energy'
+    input_convention: str = 'positions'
     partial_charges: Optional[Any] = None
     ke: float = 14.399645351950548 #TODO: check if this is the correct value
     use_ewald_summation_bool: bool = False
@@ -604,6 +605,7 @@ class DispersionEnergySparse(BaseSubModule):
     activation_fn: Callable[[Any], Any] = lambda u: u
     regression_dim: int = None
     module_name = 'dispersion_energy'
+    input_convention: str = 'positions'
     output_is_zero_at_init: bool = True
 
     def setup(self):

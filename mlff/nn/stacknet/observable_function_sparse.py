@@ -275,26 +275,18 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
                 )
 
         _, number_of_atoms_in_molecule = jnp.unique(batch_segments, return_counts = True, size=len(graph_mask))
-        hirsh_bool_1 = jnp.repeat(hirsh_bool, number_of_atoms_in_molecule, total_repeat_length = len(node_mask))
-        hirsh_bool_2 = jax.lax.convert_element_type(hirsh_bool_1, jnp.bool_)
-        # print('number_of_atoms_in_molecule: ', number_of_atoms_in_molecule)
-        # print('hirsh_bool: ', hirsh_bool)
-        # print('hirsh_bool_1: ', hirsh_bool_1)
-        # print('hirsh_bool_2: ', hirsh_bool_2)
-        # # print('hirsh_bool_2: ', hirsh_bool_2.value)
-        # hirsh_bool_2_values = jax.device_get(hirsh_bool_2)
-        # print('hirsh_bool_2:', jnp.array(hirsh_bool_2_values))
-        # print('node_mask: ', node_mask)
 
-
-        dipole = model.apply(params, inputs)['dipole']  # (num_graphs)
-        dipole = jnp.where(graph_mask, dipole, jnp.asarray(0., dtype=dipole.dtype))  # (num_graphs)
         dipole_vec = model.apply(params, inputs)['dipole_vec']  # (num_graphs)
         dipole_vec = safe_scale(dipole_vec, graph_mask_expanded)
+
+        #create Hirshfeld bool mask to hide molecules if Hirshfeld ratios is specified
+        hirsh_bool = jnp.repeat(hirsh_bool, number_of_atoms_in_molecule, total_repeat_length = len(node_mask))
+        hirsh_bool = jax.lax.convert_element_type(hirsh_bool, jnp.bool_)
+
         hirshfeld_ratios = model.apply(params, inputs)['hirshfeld_ratios']  # (num_graphs)
         hirshfeld_ratios = safe_scale(hirshfeld_ratios, node_mask)
-        hirshfeld_ratios = safe_scale(hirsh_bool_2, hirshfeld_ratios)
+        hirshfeld_ratios = safe_scale(hirshfeld_ratios, hirsh_bool)
 
-        return dict(energy=energy, forces=forces, dipole=dipole, dipole_vec=dipole_vec, hirshfeld_ratios = hirshfeld_ratios)
+        return dict(energy=energy, forces=forces, dipole_vec=dipole_vec, hirshfeld_ratios = hirshfeld_ratios)
         
     return energy_and_force_and_dipole_and_hirsh_fn

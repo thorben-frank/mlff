@@ -116,8 +116,6 @@ def init_itp_net(
             nn.activation, energy_activation_fn
         ) if energy_activation_fn != 'identity' else lambda u: u,
         partial_charges=partial_charges,
-        # hirshfeld_ratios=hirshfeld_ratios,
-        cutoff=cutoff,
     )
 
     dipole_vec = DipoleVecSparse(
@@ -128,14 +126,10 @@ def init_itp_net(
             nn.activation, energy_activation_fn
         ) if energy_activation_fn != 'identity' else lambda u: u,
         partial_charges=partial_charges,
-        # return_partial_charges=True
     )
     
     zbl_repulsion = ZBLRepulsionSparse(
         prop_keys=None,
-        # activation_fn=getattr(
-        #     nn.activation, energy_activation_fn
-        # ) if energy_activation_fn != 'identity' else lambda u: u,
     )
 
     energy = EnergySparse(
@@ -148,10 +142,10 @@ def init_itp_net(
         learn_atomic_type_scales=energy_learn_atomic_type_scales,
         learn_atomic_type_shifts=energy_learn_atomic_type_shifts,
         electrostatic_energy=electrostatic_energy,
-        dispersion_energy=dispersion_energy,
-        zbl_repulsion=zbl_repulsion,
         electrostatic_energy_bool=electrostatic_energy_bool,
+        dispersion_energy=dispersion_energy,
         dispersion_energy_bool=dispersion_energy_bool,
+        zbl_repulsion=zbl_repulsion,
         zbl_repulsion_bool=zbl_repulsion_bool
     )
 
@@ -159,6 +153,6 @@ def init_itp_net(
         geometry_embeddings=[geometry_embed],
         feature_embeddings=embedding_modules,
         layers=layers,
-        observables=[energy, dipole, dipole_vec, hirshfeld_ratios],
+        observables=[energy, dipole_vec, hirshfeld_ratios],
         prop_keys=None
     )

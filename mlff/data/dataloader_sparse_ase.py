@@ -215,7 +215,6 @@ def ASE_to_jraph(
     global_context = {
         "energy": np.array([energy]) if energy is not None else None,
         "stress": np.array(stress) if stress is not None else None,
-        "dipole": np.array([np.linalg.norm(dipole)]) if dipole is not None else None,
         "dipole_vec": np.array(dipole.reshape(-1,3)) if dipole is not None else None,
         "total_charge": np.array(total_charge, dtype=np.int16).reshape(-1) if total_charge is not None else None,
         "hirsh_bool": np.array([0]) if hirshfeld_ratios[0]==0. else np.array([1]),
