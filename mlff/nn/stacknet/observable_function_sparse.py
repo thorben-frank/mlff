@@ -45,9 +45,6 @@ def get_observable_fn_sparse(model: StackNetSparse, observable: str = None):
                 hirsh_bool: jnp.ndarray = None,
                 i_pairs: jnp.ndarray = None,
                 j_pairs: jnp.ndarray = None,
-                # d_ij_all: jnp.ndarray = None,
-                pair_mask: jnp.ndarray = None,
-                batch_segments_pairs: jnp.ndarray = None,
         ):
             if batch_segments is None:
                 assert graph_mask is None
@@ -76,9 +73,7 @@ def get_observable_fn_sparse(model: StackNetSparse, observable: str = None):
                 hirsh_bool=hirsh_bool,
                 i_pairs=i_pairs,
                 j_pairs=j_pairs,
-                # d_ij_all=d_ij_all,
-                pair_mask=pair_mask,
-                batch_segments_pairs=batch_segments_pairs,
+                # d_ij_all=d_ij_all
             )
             return model.apply(params, inputs)
     else:
@@ -100,9 +95,6 @@ def get_observable_fn_sparse(model: StackNetSparse, observable: str = None):
                 hirsh_bool: jnp.ndarray = None,
                 i_pairs: jnp.ndarray = None,
                 j_pairs: jnp.ndarray = None,
-                # d_ij_all: jnp.ndarray = None,
-                pair_mask: jnp.ndarray = None,
-                batch_segments_pairs: jnp.ndarray = None,
         ):
             if batch_segments is None:
                 assert graph_mask is None
@@ -130,10 +122,7 @@ def get_observable_fn_sparse(model: StackNetSparse, observable: str = None):
                 num_unpaired_electrons=num_unpaired_electrons,
                 hirsh_bool=hirsh_bool,
                 i_pairs=i_pairs,
-                j_pairs=j_pairs,
-                # d_ij_all=d_ij_all,
-                pair_mask=pair_mask,
-                batch_segments_pairs=batch_segments_pairs,
+                j_pairs=j_pairs
             )
             return dict(observable=model.apply(params, inputs)[observable])
 
@@ -157,9 +146,6 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
                   hirsh_bool: jnp.ndarray = None,
                   i_pairs: jnp.ndarray = None,
                   j_pairs: jnp.ndarray = None,
-                #   d_ij_all: jnp.ndarray = None,
-                  pair_mask: jnp.ndarray = None,
-                  batch_segments_pairs: jnp.ndarray = None,
                   dummmy: jnp.ndarray = None):
         if batch_segments is None:
             assert graph_mask is None
@@ -186,9 +172,6 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
                       hirsh_bool=hirsh_bool,
                       i_pairs=i_pairs,
                       j_pairs=j_pairs,
-                    #   d_ij_all=d_ij_all,
-                      pair_mask=pair_mask,
-                      batch_segments_pairs=batch_segments_pairs,
                       dummmy = dummmy
                       )
 
@@ -212,9 +195,6 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
                             hirsh_bool: jnp.ndarray = None,
                             i_pairs: jnp.ndarray = None,
                             j_pairs: jnp.ndarray = None,
-                            # d_ij_all: jnp.ndarray = None,
-                            pair_mask: jnp.ndarray = None,
-                            batch_segments_pairs: jnp.ndarray = None,
                             dummmy: jnp.ndarray = None,
                             *args,
                             **kwargs):
@@ -237,9 +217,6 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
                           hirsh_bool,
                           i_pairs,
                           j_pairs,
-                        #   d_ij_all,
-                          pair_mask,
-                          batch_segments_pairs,
                           dummmy
                           )
 
@@ -268,9 +245,6 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
                 hirsh_bool=hirsh_bool,
                 i_pairs=i_pairs,
                 j_pairs=j_pairs,
-                # d_ij_all=d_ij_all,
-                pair_mask=pair_mask,
-                batch_segments_pairs=batch_segments_pairs,
                 dummmy = dummmy
                 )
 

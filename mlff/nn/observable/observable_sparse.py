@@ -632,10 +632,8 @@ class DispersionEnergySparse(BaseSubModule):
     def __call__(self, inputs: Dict, *args, **kwargs) -> jnp.ndarray:  
         node_mask = inputs['node_mask']  # (num_nodes)
         num_nodes = len(node_mask)
-        pair_mask = inputs['pair_mask']  # (num_pairs)
         i_pairs = inputs['i_pairs']
         j_pairs = inputs['j_pairs']
-        pair_mask = inputs['pair_mask']
         cell = inputs.get('cell')  # shape: (num_graphs, 3, 3)
         cell_offsets = inputs.get('cell_offset')  # shape: (num_pairs, 3)
 
