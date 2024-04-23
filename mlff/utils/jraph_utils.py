@@ -51,7 +51,6 @@ def graph_to_batch_fn(graph: jraph.GraphsTuple):
         stress=graph.globals.get('stress'),
         total_charge=graph.globals.get('total_charge'),
         hirsh_bool=graph.globals.get('hirsh_bool'),
-        dipole=graph.globals.get('dipole'),
         dipole_vec=graph.globals.get('dipole_vec'),
         hirshfeld_ratios=graph.nodes.get('hirshfeld_ratios'),
         idx_i_lr=graph.idx_i_lr,

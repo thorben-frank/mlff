@@ -157,10 +157,6 @@ def ASE_to_jraph(
         total_charge = None
         multiplicity = None
 
-
-    # total_charge = mol.info.get('total_charge')
-    # multiplicity = mol.info.get('multiplicity')
-
     if mol.get_pbc().any():
         i, j, S = neighbor_list('ijS', mol, cutoff, self_interaction=self_interaction)
         cell = np.array(mol.get_cell())
@@ -197,9 +193,6 @@ def ASE_to_jraph(
             "forces": np.array(forces) if forces is not None else None,
             "hirshfeld_ratios": np.array(hirshfeld_ratios) if hirshfeld_ratios is not None else None
             }
-
-    # senders = np.array(j)
-    # receivers = np.array(i)
     
     idx_i_lr, idx_j_lr = np.triu_indices(n_atoms, k=1)
     idx_i_lr = np.array(idx_i_lr)
@@ -211,7 +204,6 @@ def ASE_to_jraph(
     n_edge = np.array([len(senders)])
     n_pairs = np.array([n_atoms * (n_atoms - 1) // 2])
 
-    # num_unpaired_electrons = int(multiplicity - 1)
 
     global_context = {
         "energy": np.array([energy]) if energy is not None else None,
@@ -220,7 +212,6 @@ def ASE_to_jraph(
         "total_charge": np.array(total_charge, dtype=np.int16).reshape(-1) if total_charge is not None else None,
         "hirsh_bool": np.array([0]) if hirshfeld_ratios[0]==0. else np.array([1]),
         "num_unpaired_electrons": np.array([multiplicity]) - 1 if multiplicity is not None else None,
-        # "num_unpaired_electrons": np.array(num_unpaired_electrons, dtype=np.int16).reshape(-1) if num_unpaired_electrons is not None else None
     }
 
     return jraph.GraphsTuple(

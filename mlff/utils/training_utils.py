@@ -14,7 +14,6 @@ property_to_mask = {
     'energy': 'graph_mask',
     'stress': 'graph_mask',
     'forces': 'node_mask',
-    'dipole': 'graph_mask',
     'dipole_vec': 'graph_mask_expanded',
     'hirshfeld_ratios': 'node_mask',
     'dispersion_energy': 'graph_mask',
@@ -107,7 +106,6 @@ property_to_loss = {
     'energy': graph_mse_loss,
     'stress': graph_mse_loss,
     'forces': node_mse_loss,
-    'dipole': graph_mse_loss,
     'dipole_vec': graph_mse_loss,
     'hirshfeld_ratios': node_mse_loss,
 }

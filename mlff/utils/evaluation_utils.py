@@ -83,8 +83,6 @@ def evaluate(
                 msk = node_mask
             elif t == 'stress':
                 msk = graph_mask
-            elif t == 'dipole':
-                msk = graph_mask
             elif t == 'dipole_vec':
                 msk = graph_mask_expanded
             elif t == 'hirshfeld_ratios':
