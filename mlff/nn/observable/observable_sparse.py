@@ -113,7 +113,7 @@ def gamma_cubic_fit(alpha):
 @jax.jit
 def _coulomb_erf(q: jnp.ndarray, rij: jnp.ndarray, 
              idx_i: jnp.ndarray, idx_j: jnp.ndarray,
-             kehalf: float, sigma: float#, sigma: jnp.ndarray
+             kehalf: float, sigma: float
 ) -> jnp.ndarray:
     """ Pairwise Coulomb interaction with erf damping """
     pairwise = kehalf * q[idx_i] * q[idx_j] * jax.scipy.special.erf(rij/sigma)/rij
@@ -280,7 +280,6 @@ class ZBLRepulsionSparse(BaseSubModule):
     """
     prop_keys: Dict
     input_convention: str = 'positions'
-    # output_convention: str = 'per_atom'
     module_name: str = 'zbl_repulsion'
     a0: float = 0.5291772105638411
     ke: float = 14.399645351950548
@@ -314,32 +313,11 @@ class ZBLRepulsionSparse(BaseSubModule):
         phi_r_cut_ij = inputs['cut']
         idx_i = inputs['idx_i']
         idx_j = inputs['idx_j']
-        cell = inputs.get('cell')
-        cell_offsets = inputs.get('cell_offset') 
 
         z_i = atomic_numbers[idx_i]
         z_j = atomic_numbers[idx_j]
 
-        if self.input_convention == 'positions':
-            positions = inputs['positions']  # (N, 3)
-
-            # Calculate pairwise distance vectors
-            r_ij = jax.vmap(
-                lambda i, j: positions[j] - positions[i]
-            )(idx_i, idx_j)  # (num_pairs, 3)
-
-            # Apply minimal image convention if needed.
-            if cell is not None:
-                r_ij = add_cell_offsets_sparse(
-                    r_ij=r_ij,
-                    cell=cell,
-                    cell_offsets=cell_offsets
-                )  # shape: (num_pairs,3)
-
-        if self.input_convention == 'displacements':
-            r_ij = inputs['displacements']
-
-        d_ij = safe_norm(r_ij, axis=-1) 
+        d_ij = inputs['d_ij']
 
         z_d_ij = safe_mask(mask=d_ij != 0,
                            operand=d_ij,
@@ -561,44 +539,19 @@ class ElectrostaticEnergySparse(BaseSubModule):
     partial_charges: Optional[Any] = None
     ke: float = 14.399645351950548 #TODO: check if this is the correct value
     use_ewald_summation_bool: bool = False
-
-    def setup(self):
-        self.kehalf = self.ke / 2
+    kehalf: float = 14.399645351950548/2
   
     @nn.compact
     def __call__(self, inputs: Dict, *args, **kwargs) -> jnp.ndarray:  
         node_mask = inputs['node_mask']  # (num_nodes)
         num_nodes = len(node_mask)
         partial_charges = self.partial_charges(inputs)['partial_charges'] # shape: (num_nodes)
-        cell = inputs.get('cell')
-        cell_offsets = inputs.get('cell_offset') 
         idx_i_lr = inputs['idx_i_lr']
         idx_j_lr = inputs['idx_j_lr']        
-
-        if self.input_convention == 'positions':
-            positions = inputs['positions']  # (N, 3)
-
-            # Calculate pairwise distance vectors
-            r_ij_all = jax.vmap(
-                lambda i, j: positions[j] - positions[i]
-            )(idx_i_lr, idx_j_lr)  # (num_pairs, 3)
-
-            # Apply minimal image convention if needed.
-            if cell is not None:
-                r_ij = add_cell_offsets_sparse(
-                    r_ij=r_ij,
-                    cell=cell,
-                    cell_offsets=cell_offsets
-                )  # shape: (num_pairs,3)
-
-        # if self.input_convention == 'displacements':
-        #     #TODO: displacements of SR and LR pairs combined
-        #     r_ij = inputs['displacements']
-
-        d_ij_all = safe_norm(r_ij_all, axis=-1)  # shape : (num_pairs)
+        d_ij_lr = inputs['d_ij_lr']
        
-        atomic_electrostatic_energy_ij = _coulomb_erf(partial_charges, d_ij_all, idx_i_lr, idx_j_lr, self.kehalf, 1.64) 
-        #TODO: 1.64 comes from sigma_cubic_fit(4.5), Hydrogen polarizability, multiplied by jnp.sqrt(2) 
+        atomic_electrostatic_energy_ij = _coulomb_erf(partial_charges, d_ij_lr, idx_i_lr, idx_j_lr, self.kehalf, 1.64) 
+        #1.64 comes from sigma_cubic_fit(4.5), Hydrogen polarizability, multiplied by jnp.sqrt(2) 
 
         atomic_electrostatic_energy = segment_sum(
                 atomic_electrostatic_energy_ij,
@@ -634,30 +587,7 @@ class DispersionEnergySparse(BaseSubModule):
         num_nodes = len(node_mask)
         idx_i_lr = inputs['idx_i_lr']
         idx_j_lr = inputs['idx_j_lr']
-        cell = inputs.get('cell')  # shape: (num_graphs, 3, 3)
-        cell_offsets = inputs.get('cell_offset')  # shape: (num_pairs, 3)
-
-        if self.input_convention == 'positions':
-            positions = inputs['positions']  # (N, 3)
-
-            # Calculate pairwise distance vectors
-            r_ij_all = jax.vmap(
-                lambda i, j: positions[j] - positions[i]
-            )(idx_i_lr, idx_j_lr)  # (num_pairs, 3)
-
-            # Apply minimal image convention if needed.
-            if cell is not None:
-                r_ij = add_cell_offsets_sparse(
-                    r_ij=r_ij,
-                    cell=cell,
-                    cell_offsets=cell_offsets
-                )  # shape: (num_pairs,3)
-
-        # if self.input_convention == 'displacements':
-        #     #TODO: displacements of SR and LR pairs combined, r_ij_all
-        #     r_ij = inputs['displacements']
-
-        d_ij_all = safe_norm(r_ij_all, axis=-1)  # shape : (num_pairs)
+        d_ij_lr = inputs['d_ij_lr']
 
         hirshfeld_ratios = self.hirshfeld_ratios(inputs)['hirshfeld_ratios']
 
@@ -671,7 +601,7 @@ class DispersionEnergySparse(BaseSubModule):
         gamma_ij = gamma_cubic_fit(alpha_ij)
 
         # Getting dispersion energy, positions are converted to to a.u.
-        dispersion_energy_ij = vdw_QDO_disp_damp(d_ij_all / Bohr, gamma_ij, C6_ij)
+        dispersion_energy_ij = vdw_QDO_disp_damp(d_ij_lr / Bohr, gamma_ij, C6_ij)
 
         atomic_dispersion_energy = segment_sum(
                 dispersion_energy_ij,
