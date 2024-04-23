@@ -48,27 +48,31 @@ def switching_fn(x, x_on, x_off):
     c = (x - x_on) / (x_off - x_on)
     return sigma(1 - c) / (sigma(1 - c) + sigma(c))
 
+@jax.jit
+def Damp_n3(z) -> jnp.ndarray:
+    return 1 - jnp.exp(-z) * (1 + z + z**2/factorial(2) + z**3/factorial(3))
 
 @jax.jit
-def Damp_n3(R, gamma) -> jnp.ndarray:
-    return 1 - jnp.exp(-gamma*R**2/2) * (1 + gamma*R**2/2 + (gamma*R**2/2)**2/2/factorial(2))
+def Damp_n4(z) -> jnp.ndarray:
+    return 1 - jnp.exp(-z) * (1 + z + z**2/factorial(2) + z**3/factorial(3)+z**4/factorial(4))
 
 @jax.jit
-def Damp_n4(R, gamma) -> jnp.ndarray:
-    return 1 - jnp.exp(-gamma*R**2/2) * (1 + gamma*R**2/2 + (gamma*R**2/2)**2/2/factorial(2) + (gamma*R**2/2)**3/2/factorial(3))
+def Damp_n5(z) -> jnp.ndarray:
+    return 1 - jnp.exp(-z) * (1 + z + z**2/factorial(2) + z**3/factorial(3)+z**4/factorial(4)+z**5/factorial(5))
 
 @jax.jit
-def Damp_n5(R, gamma) -> jnp.ndarray:
-    return 1 - jnp.exp(-gamma*R**2/2) * (1 + gamma*R**2/2 + (gamma*R**2/2)**2/2/factorial(2) + (gamma*R**2/2)**3/2/factorial(3) + (gamma*R**2/2)**4/24/factorial(4))
+def Damp_n6(z) -> jnp.ndarray:
+    return 1 - jnp.exp(-z) * (1 + z + z**2/factorial(2) + z**3/factorial(3)+z**4/factorial(4)+z**5/factorial(5)+z**6/factorial(6))
 
 @jax.jit
 def vdw_QDO_disp_damp(R, gamma, C6):
     #  Computing the vdW-QDO dispersion energy and returning it in eV
+    z = gamma*R**2/2
     C8 = 5/gamma*C6
     C10 = 245/8/gamma**2*C6
-    f6 = Damp_n3(R, gamma)
-    f8 = Damp_n4(R, gamma)
-    f10 = Damp_n5(R, gamma)
+    f6 = Damp_n3(z)
+    f8 = Damp_n4(z)
+    f10 = Damp_n5(z)
     V3 = -f6*C6/R**6 - f8*C8/R**8 - f10*C10/R**10
     return V3*Hartree
 
@@ -97,7 +101,7 @@ def mixing_rules(
 
 @jax.jit
 def gamma_cubic_fit(alpha):
-    vdW_radius = fine_structure**(-4/21)*alpha**(1/7) 
+    vdW_radius = fine_structure**(-4/21)*alpha**(1/7)
     b0 = -0.00433008
     b1 = 0.24428889
     b2 = 0.04125273
@@ -243,6 +247,14 @@ class EnergySparse(BaseSubModule):
             energy = atomic_energy  # (num_nodes)
 
             return dict(energy=energy)
+            # return dict(e_sum = jnp.sum(electrostatic_energy), 
+            #             d_sum = jnp.sum(dispersion_energy), 
+            #             r_sum = jnp.sum(repulsion_energy), 
+            #             energy=energy, 
+            #             atomic_energy=atomic_energy ,
+            #             repulsion_energy=repulsion_energy, 
+            #             electrostatic_energy=electrostatic_energy, 
+            #             dispersion_energy=dispersion_energy)
 
         else:
             raise ValueError(
@@ -533,6 +545,8 @@ class DipoleVecSparse(BaseSubModule):
         dipole_vec = safe_scale(dipole, graph_mask_expanded)
 
         return dict(dipole_vec=dipole_vec)
+        # return dict(dipole_vec=dipole_vec, 
+        #             partial_charges=partial_charges)
 
     def reset_output_convention(self, output_convention):
         self.output_convention = output_convention
@@ -661,13 +675,13 @@ class DispersionEnergySparse(BaseSubModule):
         # Getting dispersion energy, positions are converted to to a.u.
         dispersion_energy_ij = vdw_QDO_disp_damp(d_ij_all / Bohr, gamma_ij, C6_ij)
 
-        dispersion_energy_ij = safe_scale(dispersion_energy_ij, pair_mask)
-
         atomic_dispersion_energy = segment_sum(
                 dispersion_energy_ij,
                 segment_ids=i_pairs,
                 num_segments=num_nodes
             )  # (num_nodes)
+        
+        atomic_dispersion_energy = safe_scale(atomic_dispersion_energy, node_mask)
 
         return dict(dispersion_energy=atomic_dispersion_energy)
     
