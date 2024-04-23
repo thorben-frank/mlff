@@ -4,7 +4,7 @@ from mlff.nn.stacknet import StackNetSparse
 from mlff.nn.embed import GeometryEmbedSparse, AtomTypeEmbedSparse, ChargeEmbedSparse, SpinEmbedSparse
 from mlff.nn.layer import SO3kratesLayerSparse
 from .representation_utils import make_embedding_modules
-from mlff.nn.observable import EnergySparse, DipoleSparse, DipoleVecSparse, HirshfeldSparse, PartialChargesSparse, ElectrostaticEnergySparse, DispersionEnergySparse, ZBLRepulsionSparse
+from mlff.nn.observable import EnergySparse, DipoleVecSparse, HirshfeldSparse, PartialChargesSparse, ElectrostaticEnergySparse, DispersionEnergySparse, ZBLRepulsionSparse
 from typing import Sequence
 
 
@@ -70,17 +70,6 @@ def init_so3krates_sparse(
         activation_fn=getattr(nn.activation, activation_fn) if activation_fn != 'identity' else lambda u: u,
         behave_like_identity_fn_at_init=layers_behave_like_identity_fn_at_init
     ) for i in range(num_layers)]
-
-    dipole = DipoleSparse(
-        prop_keys=None,
-        output_is_zero_at_init=output_is_zero_at_init,
-        regression_dim=energy_regression_dim,
-        activation_fn=getattr(
-            nn.activation, energy_activation_fn
-        ) if energy_activation_fn != 'identity' else lambda u: u,
-        # learn_atomic_type_scales=energy_learn_atomic_type_scales,
-        # learn_atomic_type_shifts=energy_learn_atomic_type_shifts,
-    )
 
     partial_charges = PartialChargesSparse(
         prop_keys=None,

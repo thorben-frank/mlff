@@ -2,7 +2,7 @@ import flax.linen as nn
 from mlff.nn.stacknet import StackNetSparse
 from mlff.nn.embed import GeometryEmbedE3x
 from mlff.nn.layer import ITPLayer
-from mlff.nn.observable import EnergySparse, DipoleSparse, DipoleVecSparse, HirshfeldSparse, PartialChargesSparse, ElectrostaticEnergySparse, DispersionEnergySparse, ZBLRepulsionSparse
+from mlff.nn.observable import EnergySparse, DipoleVecSparse, HirshfeldSparse, PartialChargesSparse, ElectrostaticEnergySparse, DispersionEnergySparse, ZBLRepulsionSparse
 
 from .representation_utils import make_embedding_modules
 
@@ -79,17 +79,6 @@ def init_itp_net(
         feature_collection_over_layers=feature_collection_over_layers,
         include_pseudotensors=include_pseudotensors
     )]
-
-    dipole = DipoleSparse(
-        prop_keys=None,
-        output_is_zero_at_init=output_is_zero_at_init,
-        regression_dim=energy_regression_dim,
-        activation_fn=getattr(
-            nn.activation, energy_activation_fn
-        ) if energy_activation_fn != 'identity' else lambda u: u,
-        # learn_atomic_type_scales=energy_learn_atomic_type_scales,
-        # learn_atomic_type_shifts=energy_learn_atomic_type_shifts,
-    )
 
     partial_charges = PartialChargesSparse(
         prop_keys=None,
