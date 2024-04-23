@@ -540,6 +540,7 @@ class ElectrostaticEnergySparse(BaseSubModule):
     ke: float = 14.399645351950548 #TODO: check if this is the correct value
     use_ewald_summation_bool: bool = False
     kehalf: float = 14.399645351950548/2
+    electrostatic_energy_scale: float = 1.0
   
     @nn.compact
     def __call__(self, inputs: Dict, *args, **kwargs) -> jnp.ndarray:  
@@ -550,8 +551,7 @@ class ElectrostaticEnergySparse(BaseSubModule):
         idx_j_lr = inputs['idx_j_lr']        
         d_ij_lr = inputs['d_ij_lr']
        
-        atomic_electrostatic_energy_ij = _coulomb_erf(partial_charges, d_ij_lr, idx_i_lr, idx_j_lr, self.kehalf, 1.64) 
-        #1.64 comes from sigma_cubic_fit(4.5), Hydrogen polarizability, multiplied by jnp.sqrt(2) 
+        atomic_electrostatic_energy_ij = _coulomb_erf(partial_charges, d_ij_lr, idx_i_lr, idx_j_lr, self.kehalf, self.electrostatic_energy_scale)
 
         atomic_electrostatic_energy = segment_sum(
                 atomic_electrostatic_energy_ij,
@@ -574,6 +574,7 @@ class DispersionEnergySparse(BaseSubModule):
     module_name = 'dispersion_energy'
     input_convention: str = 'positions'
     output_is_zero_at_init: bool = True
+    dispersion_energy_scale: float = 1.0
 
     def setup(self):
         if self.output_is_zero_at_init:
@@ -598,7 +599,7 @@ class DispersionEnergySparse(BaseSubModule):
         alpha_ij, C6_ij = mixing_rules(atomic_numbers, idx_i_lr, idx_j_lr, hirshfeld_ratios)
         
         # Use cubic fit for gamma
-        gamma_ij = gamma_cubic_fit(alpha_ij)
+        gamma_ij = gamma_cubic_fit(alpha_ij)/self.dispersion_energy_scale
 
         # Getting dispersion energy, positions are converted to to a.u.
         dispersion_energy_ij = vdw_QDO_disp_damp(d_ij_lr / Bohr, gamma_ij, C6_ij)

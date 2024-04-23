@@ -40,7 +40,9 @@ model:
   energy_learn_atomic_type_shifts: false
   input_convention: positions  # Input convention.
   electrostatic_energy_bool: false
+  electrostatic_energy_scale: 1.0
   dispersion_energy_bool: false
+  dispersion_energy_scale: 1.0
   zbl_repulsion_bool: true
 optimizer:
   name: adam  # Name of the optimizer. See https://optax.readthedocs.io/en/latest/api.html#common-optimizers for available ones.

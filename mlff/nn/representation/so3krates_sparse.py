@@ -36,7 +36,9 @@ def init_so3krates_sparse(
         energy_learn_atomic_type_shifts: bool = False,
         input_convention: str = 'positions',
         electrostatic_energy_bool: bool = False,
+        electrostatic_energy_scale: float = 1.0,
         dispersion_energy_bool: bool = False,
+        dispersion_energy_scale: float = 1.0,
         zbl_repulsion_bool: bool = False,
 ):
     embedding_modules = make_embedding_modules(
@@ -97,6 +99,7 @@ def init_so3krates_sparse(
         activation_fn=getattr(
             nn.activation, energy_activation_fn
         ) if energy_activation_fn != 'identity' else lambda u: u,
+        dispersion_energy_scale=dispersion_energy_scale
     )
 
     electrostatic_energy = ElectrostaticEnergySparse(
@@ -107,6 +110,7 @@ def init_so3krates_sparse(
             nn.activation, energy_activation_fn
         ) if energy_activation_fn != 'identity' else lambda u: u,
         partial_charges=partial_charges,
+        electrostatic_energy_scale=electrostatic_energy_scale
     )
 
     dipole_vec = DipoleVecSparse(
@@ -116,15 +120,11 @@ def init_so3krates_sparse(
         activation_fn=getattr(
             nn.activation, energy_activation_fn
         ) if energy_activation_fn != 'identity' else lambda u: u,
-        partial_charges=partial_charges,
-        # return_partial_charges=True
+        partial_charges=partial_charges
     )
 
     zbl_repulsion = ZBLRepulsionSparse(
-        prop_keys=None,
-        # activation_fn=getattr(
-        #     nn.activation, energy_activation_fn
-        # ) if energy_activation_fn != 'identity' else lambda u: u,
+        prop_keys=None
     )
     
     energy = EnergySparse(
