@@ -119,17 +119,6 @@ def _coulomb_erf(q: jnp.ndarray, rij: jnp.ndarray,
     pairwise = kehalf * q[idx_i] * q[idx_j] * jax.scipy.special.erf(rij/sigma)/rij
     return pairwise
 
-@jax.jit
-def sigma_cubic_fit(alpha):
-    vdW_radius = fine_structure**(-4/21)*alpha**(1/7) 
-    b0 = -0.00433008
-    b1 = 0.24428889
-    b2 = 0.04125273
-    b3 = -0.00078893
-    sigma = b3*vdW_radius**3 + b2*vdW_radius**2 + b1*vdW_radius + b0
-    return sigma*jnp.sqrt(2)
-
-
 Array = Any
 
 class EnergySparse(BaseSubModule):
