@@ -535,7 +535,7 @@ class ElectrostaticEnergySparse(BaseSubModule):
     def __call__(self, inputs: Dict, *args, **kwargs) -> jnp.ndarray:  
         node_mask = inputs['node_mask']  # (num_nodes)
         num_nodes = len(node_mask)
-        partial_charges = self.partial_charges(inputs)['partial_charges'] # shape: (num_nodes)
+        partial_charges = self.partial_charges(inputs)['partial_charges']
         idx_i_lr = inputs['idx_i_lr']
         idx_j_lr = inputs['idx_j_lr']        
         d_ij_lr = inputs['d_ij_lr']
