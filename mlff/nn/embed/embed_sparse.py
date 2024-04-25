@@ -31,16 +31,27 @@ class GeometryEmbedE3x(BaseSubModule):
 
         idx_i = inputs['idx_i']  # shape: (num_pairs)
         idx_j = inputs['idx_j']  # shape: (num_pairs)
+        idx_i_lr = inputs.get('idx_i_lr')  # shape: (num_pairs_lr)
+        idx_j_lr = inputs.get('idx_j_lr')  # shape: (num_pairs_lr)
         cell = inputs.get('cell')  # shape: (num_graphs, 3, 3)
         cell_offsets = inputs.get('cell_offset')  # shape: (num_pairs, 3)
+        cell_offsets_lr = inputs.get('cell_offset_lr')  # shape: (num_pairs, 3)
 
         if self.input_convention == 'positions':
             positions = inputs['positions']  # (N, 3)
 
-            # Calculate pairwise distance vectors
+            # Calculate pairwise distance vectors.
             r_ij = jax.vmap(
                 lambda i, j: positions[j] - positions[i]
             )(idx_i, idx_j)  # (num_pairs, 3)
+
+            r_ij_lr = None
+            # If indices for long range corrections are present they are used.
+            if idx_i_lr is not None:
+                # Calculate pairwise distance vectors on long range indices.
+                r_ij_lr = jax.vmap(
+                    lambda i, j: positions[j] - positions[i]
+                )(idx_i_lr, idx_j_lr)  # (num_pairs_lr, 3)
 
             # Apply minimal image convention if needed.
             if cell is not None:
@@ -50,12 +61,38 @@ class GeometryEmbedE3x(BaseSubModule):
                     cell_offsets=cell_offsets
                 )  # shape: (num_pairs,3)
 
+                if idx_i_lr is not None:
+                    if cell_offsets_lr is None:
+                        raise ValueError(
+                            '`cell_offsets_lr` are required in GeometryEmbed when using global indices with periodic'
+                            'boundary conditions.'
+                        )
+                    logging.warning(
+                        'The use of long range indices with PBCs has not been tested thoroughly yet, so use with care!'
+                    )
+
+                    r_ij_lr = add_cell_offsets_sparse(
+                        r_ij=r_ij_lr,
+                        cell=cell,
+                        cell_offsets=cell_offsets_lr
+                    )  # shape: (num_pairs_lr,3)
+
         # Here it is assumed that PBC (if present) have already been respected in displacement calculation.
         elif self.input_convention == 'displacements':
             positions = None
-            r_ij = inputs['displacements']
+            r_ij = inputs['displacements']  # shape : (num_pairs, 3)
+            r_ij_lr = inputs.get('displacements_lr')  # shape : (num_pairs_lr, 3)
         else:
             raise ValueError(f"{self.input_convention} is not a valid argument for `input_convention`.")
+
+        # Calculate pairwise distances.
+        d_ij = safe_norm(r_ij, axis=-1)  # shape : (num_pairs)
+
+        if r_ij_lr is not None:
+            d_ij_lr = safe_norm(r_ij_lr, axis=-1)  # shape : (num_pairs_lr)
+            del r_ij_lr
+        else:
+            d_ij_lr = None
 
         basis, cut = e3x.nn.basis(
             r=r_ij,
@@ -70,6 +107,8 @@ class GeometryEmbedE3x(BaseSubModule):
         geometric_data = {'positions': positions,
                           'basis': basis,
                           'r_ij': r_ij,
+                          'd_ij': d_ij,
+                          'd_ij_lr': d_ij_lr,
                           'cut': cut,
                           }
 
