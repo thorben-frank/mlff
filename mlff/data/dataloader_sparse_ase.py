@@ -167,25 +167,28 @@ def ASE_to_jraph(
         senders = np.array(j)
         receivers = np.array(i)
     else:
-        # i, j = neighbor_list('ij', mol, cutoff, self_interaction=self_interaction)
+        i, j = neighbor_list('ij', mol, cutoff, self_interaction=self_interaction)
         edge_features = {
             "cell": None,
             "cell_offset": None
         }
-        
-        if len(atomic_numbers) == 1:
-            return None
 
-        senders, receivers, minimal_distance = compute_senders_and_receivers_np(
-            positions,
-            cutoff=cutoff
-        )
+        senders = np.array(j)
+        receivers = np.array(i)
 
-        if (
-                minimal_distance < min_distance_filter or
-                np.abs(forces).max() > max_force_filter
-        ):
-            return None
+        # if len(atomic_numbers) == 1:
+        #     return None
+
+        # senders, receivers, minimal_distance = compute_senders_and_receivers_np(
+        #     positions,
+        #     cutoff=cutoff
+        # )
+
+        # if (
+        #         minimal_distance < min_distance_filter or
+        #         np.abs(forces).max() > max_force_filter
+        # ):
+        #     return None
 
     node_features = {
             "positions": np.array(positions),
@@ -194,7 +197,7 @@ def ASE_to_jraph(
             "hirshfeld_ratios": np.array(hirshfeld_ratios) if hirshfeld_ratios is not None else None
             }
     
-    idx_i_lr, idx_j_lr = np.triu_indices(n_atoms, k=1)
+    idx_i_lr, idx_j_lr = neighbor_list('ij', mol, 100, self_interaction=self_interaction)
     idx_i_lr = np.array(idx_i_lr)
     idx_j_lr = np.array(idx_j_lr)
 
@@ -202,7 +205,8 @@ def ASE_to_jraph(
     n_node = np.array([n_atoms])
 
     n_edge = np.array([len(senders)])
-    n_pairs = np.array([n_atoms * (n_atoms - 1) // 2])
+    # n_pairs = np.array([n_atoms * (n_atoms - 1)])
+    n_pairs = np.array([len(idx_i_lr)])
 
 
     global_context = {

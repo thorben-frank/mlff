@@ -504,7 +504,7 @@ class ElectrostaticEnergySparse(BaseSubModule):
     partial_charges: Optional[Any] = None
     ke: float = 14.399645351950548
     use_ewald_summation_bool: bool = False
-    kehalf: float = 14.399645351950548/2  #TODO: should we use ke or kehalf?
+    kehalf: float = 14.399645351950548/2
     electrostatic_energy_scale: float = 1.0
   
     @nn.compact
@@ -516,7 +516,7 @@ class ElectrostaticEnergySparse(BaseSubModule):
         idx_j_lr = inputs['idx_j_lr']        
         d_ij_lr = inputs['d_ij_lr']
        
-        atomic_electrostatic_energy_ij = _coulomb_erf(partial_charges, d_ij_lr, idx_i_lr, idx_j_lr, self.ke, self.electrostatic_energy_scale)
+        atomic_electrostatic_energy_ij = _coulomb_erf(partial_charges, d_ij_lr, idx_i_lr, idx_j_lr, self.kehalf, self.electrostatic_energy_scale)
 
         atomic_electrostatic_energy = segment_sum(
                 atomic_electrostatic_energy_ij,
