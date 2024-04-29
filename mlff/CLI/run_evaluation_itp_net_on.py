@@ -53,7 +53,7 @@ def evaluate_itp_net_on():
         help='How many edges to put in a batch. If not set is determined from max_num_graphs and max_num_edges in '
              '--datafile.'
     )
-    parser.add_argument(
+    parser.add_argument( #TODO: remove --max_num_pairs
         "--max_num_pairs",
         type=int,
         default=None,

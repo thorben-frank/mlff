@@ -7,6 +7,7 @@ from collections import namedtuple
 from typing import Any
 
 from ase.calculators.calculator import Calculator
+from ase.neighborlist import neighbor_list as ase_neighbor_list
 
 from mlff.utils.structures import Graph
 from mlff.mdx.potential import MLFFPotentialSparse
@@ -207,7 +208,8 @@ class mlffCalculatorSparse(Calculator):
                                                                       skin=0.,
                                                                       capacity_multiplier=self.capacity_multiplier)
         if self.pairs is None:
-            self.pairs = compute_pairs(system.R.shape[0])
+            idx_i_lrr, idx_j_lrr = ase_neighbor_list('ij', atoms, 100, self_interaction=False)
+            self.pairs = Pairs(jnp.array(idx_i_lrr, dtype=jnp.int32), jnp.array(idx_j_lrr, dtype=jnp.int32))
 
         output = self.calculate_fn(system, neighbors, self.pairs)  # note different cell convention
         self.results = jax.tree_map(lambda x: np.array(x), output)
@@ -285,15 +287,3 @@ def neighbor_list(positions: jnp.ndarray, cutoff: float, skin: float, cell: jnp.
                                           cutoff=cutoff,
                                           skin=skin,
                                           capacity_multiplier=capacity_multiplier)
-
-def compute_pairs(N):
-    idx_i_lr = jnp.arange(N) 
-    idx_j_lr = []
-    for i in range(1, N):
-        # Rotate the array
-        rotated = idx_i_lr[i:]
-        rotated = jnp.concatenate([rotated, idx_i_lr[:i]])
-        # Concatenate the rotated array to the result
-        idx_j_lr.extend(rotated)
-    idx_i_lr = jnp.repeat(idx_i_lr, N-1)
-    return  Pairs(jnp.array(idx_i_lr, dtype=jnp.int32), jnp.array(idx_j_lr, dtype=jnp.int32))
