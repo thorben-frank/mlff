@@ -187,26 +187,29 @@ def run_training(config: config_dict.ConfigDict, model: str = 'so3krates'):
     #         min_distance_filter=config.data.filter.min_distance / length_unit,
     #         max_force_filter=config.data.filter.max_force / energy_unit * length_unit,
     #     )
+    # elif data_filepath.is_dir():
+    #     tf_record_present = len([1 for x in os.scandir(data_filepath) if Path(x).suffix[:9] == '.tfrecord']) > 0
+    #     if tf_record_present:
+    #         loader = data.TFDSDataLoaderSparse(
+    #             input_file=data_filepath,
+    #             split='train',
+    #             max_force_filter=config.data.filter.max_force / energy_unit * length_unit
+    #         )
     elif data_filepath.is_dir():
-        tf_record_present = len([1 for x in os.scandir(data_filepath) if Path(x).suffix[:9] == '.tfrecord']) > 0
-        if tf_record_present:
-            loader = data.TFDSDataLoaderSparse(
-                input_file=data_filepath,
-                split='train',
-                max_force_filter=config.data.filter.max_force / energy_unit * length_unit
-            )
-
+        # tf_record_present = len([1 for x in os.scandir(data_filepath) if Path(x).suffix[:9] == '.tfrecord']) > 0
+        loader = data.AseDataLoaderSparse(input_folder=data_filepath)
             # loader = data.TFRecordDataLoaderSparse(
             #     input_file=data_filepath,
             #     # We need to do the inverse transforms, since in config everything is in ASE default units.
             #     min_distance_filter=config.data.filter.min_distance / length_unit,
             #     max_force_filter=config.data.filter.max_force / energy_unit * length_unit,
             # )
-        else:
-            raise ValueError(
-                f"Specifying a directory for `data_filepath` is only supported for directories that contain .tfrecord "
-                f"files. No .tfrecord files found at {data_filepath}."
-            )
+        # else:
+        #     raise ValueError(
+        #         f"Specifying a directory for `data_filepath` is only supported for directories that contain .tfrecord "
+        #         f"files. No .tfrecord files found at {data_filepath}."
+        #     )
+
     else:
         loader = data.AseDataLoaderSparse(input_file=data_filepath)
 
@@ -413,7 +416,7 @@ def run_training(config: config_dict.ConfigDict, model: str = 'so3krates'):
 
         batch_max_num_nodes = data_stats['max_num_of_nodes'] * (config.training.batch_max_num_graphs - 1) + 1
         batch_max_num_edges = data_stats['max_num_of_edges'] * (config.training.batch_max_num_graphs - 1) + 1
-        batch_max_num_pairs = data_stats['max_num_of_nodes'] * (data_stats['max_num_of_nodes'] - 1) // 2 * (config.training.batch_max_num_graphs - 1) + 1
+        batch_max_num_pairs = data_stats['max_num_of_nodes'] * (data_stats['max_num_of_nodes'] - 1) * (config.training.batch_max_num_graphs - 1) + 1
 
         config.training.batch_max_num_nodes = batch_max_num_nodes
         config.training.batch_max_num_edges = batch_max_num_edges
@@ -440,7 +443,7 @@ def run_training(config: config_dict.ConfigDict, model: str = 'so3krates'):
             batch_max_num_nodes=config.training.batch_max_num_nodes,
             batch_max_num_graphs=config.training.batch_max_num_graphs,
             batch_max_num_pairs=config.training.batch_max_num_pairs,
-        training_data=training_data,
+            training_data=training_data,
             validation_data=validation_data,
             ckpt_dir=workdir / 'checkpoints',
             eval_every_num_steps=config.training.eval_every_num_steps,
@@ -959,7 +962,7 @@ def run_fine_tuning(
 
         batch_max_num_nodes = data_stats['max_num_of_nodes'] * (config.training.batch_max_num_graphs - 1) + 1
         batch_max_num_edges = data_stats['max_num_of_edges'] * (config.training.batch_max_num_graphs - 1) + 1
-        batch_max_num_pairs = data_stats['max_num_of_nodes'] * (data_stats['max_num_of_nodes'] - 1) // 2 * (config.training.batch_max_num_graphs - 1) + 1
+        batch_max_num_pairs = data_stats['max_num_of_nodes'] * (data_stats['max_num_of_nodes'] - 1) * (config.training.batch_max_num_graphs - 1) + 1
 
         config.training.batch_max_num_nodes = batch_max_num_nodes
         config.training.batch_max_num_edges = batch_max_num_edges

@@ -1,11 +1,13 @@
 from ase.calculators.calculator import PropertyNotImplementedError
-from ase.io import iread
+from ase.io import read, iread
 from ase.neighborlist import neighbor_list
 from ase import Atoms
 from dataclasses import dataclass
+from typing import Optional
 from tqdm import tqdm
 import numpy as np
 import jraph
+import os
 
 import logging
 
@@ -34,15 +36,22 @@ def compute_senders_and_receivers_np(
 
 @dataclass
 class AseDataLoaderSparse:
-    input_file: str
+    input_file: Optional[str] = None,
+    input_folder: Optional[str] = None,
     min_distance_filter: float = 0.
     max_force_filter: float = 1.e6
 
     def cardinality(self):
-        n = 0
-        for _ in iread(self.input_file):
-            n += 1
-        return n
+        if self.input_file:
+            atoms = read(self.input_file)
+            return len(atoms)
+        elif self.input_folder:
+            file_list = [f for f in os.listdir(self.input_folder) if os.path.isfile(os.path.join(self.input_folder, f))]
+            total_atoms = 0
+            for file in file_list:
+                atoms = read(os.path.join(self.input_folder, file))
+                total_atoms += len(atoms)
+            return total_atoms
 
     def load(self, cutoff: float, pick_idx: np.ndarray = None):
         if pick_idx is None:
@@ -52,45 +61,50 @@ class AseDataLoaderSparse:
             def keep(idx: int):
                 return idx in pick_idx
 
-        logging.mlff(
-            f"Load data from {self.input_file} and calculate neighbors within cutoff={cutoff} Ang ..."
-        )
+        if self.input_file:
+            file_list = [self.input_file]
+        elif self.input_folder:
+            file_list = [os.path.join(self.input_folder, f) for f in os.listdir(self.input_folder) if os.path.isfile(os.path.join(self.input_folder, f))]
+        
         loaded_data = []
         max_num_of_nodes = 0
         max_num_of_edges = 0
         max_num_of_pairs = 0
-        i = 0
-        for a in tqdm(iread(self.input_file)):
-            if keep(i):
-                graph = ASE_to_jraph(
-                    a,
-                    min_distance_filter=self.min_distance_filter,
-                    max_force_filter=self.max_force_filter,
-                    cutoff=cutoff
-                )
+        for file_path in file_list:
+            logging.mlff(
+                f"Load data from {file_path} and calculate neighbors within cutoff={cutoff} Ang ..."
+            )
+            i = 0
+            for a in tqdm(iread(file_path), mininterval = 60, maxinterval=600):
+                if keep(i):
+                    graph = ASE_to_jraph(
+                        a,
+                        min_distance_filter=self.min_distance_filter,
+                        max_force_filter=self.max_force_filter,
+                        cutoff=cutoff
+                    )
 
-                loaded_data.append(graph)
+                    loaded_data.append(graph)
 
-                if graph is not None:
-                    num_nodes = len(graph.nodes['atomic_numbers'])
-                    num_edges = len(graph.receivers)
-                    num_pairs = num_nodes * (num_nodes - 1) // 2
-                    max_num_of_nodes = max_num_of_nodes if num_nodes <= max_num_of_nodes else num_nodes
-                    max_num_of_edges = max_num_of_edges if num_edges <= max_num_of_edges else num_edges
-                    max_num_of_pairs = max_num_of_pairs if num_pairs <= max_num_of_pairs else num_pairs
-            else:
-                pass
-            i += 1
+                    if graph is not None:
+                        num_nodes = len(graph.nodes['atomic_numbers'])
+                        num_edges = len(graph.receivers) 
+                        num_pairs = num_nodes * (num_nodes - 1) #TODO: remove --max_num_pairs
+                        max_num_of_nodes = max_num_of_nodes if num_nodes <= max_num_of_nodes else num_nodes
+                        max_num_of_edges = max_num_of_edges if num_edges <= max_num_of_edges else num_edges
+                        max_num_of_pairs = max_num_of_pairs if num_pairs <= max_num_of_pairs else num_pairs
+                else:
+                    pass
+                i += 1
 
-        if pick_idx is not None:
-            if max(pick_idx) >= i:
-                raise RuntimeError(
-                    f'`max(pick_idx) = {max(pick_idx)} >= cardinality = {i} of the dataset`.'
-                )
-        logging.mlff("... done!")
+            if pick_idx is not None:
+                if max(pick_idx) >= i:
+                    raise RuntimeError(
+                        f'`max(pick_idx) = {max(pick_idx)} >= cardinality = {i} of the dataset`.'
+                    )
+            logging.mlff("... done!")
 
         return loaded_data, {'max_num_of_nodes': max_num_of_nodes, 'max_num_of_edges': max_num_of_edges, 'max_num_of_pairs': max_num_of_pairs}
-
 
 def ASE_to_jraph(
     mol: Atoms,
