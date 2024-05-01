@@ -37,12 +37,8 @@ def Damp_n5(z) -> jnp.ndarray:
     return 1 - jnp.exp(-z) * (1 + z + z**2/factorial(2) + z**3/factorial(3)+z**4/factorial(4)+z**5/factorial(5))
 
 @jax.jit
-def Damp_n6(z) -> jnp.ndarray:
-    return 1 - jnp.exp(-z) * (1 + z + z**2/factorial(2) + z**3/factorial(3)+z**4/factorial(4)+z**5/factorial(5)+z**6/factorial(6))
-
-@jax.jit
 def vdw_QDO_disp_damp(R, gamma, C6):
-    #  Computing the vdW-QDO dispersion energy and returning it in eV
+    #  Compute the vdW-QDO dispersion energy (in eV)
     z = gamma*R**2/2
     C8 = 5/gamma*C6
     C10 = 245/8/gamma**2*C6
@@ -50,7 +46,8 @@ def vdw_QDO_disp_damp(R, gamma, C6):
     f8 = Damp_n4(z)
     f10 = Damp_n5(z)
     V3 = -f6*C6/R**6 - f8*C8/R**8 - f10*C10/R**10
-    return V3*Hartree
+    V3_1 = jnp.multiply(V3, 0.5)
+    return V3_1*Hartree
 
 @jax.jit
 def mixing_rules(
@@ -84,7 +81,7 @@ def gamma_cubic_fit(alpha):
     b3 = -0.00078893
     sigma = b3*vdW_radius**3 + b2*vdW_radius**2 + b1*vdW_radius + b0
     gamma = 1/2/sigma**2
-    return gamma#, sigma*jnp.sqrt(2)
+    return gamma
 
 @jax.jit
 def _coulomb_erf(q: jnp.ndarray, rij: jnp.ndarray, 
@@ -502,7 +499,6 @@ class ElectrostaticEnergySparse(BaseSubModule):
     module_name: str = 'electrostatic_energy'
     input_convention: str = 'positions'
     partial_charges: Optional[Any] = None
-    ke: float = 14.399645351950548
     use_ewald_summation_bool: bool = False
     kehalf: float = 14.399645351950548/2
     electrostatic_energy_scale: float = 1.0
@@ -557,7 +553,7 @@ class DispersionEnergySparse(BaseSubModule):
 
         hirshfeld_ratios = self.hirshfeld_ratios(inputs)['hirshfeld_ratios']
 
-        # Getting atomic numbers (needed to link to the free-atom reference values)
+        # Get atomic numbers (needed to link to the free-atom reference values)
         atomic_numbers = inputs['atomic_numbers']  # (num_nodes)
         
         # Calculate alpha_ij and C6_ij using mixing rules
@@ -566,7 +562,7 @@ class DispersionEnergySparse(BaseSubModule):
         # Use cubic fit for gamma
         gamma_ij = gamma_cubic_fit(alpha_ij)/self.dispersion_energy_scale
 
-        # Getting dispersion energy, positions are converted to to a.u.
+        # Get dispersion energy, positions are converted to to a.u.
         dispersion_energy_ij = vdw_QDO_disp_damp(d_ij_lr / Bohr, gamma_ij, C6_ij)
 
         atomic_dispersion_energy = segment_sum(
