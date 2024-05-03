@@ -78,7 +78,7 @@ class GeometryEmbedE3x(BaseSubModule):
 
         # Here it is assumed that PBC (if present) have already been respected in displacement calculation.
         elif self.input_convention == 'displacements':
-            positions = inputs['positions']
+            positions = inputs['positions'] #TODO: should be None?
             r_ij = inputs['displacements']
             r_ij_lr = inputs.get('displacements_lr')  # shape : (num_pairs_lr, 3)
         else:
@@ -213,7 +213,7 @@ class GeometryEmbedSparse(BaseSubModule):
 
         # Here it is assumed that PBC (if present) have already been respected in displacement calculation.
         elif self.input_convention == 'displacements':
-            positions = inputs['positions']
+            positions = inputs['positions'] #TODO: should be None?
             r_ij = inputs['displacements']  # shape : (num_pairs, 3)
             r_ij_lr = inputs.get('displacements_lr')  # shape : (num_pairs_lr, 3)
         else:

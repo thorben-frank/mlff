@@ -16,30 +16,6 @@ from mlff.nn.activation_function.activation_function import silu, softplus_inver
 from jax.nn.initializers import constant
 
 @jax.jit
-def _switch_component(x: jnp.ndarray, ones: jnp.ndarray, zeros: jnp.ndarray) -> jnp.ndarray:
-    """ Component of the switch function, only for internal use. """
-    x_ = jnp.where(x <= 0, ones, x)  # prevent nan in backprop
-    return jnp.where(x <= 0, zeros, jnp.exp(-ones / x_))
-
-@jax.jit
-def switch_function(x: jnp.ndarray, cuton: float, cutoff: float) -> jnp.ndarray:
-    """
-    Switch function that smoothly (and symmetrically) goes from f(x) = 1 to
-    f(x) = 0 in the interval from x = cuton to x = cutoff. For x <= cuton,
-    f(x) = 1 and for x >= cutoff, f(x) = 0. This switch function has infinitely
-    many smooth derivatives.
-    NOTE: The implementation with the "_switch_component" function is
-    numerically more stable than a simplified version, it is not recommended 
-    to change this!
-    """
-    x = (x - cuton) / (cutoff - cuton)
-    ones = jnp.ones_like(x)
-    zeros = jnp.zeros_like(x)
-    fp = _switch_component(x, ones, zeros)
-    fm = _switch_component(1 - x, ones, zeros)
-    return jnp.where(x <= 0, ones, jnp.where(x >= 1, zeros, fm / (fp + fm)))
-
-@jax.jit
 def sigma(x):
     return safe_mask(x > 0, fn=lambda u: jnp.exp(-1. / u), operand=x, placeholder=0)
 
@@ -59,7 +35,6 @@ def Damp_n4(z) -> jnp.ndarray:
 @jax.jit
 def Damp_n5(z) -> jnp.ndarray:
     return 1 - jnp.exp(-z) * (1 + z + z**2/factorial(2) + z**3/factorial(3)+z**4/factorial(4)+z**5/factorial(5))
-
 
 @jax.jit
 def vdw_QDO_disp_damp(R, gamma, C6):
@@ -651,7 +626,7 @@ class ElectrostaticEnergySparse(BaseSubModule):
     input_convention: str = 'positions'
     partial_charges: Optional[Any] = None
     use_particle_mesh_ewald: bool = False
-    kehalf: float = 14.399645351950548/2  #TODO: should we use ke or kehalf?
+    kehalf: float = 14.399645351950548/2
     electrostatic_energy_scale: float = 1.0
   
     @nn.compact
@@ -663,7 +638,7 @@ class ElectrostaticEnergySparse(BaseSubModule):
         idx_j_lr = inputs['idx_j_lr']        
         d_ij_lr = inputs['d_ij_lr']
        
-        atomic_electrostatic_energy_ij = _coulomb_erf(partial_charges, d_ij_lr, idx_i_lr, idx_j_lr, self.ke, self.electrostatic_energy_scale)
+        atomic_electrostatic_energy_ij = _coulomb_erf(partial_charges, d_ij_lr, idx_i_lr, idx_j_lr, self.kehalf, self.electrostatic_energy_scale)
 
         atomic_electrostatic_energy = segment_sum(
                 atomic_electrostatic_energy_ij,
@@ -675,7 +650,7 @@ class ElectrostaticEnergySparse(BaseSubModule):
 
         ngrid = inputs['ngrid'] # Check if ngrid is not None. Temporary solution to check if use PME
         if ngrid:
-            N = len(partial_charges)
+            N = len(partial_charges) #TODO: Check if this is correct
             positions = inputs['positions']
             cell = inputs['cell']
             alpha = inputs['alpha']
