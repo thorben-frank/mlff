@@ -39,12 +39,16 @@ def get_observable_fn_sparse(model: StackNetSparse, observable: str = None):
                 node_mask: jnp.ndarray = None,
                 graph_mask: jnp.ndarray = None,
                 displacements: jnp.ndarray = None,
+                displacements_lr: jnp.ndarray = None,
                 graph_mask_expanded: jnp.ndarray = None,
                 total_charge: jnp.ndarray = None,
                 num_unpaired_electrons: jnp.ndarray = None,
                 hirsh_bool: jnp.ndarray = None,
                 idx_i_lr: jnp.ndarray = None,
                 idx_j_lr: jnp.ndarray = None,
+                ngrid: jnp.ndarray = None,
+                alpha: jnp.float32 = None,
+                frequency:jnp.ndarray=None,
         ):
             if batch_segments is None:
                 assert graph_mask is None
@@ -59,6 +63,7 @@ def get_observable_fn_sparse(model: StackNetSparse, observable: str = None):
             inputs = dict(
                 positions=positions,
                 displacements=displacements,
+                displacements_lr=displacements_lr,
                 atomic_numbers=atomic_numbers,
                 idx_i=idx_i,
                 idx_j=idx_j,
@@ -72,7 +77,10 @@ def get_observable_fn_sparse(model: StackNetSparse, observable: str = None):
                 num_unpaired_electrons=num_unpaired_electrons,
                 hirsh_bool=hirsh_bool,
                 idx_i_lr=idx_i_lr,
-                idx_j_lr=idx_j_lr
+                idx_j_lr=idx_j_lr,
+                ngrid=ngrid,
+                alpha=alpha,
+                frequency=frequency
             )
             return model.apply(params, inputs)
     else:
@@ -88,12 +96,16 @@ def get_observable_fn_sparse(model: StackNetSparse, observable: str = None):
                 node_mask: jnp.ndarray = None,
                 graph_mask: jnp.ndarray = None,
                 displacements: jnp.ndarray = None,
+                displacements_lr: jnp.ndarray = None,
                 graph_mask_expanded: jnp.ndarray = None,
                 total_charge: jnp.ndarray = None,
                 num_unpaired_electrons: jnp.ndarray = None,
                 hirsh_bool: jnp.ndarray = None,
                 idx_i_lr: jnp.ndarray = None,
                 idx_j_lr: jnp.ndarray = None,
+                ngrid: jnp.ndarray = None,
+                alpha: jnp.float32 = None,
+                frequency:jnp.ndarray=None,
         ):
             if batch_segments is None:
                 assert graph_mask is None
@@ -108,6 +120,7 @@ def get_observable_fn_sparse(model: StackNetSparse, observable: str = None):
             inputs = dict(
                 positions=positions,
                 displacements=displacements,
+                displacements_lr=displacements_lr,
                 atomic_numbers=atomic_numbers,
                 idx_i=idx_i,
                 idx_j=idx_j,
@@ -121,8 +134,11 @@ def get_observable_fn_sparse(model: StackNetSparse, observable: str = None):
                 num_unpaired_electrons=num_unpaired_electrons,
                 hirsh_bool=hirsh_bool,
                 idx_i_lr=idx_i_lr,
-                idx_j_lr=idx_j_lr
-            )
+                idx_j_lr=idx_j_lr,
+                ngrid=ngrid,
+                alpha=alpha,
+                frequency=frequency
+                )
             return dict(observable=model.apply(params, inputs)[observable])
 
     return observable_fn
@@ -131,6 +147,8 @@ def get_observable_fn_sparse(model: StackNetSparse, observable: str = None):
 def get_energy_and_force_fn_sparse(model: StackNetSparse):
     def energy_fn(params,
                   positions: jnp.ndarray,
+                  displacements: jnp.ndarray,
+                  displacements_lr: jnp.ndarray,
                   atomic_numbers: jnp.ndarray,
                   idx_i: jnp.ndarray,
                   idx_j: jnp.ndarray,
@@ -144,7 +162,10 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
                   num_unpaired_electrons: jnp.ndarray = None,
                   hirsh_bool: jnp.ndarray = None,
                   idx_i_lr: jnp.ndarray = None,
-                  idx_j_lr: jnp.ndarray = None):
+                  idx_j_lr: jnp.ndarray = None,
+                  ngrid: jnp.ndarray = None,
+                  alpha: jnp.float32 = None,
+                  frequency:jnp.ndarray=None,):
         if batch_segments is None:
             assert graph_mask is None
             assert graph_mask_expanded is None
@@ -156,6 +177,8 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
             batch_segments = jnp.zeros_like(atomic_numbers)  # (num_nodes)
 
         inputs = dict(positions=positions,
+                      displacements=displacements,
+                      displacements_lr=displacements_lr,
                       atomic_numbers=atomic_numbers,
                       idx_i=idx_i,
                       idx_j=idx_j,
@@ -169,7 +192,10 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
                       num_unpaired_electrons=num_unpaired_electrons,
                       hirsh_bool=hirsh_bool,
                       idx_i_lr=idx_i_lr,
-                      idx_j_lr=idx_j_lr
+                      idx_j_lr=idx_j_lr,
+                      ngrid=ngrid,
+                      alpha=alpha,
+                      frequency=frequency
                       )
 
         energy = model.apply(params, inputs)['energy']  # (num_graphs)
@@ -178,6 +204,8 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
 
     def energy_and_force_and_dipole_and_hirsh_fn(params,
                             positions: jnp.ndarray,
+                            displacements: jnp.ndarray,
+                            displacements_lr: jnp.ndarray,
                             atomic_numbers: jnp.ndarray,
                             idx_i: jnp.ndarray,
                             idx_j: jnp.ndarray,
@@ -192,6 +220,9 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
                             hirsh_bool: jnp.ndarray = None,
                             idx_i_lr: jnp.ndarray = None,
                             idx_j_lr: jnp.ndarray = None,
+                            ngrid: jnp.ndarray = None,
+                            alpha: jnp.float32 = None,
+                            frequency:jnp.ndarray=None,
                             *args,
                             **kwargs):
         (_, energy), forces = jax.value_and_grad(
@@ -199,6 +230,8 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
             argnums=1,
             has_aux=True)(params,
                           positions,
+                          displacements,
+                          displacements_lr,
                           atomic_numbers,
                           idx_i,
                           idx_j,
@@ -212,7 +245,10 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
                           num_unpaired_electrons,
                           hirsh_bool,
                           idx_i_lr,
-                          idx_j_lr
+                          idx_j_lr,
+                          ngrid=ngrid,
+                          alpha=alpha,
+                          frequency=frequency
                           )
 
         if batch_segments is None:
@@ -226,6 +262,8 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
             batch_segments = jnp.zeros_like(atomic_numbers)  # (num_nodes) 
         
         inputs = dict(positions=positions,
+                displacements=displacements,
+                displacements_lr=displacements_lr,
                 atomic_numbers=atomic_numbers,
                 idx_i=idx_i,
                 idx_j=idx_j,
@@ -239,7 +277,10 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
                 num_unpaired_electrons=num_unpaired_electrons,
                 hirsh_bool=hirsh_bool,
                 idx_i_lr=idx_i_lr,
-                idx_j_lr=idx_j_lr
+                idx_j_lr=idx_j_lr,
+                ngrid=ngrid,
+                alpha=alpha,
+                frequency=frequency
                 )
 
         _, number_of_atoms_in_molecule = jnp.unique(batch_segments, return_counts = True, size=len(graph_mask))
