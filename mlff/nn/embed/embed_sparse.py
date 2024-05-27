@@ -79,8 +79,8 @@ class GeometryEmbedE3x(BaseSubModule):
 
         # Here it is assumed that PBC (if present) have already been respected in displacement calculation.
         elif self.input_convention == 'displacements':
-            positions = None
-            r_ij = inputs['displacements']  # shape : (num_pairs, 3)
+            positions = inputs['positions'] # we need positions for dipole moment calculation
+            r_ij = inputs['displacements']
             r_ij_lr = inputs.get('displacements_lr')  # shape : (num_pairs_lr, 3)
         else:
             raise ValueError(f"{self.input_convention} is not a valid argument for `input_convention`.")
@@ -211,7 +211,7 @@ class GeometryEmbedSparse(BaseSubModule):
 
         # Here it is assumed that PBC (if present) have already been respected in displacement calculation.
         elif self.input_convention == 'displacements':
-            positions = None
+            positions = inputs['positions']
             r_ij = inputs['displacements']  # shape : (num_pairs, 3)
             r_ij_lr = inputs.get('displacements_lr')  # shape : (num_pairs_lr, 3)
         else:
