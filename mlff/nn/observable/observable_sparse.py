@@ -37,8 +37,12 @@ def Damp_n5(z) -> jnp.ndarray:
     return 1 - jnp.exp(-z) * (1 + z + z**2/factorial(2) + z**3/factorial(3)+z**4/factorial(4)+z**5/factorial(5))
 
 @jax.jit
+def Damp_n6(z) -> jnp.ndarray:
+    return 1 - jnp.exp(-z) * (1 + z + z**2/factorial(2) + z**3/factorial(3)+z**4/factorial(4)+z**5/factorial(5)+z**6/factorial(6))
+
+@jax.jit
 def vdw_QDO_disp_damp(R, gamma, C6):
-    #  Compute the vdW-QDO dispersion energy (in eV)
+    #  Computing the vdW-QDO dispersion energy and returning it in eV
     z = gamma*R**2/2
     C8 = 5/gamma*C6
     C10 = 245/8/gamma**2*C6
@@ -46,6 +50,7 @@ def vdw_QDO_disp_damp(R, gamma, C6):
     f8 = Damp_n4(z)
     f10 = Damp_n5(z)
     V3 = -f6*C6/R**6 - f8*C8/R**8 - f10*C10/R**10
+#    return V3*Hartree
     V3_1 = jnp.multiply(V3, 0.5)
     return V3_1*Hartree
 
@@ -81,7 +86,7 @@ def gamma_cubic_fit(alpha):
     b3 = -0.00078893
     sigma = b3*vdW_radius**3 + b2*vdW_radius**2 + b1*vdW_radius + b0
     gamma = 1/2/sigma**2
-    return gamma
+    return gamma#, sigma*jnp.sqrt(2)
 
 @jax.jit
 def _coulomb_erf(q: jnp.ndarray, rij: jnp.ndarray, 
@@ -93,130 +98,13 @@ def _coulomb_erf(q: jnp.ndarray, rij: jnp.ndarray,
     return pairwise
 
 @jax.jit
-def _coulomb_erf(q: jnp.ndarray, rij: jnp.ndarray, 
+def _coulomb_damped(q: jnp.ndarray, rij: jnp.ndarray,
              idx_i: jnp.ndarray, idx_j: jnp.ndarray,
-             kehalf: float, sigma: float#, sigma: jnp.ndarray
+             kehalf: float, sigma: float
 ) -> jnp.ndarray:
     """ Pairwise Coulomb interaction with erf damping """
-    pairwise = kehalf * q[idx_i] * q[idx_j] * jax.scipy.special.erf(rij/sigma)/rij
+    pairwise = kehalf * q[idx_i] * q[idx_j] *  Damp_n3(rij**2/2/sigma)/rij
     return pairwise
-
-@jax.jit
-def _coulomb_pme(q: jnp.ndarray, positions : jnp.ndarray, cell: jnp.ndarray, 
-             ngrid: jnp.ndarray, alpha: float, frequency: jnp.ndarray,
-) -> jnp.ndarray:
-    """ Pairwise Coulomb interaction with erf damping plus PME"""
-    # Necesito hacer el grid, se supone q debe alocarse solo una vez y luego solamente se actualiza, hablar con adil
-
-    
-    @partial(jax.jit, static_argnums=(3,))
-    def map_charges_to_grid(positions, q, icell, ngrid):
-        """Smears charges over a grid of specified dimensions."""
-        # Jax-md implementation https://github.com/jax-md/jax-md/blob/main/jax_md/_energy/electrostatics.py
-        Q = ngrid
-        N = positions.shape[0]
-
-        @partial(jnp.vectorize, signature='(),()->(p)')
-        def grid_position(u, K):
-            grid = jnp.floor(u).astype(jnp.int32)
-            grid = jnp.arange(0, 4) + grid
-            return jnp.mod(grid, K)
-
-        @partial(jnp.vectorize, signature='(d),()->(p,p,p,d),(p,p,p)')
-        def map_particle_to_grid(positions, charge):
-            u = raw_transform(icell, positions) * grid_dimensions
-            w = u - jnp.floor(u)
-            coeffs = optimized_bspline_4(w)
-
-            grid_pos = grid_position(u, grid_dimensions)
-
-            accum = charge * (coeffs[0, :, None, None] *
-                                coeffs[1, None, :, None] *
-                                coeffs[2, None, None, :])
-            grid_pos = jnp.concatenate(
-                (jnp.broadcast_to(grid_pos[[0], :, None, None], (1, 4, 4, 4)),
-                    jnp.broadcast_to(grid_pos[[1], None, :, None], (1, 4, 4, 4)),
-                    jnp.broadcast_to(grid_pos[[2], None, None, :], (1, 4, 4, 4))), axis=0)
-            grid_pos = jnp.transpose(grid_pos, (1, 2, 3, 0))
-
-            return grid_pos, accum
-
-        gp, ac = map_particle_to_grid(positions, q)
-        gp = jnp.reshape(gp, (-1, 3))
-        ac = jnp.reshape(ac, (-1,))
-
-        return Q.at[gp[:, 0], gp[:, 1], gp[:, 2]].add(ac)
-    
-    def _get_free_indices(n: int) -> str:
-        return ''.join([chr(ord('a') + i) for i in range(n)])
-
-    def raw_transform(box, R) -> Array:
-        """Apply an affine transformation to positions.
-
-        See `periodic_general` for a description of the semantics of `box`.
-
-        Args:
-            box: An affine transformation described in `periodic_general`.
-            R: Array of positions. Should have  shape `(..., spatial_dimension)`.
-
-        Returns:
-            A transformed array positions of shape `(..., spatial_dimension)`.
-        """
-        free_indices = _get_free_indices(R.ndim - 1)
-        left_indices = free_indices + 'j'
-        right_indices = free_indices + 'i'
-        return jnp.einsum(f'ij,{left_indices}->{right_indices}', box, R)
-
-
-
-    @partial(jnp.vectorize, signature='()->(p)')
-    def optimized_bspline_4(w):
-        coeffs = jnp.zeros((4,))
-
-        coeffs = coeffs.at[2].set(0.5 * w * w)
-        coeffs = coeffs.at[0].set(0.5 * (1.0-w) * (1.0-w))
-        coeffs = coeffs.at[1].set(1.0 - coeffs[0] - coeffs[2])
-
-        coeffs = coeffs.at[3].set(w * coeffs[2] / 3.0)
-        coeffs = coeffs.at[2].set(((1.0 + w) * coeffs[1] + (3.0 - w) * coeffs[2])/3.0)
-        coeffs = coeffs.at[0].set((1.0 - w) * coeffs[0] / 3.0)
-        coeffs = coeffs.at[1].set(1.0 - coeffs[0] - coeffs[2] - coeffs[3])
-
-        return coeffs
-    
-    @partial(jnp.vectorize, signature='()->()')
-    def b(m, n=4):
-        assert(n == 4)
-        k = jnp.arange(n - 1)
-        M = optimized_bspline_4(1.0)[1:][::-1]
-        prefix = jnp.exp(2 * jnp.pi * 1j * (n - 1) * m)
-        return prefix / jnp.sum(M * jnp.exp(2 * jnp.pi * 1j * m * k))
-
-
-    def B(mx, my, mz, n=4):
-        """Compute the B factors from Essmann et al. equation 4.7."""
-        b_x = b(mx)
-        b_y = b(my)
-        b_z = b(mz)
-        return jnp.abs(b_x)**2 * jnp.abs(b_y)**2 * jnp.abs(b_z)**2
-    
-
-    icell = jnp.linalg.inv(cell)
-    grid_dimensions = jnp.array(ngrid.shape)
-    grid = map_charges_to_grid(positions, q, icell, ngrid)
-    Fgrid = jnp.fft.fftn(grid)
-    mx, my, mz = frequency
-
-    m = (icell[None, None, None, 0] * mx[:, :, :, None] * grid_dimensions[0] +
-        icell[None, None, None, 1] * my[:, :, :, None] * grid_dimensions[1] +
-        icell[None, None, None, 2] * mz[:, :, :, None] * grid_dimensions[2])
-    m_2 = jnp.sum(m**2, axis=-1)
-    V = jnp.linalg.det(cell)
-    mask = m_2 != 0
-
-    exp_m = 1 / (2 * jnp.pi * V) * jnp.exp(-jnp.pi**2 * m_2 / alpha**2) / m_2
-    return jnp.sum(mask * exp_m * B(mx, my, mz) * jnp.abs(Fgrid)**2)
-
 
 Array = Any
 
@@ -625,7 +513,8 @@ class ElectrostaticEnergySparse(BaseSubModule):
     module_name: str = 'electrostatic_energy'
     input_convention: str = 'positions'
     partial_charges: Optional[Any] = None
-    use_particle_mesh_ewald: bool = False
+    ke: float = 14.399645351950548
+    use_ewald_summation_bool: bool = False
     kehalf: float = 14.399645351950548/2
     electrostatic_energy_scale: float = 1.0
   
@@ -638,6 +527,7 @@ class ElectrostaticEnergySparse(BaseSubModule):
         idx_j_lr = inputs['idx_j_lr']        
         d_ij_lr = inputs['d_ij_lr']
        
+        #atomic_electrostatic_energy_ij = _coulomb_damped(partial_charges, d_ij_lr, idx_i_lr, idx_j_lr, self.kehalf, self.electrostatic_energy_scale)
         atomic_electrostatic_energy_ij = _coulomb_erf(partial_charges, d_ij_lr, idx_i_lr, idx_j_lr, self.kehalf, self.electrostatic_energy_scale)
 
         atomic_electrostatic_energy = segment_sum(
@@ -647,16 +537,6 @@ class ElectrostaticEnergySparse(BaseSubModule):
             )  # (num_nodes)
 
         atomic_electrostatic_energy = safe_scale(atomic_electrostatic_energy, node_mask)
-
-        ngrid = inputs['ngrid'] # Check if ngrid is not None. Temporary solution to check if use PME
-        if ngrid:
-            N = len(partial_charges) #TODO: Check if this is correct
-            positions = inputs['positions']
-            cell = inputs['cell']
-            alpha = inputs['alpha']
-            frequency = inputs['frequency']
-
-            atomic_electrostatic_energy += _coulomb_pme(partial_charges, positions, cell, ngrid, alpha, frequency)/N
 
         return dict(electrostatic_energy=atomic_electrostatic_energy)
 
@@ -689,7 +569,7 @@ class DispersionEnergySparse(BaseSubModule):
 
         hirshfeld_ratios = self.hirshfeld_ratios(inputs)['hirshfeld_ratios']
 
-        # Get atomic numbers (needed to link to the free-atom reference values)
+        # Getting atomic numbers (needed to link to the free-atom reference values)
         atomic_numbers = inputs['atomic_numbers']  # (num_nodes)
         
         # Calculate alpha_ij and C6_ij using mixing rules
@@ -698,7 +578,7 @@ class DispersionEnergySparse(BaseSubModule):
         # Use cubic fit for gamma
         gamma_ij = gamma_cubic_fit(alpha_ij)/self.dispersion_energy_scale
 
-        # Get dispersion energy, positions are converted to to a.u.
+        # Getting dispersion energy, positions are converted to to a.u.
         dispersion_energy_ij = vdw_QDO_disp_damp(d_ij_lr / Bohr, gamma_ij, C6_ij)
 
         atomic_dispersion_energy = segment_sum(
