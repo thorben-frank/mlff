@@ -18,7 +18,7 @@ except ImportError:
     raise ImportError('Please install GLP package for running MD.')
 
 SpatialPartitioning = namedtuple(
-    "SpatialPartitioning", ("allocate_fn", "update_fn", "cutoff", "electro_cutoff", "skin", "capacity_multiplier")
+    "SpatialPartitioning", ("allocate_fn", "update_fn", "cutoff", "lr_cutoff", "skin", "capacity_multiplier")
 )
 
 PME = namedtuple("PME", ("ngrid", "alpha", "tolerance", "frequencies"))
@@ -35,7 +35,7 @@ class mlffCalculatorSparse(Calculator):
                              ckpt_dir: str,
                              calculate_stress: bool = False,
                              use_PME: bool = False,
-                             cutoff: float = 10.,
+                             lr_cutoff: float = 10.,
                              E_to_eV: float = 1.,
                              F_to_eV_Ang: float = 1.,
                              capacity_multiplier: float = 1.25,
@@ -57,7 +57,7 @@ class mlffCalculatorSparse(Calculator):
                    F_to_eV_Ang=F_to_eV_Ang,
                    capacity_multiplier=capacity_multiplier,
                    use_PME=use_PME,
-                   cutoff=cutoff,
+                   lr_cutoff=lr_cutoff,
                    dtype=dtype,
                    has_aux=has_aux
                    )
@@ -70,7 +70,7 @@ class mlffCalculatorSparse(Calculator):
             capacity_multiplier: float = 1.25,
             calculate_stress: bool = False,
             use_PME: bool = False,
-            cutoff: float = 10.,
+            lr_cutoff: float = 10.,
             dtype: np.dtype = np.float32,
             has_aux: bool = False,
             *args,
@@ -180,7 +180,7 @@ class mlffCalculatorSparse(Calculator):
         self.spatial_partitioning = None
         self.capacity_multiplier = capacity_multiplier
         self.cutoff = potential.cutoff # cutoff for the neighbor list
-        self.cutoff_electrostatics = cutoff # cutoff for electrostatics
+        self.lr_cutoff = lr_cutoff # cutoff for electrostatics
         self.dtype = dtype
 
     def calculate(self, atoms=None, *args, **kwargs):
@@ -195,7 +195,7 @@ class mlffCalculatorSparse(Calculator):
         # Allocate the grid for PME. It might be necessary to put some tollerance in the cell
         # to fullfil that the grid is big enough to keep the max distance between points    
         if self.pme is None and self.use_PME:
-            self.pme = get_ngrid(cell, self.cutoff_electrostatics, tolerance=5e-4)
+            self.pme = get_ngrid(cell, self.lr_cutoff, tolerance=5e-4)
             
         if self.spatial_partitioning is None:
             self.neighbors, self.spatial_partitioning = neighbor_list(positions=system.R,
@@ -203,7 +203,7 @@ class mlffCalculatorSparse(Calculator):
                                                                       cutoff=self.cutoff,
                                                                       skin=0.,
                                                                       capacity_multiplier=self.capacity_multiplier,
-                                                                      electro_cutoff=self.cutoff_electrostatics)
+                                                                      lr_cutoff=self.lr_cutoff)
         neighbors = self.spatial_partitioning.update_fn(system.R, self.neighbors, new_cell=cell)
         if neighbors.overflow:
             raise RuntimeError('Spatial overflow.')
@@ -217,7 +217,7 @@ class mlffCalculatorSparse(Calculator):
                                                                       cutoff=self.cutoff,
                                                                       skin=0.,
                                                                       capacity_multiplier=self.capacity_multiplier,
-                                                                      electro_cutoff=self.cutoff_electrostatics)
+                                                                      lr_cutoff=self.lr_cutoff)
             #self.neighbors now contains Neighbors namedtuple with idx_i_lr etc
 
         output = self.calculate_fn(system, neighbors, self.pme)  # note different cell convention
@@ -284,7 +284,7 @@ def add_batch_dim(tree):
 
 
 def neighbor_list(positions: jnp.ndarray, cutoff: float, skin: float, cell: jnp.ndarray = None,
-                  capacity_multiplier: float = 1.25, electro_cutoff: float = 10.):
+                  capacity_multiplier: float = 1.25, lr_cutoff: float = 10.):
     """
 
     Args:
@@ -303,7 +303,7 @@ def neighbor_list(positions: jnp.ndarray, cutoff: float, skin: float, cell: jnp.
         raise ImportError('For neighborhood list, please install the glp package from ...')
 
     allocate, update = quadratic_neighbor_list(
-        cell, cutoff, skin, capacity_multiplier=capacity_multiplier, use_cell_list=True, electro_cutoff=electro_cutoff
+        cell, cutoff, skin, capacity_multiplier=capacity_multiplier, use_cell_list=True, lr_cutoff=lr_cutoff
     )
     neighbors = allocate(positions)
     return neighbors, SpatialPartitioning(allocate_fn=allocate,
@@ -311,5 +311,5 @@ def neighbor_list(positions: jnp.ndarray, cutoff: float, skin: float, cell: jnp.
                                           cutoff=cutoff,
                                           skin=skin,
                                           capacity_multiplier=capacity_multiplier,
-                                          electro_cutoff=electro_cutoff)
+                                          lr_cutoff=lr_cutoff)
 
