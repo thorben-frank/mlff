@@ -80,8 +80,8 @@ def valid_epoch(state: TrainState,
         batch_metrics.append(metrics)
 
     # compute mean of metrics across each batch in epoch.
-    batch_metrics_np = jax.device_get(batch_metrics)
-    epoch_metrics_np = {k: np.mean([metrics[k] for metrics in batch_metrics_np]) for k in batch_metrics_np[0]}
+    # batch_metrics_np = jax.device_get(batch_metrics)
+    epoch_metrics_np = {k: np.mean([metrics[k] for metrics in batch_metrics]) for k in batch_metrics[0]}
     return epoch_metrics_np, n_data
 
 
@@ -208,7 +208,7 @@ def run_training(state: TrainState,
         train_end = time.time()
 
         # check for NaN
-        train_batch_metrics_np = jax.device_get(train_batch_metrics)
+        train_batch_metrics_np = jax.tree_map(lambda x: np.array(x), train_batch_metrics)
 
         if (np.isnan(train_batch_metrics_np['loss']) or
             np.isinf(train_batch_metrics_np['loss']) or
@@ -223,7 +223,7 @@ def run_training(state: TrainState,
                 logging.warning(f'NaN detected during training in step {i} in gradient values. Reload the '
                                 'last checkpoint.')
 
-            grads_np = jax.tree_map(lambda x: x.tolist(), jax.device_get(grads))
+            grads_np = jax.tree_map(lambda x: np.array(x).tolist(), grads)
             save_dict(ckpt_dir, filename=f'gradients_nan_step_{i}.json', data=unfreeze(grads_np), exists_ok=True)
 
             def reset_records():
