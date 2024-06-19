@@ -80,6 +80,16 @@ def vdw_QDO_disp_damp(R, gamma, C6):
     return V3_1*Hartree
 
 @jax.jit
+def vdw_QDO_disp_bj_damp(R, gamma, C6, alpha_ij, gamma_scale):
+    #  Compute the vdW-QDO dispersion energy (in eV)
+    C8 = 5/gamma*C6
+    C10 = 245/8/gamma**2*C6
+    p = gamma_scale * 2 * 2.54 * alpha_ij ** 1/7
+    V3 = -C6/(R**6+p**6) - C8/(R**8+p**8) - C10/(R**10+p**10)
+    V3_1 = jnp.multiply(V3, 0.5)
+    return V3_1*Hartree
+
+@jax.jit
 def mixing_rules(
     atomic_numbers: jnp.ndarray,
     idx_i: jnp.ndarray,
@@ -120,6 +130,8 @@ def _coulomb_erf(q: jnp.ndarray, rij: jnp.ndarray,
 ) -> jnp.ndarray:
     """ Pairwise Coulomb interaction with erf damping """
     pairwise = kehalf * q[idx_i] * q[idx_j] * jax.scipy.special.erf(rij/sigma)/rij
+    #switch for PME:
+    #pairwise = kehalf * q[idx_i] * q[idx_j] * jax.scipy.special.erf(rij/sigma) * smooth_switch(1/rij, x0=1/10, x1=1/9.9 ) / rij 
     return pairwise
 
 @jax.jit
@@ -513,7 +525,7 @@ class HirshfeldSparse(BaseSubModule):
         
         if self.regression_dim is not None:
             y = nn.Dense(
-                self.regression_dim,
+                int(self.regression_dim/2),
                 kernel_init=nn.initializers.lecun_normal(),
                 name='hirshfeld_ratios_dense_regression'
             )(x)  # (num_nodes, regression_dim)
@@ -648,8 +660,8 @@ class DipoleVecSparse(BaseSubModule):
         dipole_vec = safe_scale(dipole, graph_mask_expanded)
 
         return dict(dipole_vec=dipole_vec)
-        # return dict(dipole_vec=dipole_vec, 
-        #             partial_charges=partial_charges)
+        # return dict(dipole_vec=dipole_vec,
+        #         partial_charges=partial_charges)
 
     def reset_output_convention(self, output_convention):
         self.output_convention = output_convention
@@ -674,7 +686,10 @@ class ElectrostaticEnergySparse(BaseSubModule):
         idx_i_lr = inputs['idx_i_lr']
         idx_j_lr = inputs['idx_j_lr']        
         d_ij_lr = inputs['d_ij_lr']
-        ngrid = inputs['ngrid']
+        try:
+            ngrid = inputs['ngrid']
+        except:
+            ngrid = None
 
         # With PME
         if isinstance(ngrid, jnp.ndarray):  # Check if ngrid is not None. Temporary solution to check if use PME
@@ -743,11 +758,19 @@ class DispersionEnergySparse(BaseSubModule):
         # Calculate alpha_ij and C6_ij using mixing rules
         alpha_ij, C6_ij = mixing_rules(atomic_numbers, idx_i_lr, idx_j_lr, hirshfeld_ratios)
         
+        # # vdw_QDO_disp_damp
+        # # Use cubic fit for gamma
+        # gamma_ij = gamma_cubic_fit(alpha_ij)/self.dispersion_energy_scale
+
+        # # Get dispersion energy, positions are converted to to a.u.
+        # dispersion_energy_ij = vdw_QDO_disp_damp(d_ij_lr / Bohr, gamma_ij, C6_ij)
+
+        # vdw_QDO_disp_bj_damp
         # Use cubic fit for gamma
-        gamma_ij = gamma_cubic_fit(alpha_ij)/self.dispersion_energy_scale
+        gamma_ij = gamma_cubic_fit(alpha_ij)
 
         # Get dispersion energy, positions are converted to to a.u.
-        dispersion_energy_ij = vdw_QDO_disp_damp(d_ij_lr / Bohr, gamma_ij, C6_ij)
+        dispersion_energy_ij = vdw_QDO_disp_bj_damp(d_ij_lr / Bohr, gamma_ij, C6_ij, alpha_ij, self.dispersion_energy_scale)
 
         atomic_dispersion_energy = segment_sum(
                 dispersion_energy_ij,
@@ -758,6 +781,15 @@ class DispersionEnergySparse(BaseSubModule):
         atomic_dispersion_energy = safe_scale(atomic_dispersion_energy, node_mask)
 
         return dict(dispersion_energy=atomic_dispersion_energy)
+       #return dict(dispersion_energy=atomic_dispersion_energy,
+       #        atomic_numbers=atomic_numbers,
+       #        hirshfeld_ratios=hirshfeld_ratios,
+       #        alpha_ij=alpha_ij,
+       #        C6_ij=C6_ij,
+       #        gamma_ij=gamma_ij,
+       #        dispersion_energy_ij=dispersion_energy_ij,
+       #        atomic_dispersion_energy=atomic_dispersion_energy,
+       #        )
     
     def reset_output_convention(self, output_convention):
         self.output_convention = output_convention
