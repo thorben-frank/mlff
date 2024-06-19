@@ -43,10 +43,7 @@ class AseDataLoaderSparse:
 
 
     def cardinality(self):
-        print('wassap')
         print(self.input_folder)
-#        print(self.input_folder.iterdir()[0])
-        #if self.input_folder is not None:
         if self.input_folder[0] is not None:
             file_list = [f for f in os.listdir(self.input_folder) if os.path.isfile(os.path.join(self.input_folder, f))]
             print(file_list)
@@ -72,8 +69,6 @@ class AseDataLoaderSparse:
             file_list = [os.path.join(self.input_folder, f) for f in os.listdir(self.input_folder) if os.path.isfile(os.path.join(self.input_folder, f))]
         elif self.input_file:
             file_list = [self.input_file]
-
-        print('aa: ', file_list)
         
         loaded_data = []
         max_num_of_nodes = 0
