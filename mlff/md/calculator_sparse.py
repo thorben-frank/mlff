@@ -11,14 +11,14 @@ from ase.calculators.calculator import Calculator
 from mlff.utils.structures import Graph
 from mlff.mdx.potential import MLFFPotentialSparse
 try:
-    from glp.calculators.utils import strain_graph, get_strain
+    from glp.calculators.utils import strain_graph, get_strain, strain_system
     from glp import System, atoms_to_system
     from glp.graph import system_to_graph
 except ImportError:
     raise ImportError('Please install GLP package for running MD.')
 
 SpatialPartitioning = namedtuple(
-    "SpatialPartitioning", ("allocate_fn", "update_fn", "cutoff", "lr_cutoff", "skin", "capacity_multiplier")
+    "SpatialPartitioning", ("allocate_fn", "update_fn", "cutoff", "lr_cutoff", "skin", "capacity_multiplier", "buffer_size_multiplier")
 )
 
 PME = namedtuple("PME", ("ngrid", "alpha", "tolerance", "frequencies"))
@@ -26,6 +26,24 @@ logging.basicConfig(level=logging.INFO)
 
 StackNet = Any
 
+def matrix_to_voigt(matrix):
+    """
+    Convert a 3x3 matrix to a 6-component stress vector in Voigt notation.
+
+    Args:
+        matrix (jnp.ndarray): A 3x3 matrix.
+
+    Returns:
+        jnp.ndarray: A 6-component stress vector in Voigt notation.
+    """
+    ## Check input
+    if matrix.shape != (3, 3):
+        raise ValueError("Input must be a 3x3 matrix. Shape is ", matrix.shape)
+
+    ## Form Voigt vector
+    voigt_vector = jnp.array([matrix[0,0], matrix[1,1], matrix[2,2], (matrix[1,2]+matrix[2,1])/2, (matrix[0,2]+matrix[2,0])/2, (matrix[0,1]+matrix[1,0])/2])
+
+    return voigt_vector
 
 class mlffCalculatorSparse(Calculator):
     implemented_properties = ['energy', 'forces', 'stress', 'free_energy']
@@ -39,6 +57,8 @@ class mlffCalculatorSparse(Calculator):
                              E_to_eV: float = 1.,
                              F_to_eV_Ang: float = 1.,
                              capacity_multiplier: float = 1.25,
+                             buffer_size_multiplier: float = 1.25,
+                             skin: float = 0.,
                              add_energy_shift: bool = False,
                              dtype: np.dtype = np.float32,
                              model: str = 'so3krates',
@@ -56,6 +76,8 @@ class mlffCalculatorSparse(Calculator):
                    E_to_eV=E_to_eV,
                    F_to_eV_Ang=F_to_eV_Ang,
                    capacity_multiplier=capacity_multiplier,
+                   buffer_size_multiplier=buffer_size_multiplier,
+                   skin=skin,
                    use_PME=use_PME,
                    lr_cutoff=lr_cutoff,
                    dtype=dtype,
@@ -68,6 +90,8 @@ class mlffCalculatorSparse(Calculator):
             E_to_eV: float = 1.,
             F_to_eV_Ang: float = 1.,
             capacity_multiplier: float = 1.25,
+            buffer_size_multiplier: float = 1.25,
+            skin: float = 0.,
             calculate_stress: bool = False,
             use_PME: bool = False,
             lr_cutoff: float = 10.,
@@ -98,10 +122,13 @@ class mlffCalculatorSparse(Calculator):
         )
         if calculate_stress:
             def energy_fn(system, strain: jnp.ndarray, neighbors, pme):
-                graph = system_to_graph(system, neighbors, pme)
-                graph = strain_graph(graph, strain)
+                strained_system = strain_system(system, strain)
+                graph = system_to_graph(strained_system, neighbors, pme)
 
-                out, aux = potential(graph, has_aux=has_aux)
+                #graph = system_to_graph(system, neighbors, pme)
+                #graph = strain_graph(graph, strain)
+
+                out = potential(graph, has_aux=has_aux)
                 if isinstance(out, tuple):
                     atomic_energy = out[0]
                     aux = out[1]
@@ -126,8 +153,9 @@ class mlffCalculatorSparse(Calculator):
                   )
 
                 forces = - grads[0].R
-                volume_factor = jnp.abs(jnp.dot(jnp.cross(system.cell[0], system.cell[1]), system.cell[2]))
-                stress = grads[1] / volume_factor
+                volume = jnp.abs(jnp.dot(jnp.cross(system.cell[0], system.cell[1]), system.cell[2]))
+                stress = grads[1] / volume
+                stress = matrix_to_voigt(stress)
 
                 if isinstance(out, tuple):
                     if not has_aux:
@@ -179,6 +207,8 @@ class mlffCalculatorSparse(Calculator):
         self.neighbors = None
         self.spatial_partitioning = None
         self.capacity_multiplier = capacity_multiplier
+        self.buffer_size_multiplier = buffer_size_multiplier
+        self.skin = skin
         self.cutoff = potential.cutoff # cutoff for the neighbor list
         self.lr_cutoff = lr_cutoff # cutoff for electrostatics
         self.dtype = dtype
@@ -201,8 +231,9 @@ class mlffCalculatorSparse(Calculator):
             self.neighbors, self.spatial_partitioning = neighbor_list(positions=system.R,
                                                                       cell=cell,
                                                                       cutoff=self.cutoff,
-                                                                      skin=0.,
+                                                                      skin=self.skin,
                                                                       capacity_multiplier=self.capacity_multiplier,
+                                                                      buffer_size_multiplier=self.buffer_size_multiplier, 
                                                                       lr_cutoff=self.lr_cutoff)
         neighbors = self.spatial_partitioning.update_fn(system.R, self.neighbors, new_cell=cell)
         if neighbors.overflow:
@@ -215,8 +246,9 @@ class mlffCalculatorSparse(Calculator):
                 self.neighbors, self.spatial_partitioning = neighbor_list(positions=system.R,
                                                                       cell=cell,
                                                                       cutoff=self.cutoff,
-                                                                      skin=0.,
+                                                                      skin=self.skin,
                                                                       capacity_multiplier=self.capacity_multiplier,
+                                                                      buffer_size_multiplier=self.buffer_size_multiplier,
                                                                       lr_cutoff=self.lr_cutoff)
             #self.neighbors now contains Neighbors namedtuple with idx_i_lr etc
 
@@ -283,8 +315,8 @@ def add_batch_dim(tree):
     return jax.tree_map(lambda x: x[None], tree)
 
 
-def neighbor_list(positions: jnp.ndarray, cutoff: float, skin: float, cell: jnp.ndarray = None,
-                  capacity_multiplier: float = 1.25, lr_cutoff: float = 10.):
+def neighbor_list(positions: jnp.ndarray, cutoff: float, skin: float = 0., cell: jnp.ndarray = None,
+        capacity_multiplier: float = 1.25, lr_cutoff: float = 10., buffer_size_multiplier: float = 1.25):
     """
 
     Args:
@@ -303,7 +335,7 @@ def neighbor_list(positions: jnp.ndarray, cutoff: float, skin: float, cell: jnp.
         raise ImportError('For neighborhood list, please install the glp package from ...')
 
     allocate, update = quadratic_neighbor_list(
-        cell, cutoff, skin, capacity_multiplier=capacity_multiplier, use_cell_list=True, lr_cutoff=lr_cutoff
+        cell, cutoff, skin, capacity_multiplier=capacity_multiplier, use_cell_list=True, lr_cutoff=lr_cutoff, buffer_size_multiplier=buffer_size_multiplier
     )
     neighbors = allocate(positions)
     return neighbors, SpatialPartitioning(allocate_fn=allocate,
@@ -311,5 +343,5 @@ def neighbor_list(positions: jnp.ndarray, cutoff: float, skin: float, cell: jnp.
                                           cutoff=cutoff,
                                           skin=skin,
                                           capacity_multiplier=capacity_multiplier,
+                                          buffer_size_multiplier=buffer_size_multiplier, 
                                           lr_cutoff=lr_cutoff)
-
