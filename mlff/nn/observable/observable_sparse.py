@@ -53,11 +53,14 @@ class EnergySparse(BaseSubModule):
 
         num_graphs = len(graph_mask)
         if self.learn_atomic_type_shifts:
-            energy_offset = self.param(
-                'energy_offset',
-                nn.initializers.zeros_init(),
-                (self.zmax + 1, )
-            )[atomic_numbers]  # (num_nodes)
+            energy_offset = jnp.take(
+                self.param(
+                    'energy_offset',
+                    nn.initializers.zeros_init(),
+                    (self.zmax + 1, )
+                ),
+                atomic_numbers
+            )  # (num_nodes)
         else:
             energy_offset = jnp.zeros((1,), dtype=x.dtype)
 

@@ -27,17 +27,31 @@ def load_model_from_workdir(workdir: str, model='so3krates'):
 
     loaded_mngr = checkpoint.CheckpointManager(
         pathlib.Path(workdir) / "checkpoints",
-        {
-            "params": checkpoint.PyTreeCheckpointer(),
-        },
+        item_names=('params',),
+        item_handlers={'params': checkpoint.StandardCheckpointHandler()},
         options=checkpoint.CheckpointManagerOptions(step_prefix="ckpt"),
     )
-    mgr_state = loaded_mngr.restore(
-        loaded_mngr.latest_step(),
-        {
-            "params": checkpoint.PyTreeCheckpointer(),
-        })
-    params = mgr_state.get("params")
+
+    # loaded_mngr = checkpoint.CheckpointManager(
+    #     pathlib.Path(workdir) / "checkpoints",
+    #     {
+    #         "params": checkpoint.PyTreeCheckpointer(),
+    #     },
+    #     options=checkpoint.CheckpointManagerOptions(step_prefix="ckpt"),
+    # )
+
+    mngr_state = loaded_mngr.restore(
+        loaded_mngr.latest_step()
+    )
+
+    # mgr_state = loaded_mngr.restore(
+    #     loaded_mngr.latest_step(),
+    #     {
+    #         "params": checkpoint.PyTreeCheckpointer(),
+    #     })
+    # params = mgr_state.get("params")
+
+    params = mngr_state.get('params')
 
     if model == 'so3krates':
         net = from_config.make_so3krates_sparse_from_config(cfg)
