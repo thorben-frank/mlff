@@ -18,7 +18,7 @@ def filter_and_sort(distances, cutoff):
 
 
 def test_neighborhood_list():
-    from jax.config import config
+    from jax import config
     config.update("jax_enable_x64", True)
 
     # load all data from the new ZrO2 data set

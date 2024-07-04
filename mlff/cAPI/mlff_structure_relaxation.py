@@ -88,7 +88,7 @@ def run_relaxation():
     x64 = args.x64
 
     if args.mdx_dtype == 'x64':
-        from jax.config import config
+        from jax import config
         config.update("jax_enable_x64", True)
     import jax.numpy as jnp
     _mdx_dtype = jnp.float64 if args.mdx_dtype == 'x64' else jnp.float32
@@ -104,7 +104,7 @@ def run_relaxation():
     set_seeds(seed)
 
     if x64:
-        from jax.config import config
+        from jax import config
         config.update("jax_enable_x64", True)
 
     h = read_json(os.path.join(ckpt_dir, 'hyperparameters.json'))

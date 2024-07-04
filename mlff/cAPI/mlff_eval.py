@@ -110,7 +110,7 @@ def evaluate():
 
     jax_dtype = args.jax_dtype
     if jax_dtype == 'x64':
-        from jax.config import config
+        from jax import config
         config.update("jax_enable_x64", True)
 
     ckpt_dir = (Path(args.ckpt_dir).absolute().resolve()).as_posix()

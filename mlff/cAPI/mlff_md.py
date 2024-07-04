@@ -200,7 +200,7 @@ def run_md():
     mdx_scan_interval = args.mdx_scan_interval
 
     if args.mdx_dtype == 'x64':
-        from jax.config import config
+        from jax import config
         config.update("jax_enable_x64", True)
     import jax.numpy as jnp
     _mdx_dtype = jnp.float64 if args.mdx_dtype == 'x64' else jnp.float32
