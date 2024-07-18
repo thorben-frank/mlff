@@ -43,7 +43,7 @@ class AseDataLoaderSparse:
 
 
     def cardinality(self):
-        print(self.input_folder)
+        print('input folder: ', self.input_folder)
         if self.input_folder[0] is not None:
             file_list = [f for f in os.listdir(self.input_folder) if os.path.isfile(os.path.join(self.input_folder, f))]
             print(file_list)
@@ -69,6 +69,8 @@ class AseDataLoaderSparse:
             file_list = [os.path.join(self.input_folder, f) for f in os.listdir(self.input_folder) if os.path.isfile(os.path.join(self.input_folder, f))]
         elif self.input_file:
             file_list = [self.input_file]
+
+        print('file_list: ', file_list)
         
         loaded_data = []
         max_num_of_nodes = 0
@@ -233,7 +235,7 @@ def ASE_to_jraph(
         "stress": np.array(stress) if stress is not None else None,
         "dipole_vec": np.array(dipole.reshape(-1,3)) if dipole is not None else None,
         "total_charge": np.array(total_charge, dtype=np.int16).reshape(-1) if total_charge is not None else None,
-        "hirsh_bool": np.array([0]) if hirshfeld_ratios[0]==0. else np.array([1]),
+        "hirsh_bool": (np.array([0]) if hirshfeld_ratios[0] == 0. else np.array([1])) if hirshfeld_ratios is not None else None,
         "num_unpaired_electrons": np.array([multiplicity]) - 1 if multiplicity is not None else None,
     }
 

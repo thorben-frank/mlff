@@ -122,8 +122,8 @@ class mlffCalculatorSparse(Calculator):
         )
         if calculate_stress:
             def energy_fn(system, strain: jnp.ndarray, neighbors, pme):
-                strained_system = strain_system(system, strain)
-                graph = system_to_graph(strained_system, neighbors, pme)
+                system = strain_system(system, strain)
+                graph = system_to_graph(system, neighbors, pme)
 
                 #graph = system_to_graph(system, neighbors, pme)
                 #graph = strain_graph(graph, strain)
