@@ -5,17 +5,14 @@ from jax.ops import segment_sum
 from typing import Any, Callable, Dict
 from mlff.nn.base.sub_module import BaseSubModule
 from typing import Optional
-from mlff.cutoff_function import add_cell_offsets_sparse
-from mlff.masking.mask import safe_mask, safe_norm
+from mlff.masking.mask import safe_mask
 from ase.units import Bohr, Hartree
 from ase.units import alpha as fine_structure
 from mlff.nn.observable.dispersion_ref_data import alphas, C6_coef
-from jax.scipy.special import factorial
 from mlff.masking.mask import safe_scale
-from mlff.nn.activation_function.activation_function import silu, softplus_inverse, softplus
+from mlff.nn.activation_function.activation_function import softplus_inverse, softplus
 from jax.nn.initializers import constant
 from functools import partial
-from e3x.nn import smooth_switch
 
 @jax.jit
 def sigma(x):
@@ -209,29 +206,12 @@ class EnergySparse(BaseSubModule):
             )  # (num_graphs)
             energy = safe_scale(energy, graph_mask)
 
-        # if self.output_convention == 'per_structure':
-        #     energy = segment_sum(
-        #         atomic_energy,
-        #         segment_ids=batch_segments,
-        #         num_segments=num_graphs
-        #     )  # (num_graphs)
-        #     energy = safe_scale(energy, graph_mask)
-
             return dict(energy=energy)
 
         elif self.output_convention == 'per_atom':
             energy = atomic_energy  # (num_nodes)
 
             return dict(energy=energy)
-            # return dict(energy=jnp.sum(electrostatic_energy))
-            # return dict(e_sum = jnp.sum(electrostatic_energy), 
-            #             d_sum = jnp.sum(dispersion_energy), 
-            #             r_sum = jnp.sum(repulsion_energy), 
-            #             energy=energy, 
-            #             atomic_energy=atomic_energy ,
-            #             repulsion_energy=repulsion_energy, 
-            #             electrostatic_energy=electrostatic_energy, 
-            #             dispersion_energy=dispersion_energy)
 
         else:
             raise ValueError(
@@ -314,10 +294,6 @@ class ZBLRepulsionSparse(BaseSubModule):
         e_rep_edge = safe_scale(e_rep_edge, node_mask)
 
         return dict(zbl_repulsion=e_rep_edge)
-        # if self.output_convention == 'per_atom':
-        #     return dict(zbl_repulsion=e_rep_edge)
-        # else:
-        #     raise ValueError(f"{self.output_convention} is invalid argument for attribute `output_convention`.")
         
     def reset_output_convention(self, output_convention):
         self.output_convention = output_convention
@@ -601,15 +577,6 @@ class DispersionEnergySparse(BaseSubModule):
         atomic_dispersion_energy = safe_scale(atomic_dispersion_energy, node_mask)
 
         return dict(dispersion_energy=atomic_dispersion_energy)
-       #return dict(dispersion_energy=atomic_dispersion_energy,
-       #        atomic_numbers=atomic_numbers,
-       #        hirshfeld_ratios=hirshfeld_ratios,
-       #        alpha_ij=alpha_ij,
-       #        C6_ij=C6_ij,
-       #        gamma_ij=gamma_ij,
-       #        dispersion_energy_ij=dispersion_energy_ij,
-       #        atomic_dispersion_energy=atomic_dispersion_energy,
-       #        )
     
     def reset_output_convention(self, output_convention):
         self.output_convention = output_convention

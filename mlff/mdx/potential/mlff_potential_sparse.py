@@ -150,9 +150,6 @@ class MLFFPotentialSparse(MachineLearningPotential):
                 'lr_cutoff': getattr(graph, 'lr_cutoff', 10.),
                 'lr_cutoff_damp': getattr(graph, 'lr_cutoff_damp', 2.),
                 'cell': getattr(graph, 'cell', None),
-                'ngrid': getattr(graph, 'ngrid', None),
-                'alpha': getattr(graph, 'alpha', None),
-                'frequency': getattr(graph, 'frequency', None)
             }
 
             return x
