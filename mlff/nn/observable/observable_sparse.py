@@ -18,30 +18,6 @@ from functools import partial
 from e3x.nn import smooth_switch
 
 @jax.jit
-def _switch_component(x: jnp.ndarray, ones: jnp.ndarray, zeros: jnp.ndarray) -> jnp.ndarray:
-    """ Component of the switch function, only for internal use. """
-    x_ = jnp.where(x <= 0, ones, x)  # prevent nan in backprop
-    return jnp.where(x <= 0, zeros, jnp.exp(-ones / x_))
-
-@jax.jit
-def switch_function(x: jnp.ndarray, cuton: float, cutoff: float) -> jnp.ndarray:
-    """
-    Switch function that smoothly (and symmetrically) goes from f(x) = 1 to
-    f(x) = 0 in the interval from x = cuton to x = cutoff. For x <= cuton,
-    f(x) = 1 and for x >= cutoff, f(x) = 0. This switch function has infinitely
-    many smooth derivatives.
-    NOTE: The implementation with the "_switch_component" function is
-    numerically more stable than a simplified version, it is not recommended 
-    to change this!
-    """
-    x = (x - cuton) / (cutoff - cuton)
-    ones = jnp.ones_like(x)
-    zeros = jnp.zeros_like(x)
-    fp = _switch_component(x, ones, zeros)
-    fm = _switch_component(1 - x, ones, zeros)
-    return jnp.where(x <= 0, ones, jnp.where(x >= 1, zeros, fm / (fp + fm)))
-
-@jax.jit
 def sigma(x):
     return safe_mask(x > 0, fn=lambda u: jnp.exp(-1. / u), operand=x, placeholder=0)
 
@@ -51,43 +27,14 @@ def switching_fn(x, x_on, x_off):
     return sigma(1 - c) / (sigma(1 - c) + sigma(c))
 
 @jax.jit
-def Damp_n3(z) -> jnp.ndarray:
-    return 1 - jnp.exp(-z) * (1 + z + z**2/factorial(2) + z**3/factorial(3))
-
-@jax.jit
-def Damp_n4(z) -> jnp.ndarray:
-    return 1 - jnp.exp(-z) * (1 + z + z**2/factorial(2) + z**3/factorial(3)+z**4/factorial(4))
-
-@jax.jit
-def Damp_n5(z) -> jnp.ndarray:
-    return 1 - jnp.exp(-z) * (1 + z + z**2/factorial(2) + z**3/factorial(3)+z**4/factorial(4)+z**5/factorial(5))
-
-@jax.jit
-def Damp_n6(z) -> jnp.ndarray:
-    return 1 - jnp.exp(-z) * (1 + z + z**2/factorial(2) + z**3/factorial(3)+z**4/factorial(4)+z**5/factorial(5)+z**6/factorial(6))
-
-@jax.jit
-def vdw_QDO_disp_damp(R, gamma, C6):
-    #  Compute the vdW-QDO dispersion energy (in eV)
-    z = gamma*R**2/2
-    C8 = 5/gamma*C6
-    C10 = 245/8/gamma**2*C6
-    f6 = Damp_n3(z)
-    f8 = Damp_n4(z)
-    f10 = Damp_n5(z)
-    V3 = -f6*C6/R**6 - f8*C8/R**8 - f10*C10/R**10
-    V3_1 = jnp.multiply(V3, 0.5)
-    return V3_1*Hartree
-
-@jax.jit
-def vdw_QDO_disp_bj_damp(R, gamma, C6, alpha_ij, gamma_scale):
+def vdw_QDO_disp_damp(R, gamma, C6, alpha_ij, gamma_scale):
     #  Compute the vdW-QDO dispersion energy (in eV)
     C8 = 5/gamma*C6
     C10 = 245/8/gamma**2*C6
     p = gamma_scale * 2 * 2.54 * alpha_ij ** 1/7
     V3 = -C6/(R**6+p**6) - C8/(R**8+p**8) - C10/(R**10+p**10)
-    V3_1 = jnp.multiply(V3, 0.5)
-    return V3_1*Hartree
+    #return V3*0.5*Hartree  #for ASE and partition.NeighborListFormat(1)
+    return V3*Hartree #for partition.NeighborListFormat(2)
 
 @jax.jit
 def mixing_rules(
@@ -124,141 +71,34 @@ def gamma_cubic_fit(alpha):
     return gamma
 
 @jax.jit
-def _coulomb_erf(q: jnp.ndarray, rij: jnp.ndarray, 
+def coulomb_erf(q: jnp.ndarray, rij: jnp.ndarray, 
              idx_i: jnp.ndarray, idx_j: jnp.ndarray,
              kehalf: float, sigma: float#, sigma: jnp.ndarray
 ) -> jnp.ndarray:
     """ Pairwise Coulomb interaction with erf damping """
-    pairwise = kehalf * q[idx_i] * q[idx_j] * jax.scipy.special.erf(rij/sigma)/rij
-    #switch for PME:
-    #pairwise = kehalf * q[idx_i] * q[idx_j] * jax.scipy.special.erf(rij/sigma) * smooth_switch(1/rij, x0=1/10, x1=1/9.9 ) / rij 
+    pairwise = kehalf * q[idx_i] * q[idx_j] * jax.lax.erf(rij/sigma)/rij
     return pairwise
 
 @jax.jit
-def _coulomb_erf_PME(q: jnp.ndarray, rij: jnp.ndarray, 
-             idx_i: jnp.ndarray, idx_j: jnp.ndarray,
-             kehalf: float, sigma: float#, sigma: jnp.ndarray
+def coulomb_erf_shifted_force_smooth(q: jnp.ndarray, rij: jnp.ndarray,
+                              idx_i: jnp.ndarray, idx_j: jnp.ndarray,
+                              kehalf: float, sigma: float, 
+                              cutoff: float, cuton: float,
 ) -> jnp.ndarray:
-    """ Pairwise Coulomb interaction with erf damping """
-    pairwise = kehalf * q[idx_i] * q[idx_j] * jax.scipy.special.erf(rij/sigma) * smooth_switch(1/rij, x0=1/16, x1=1/5 ) / rij
-    return pairwise
+    """ Pairwise Coulomb interaction with erf damping, using Shifted Force method """
+    def potential(r):
+        return jax.lax.erf(r/sigma) / r
 
-@jax.jit
-def _coulomb_pme(q: jnp.ndarray, positions : jnp.ndarray, cell: jnp.ndarray, 
-             ngrid: jnp.ndarray, alpha: float, frequency: jnp.ndarray,
-) -> jnp.ndarray:
-    """ Pairwise Coulomb interaction with erf damping plus PME"""
+    def force(r):
+        return (2 * r * jnp.exp(-(r/sigma)**2) / (jnp.sqrt(jnp.pi) * sigma) - jax.lax.erf(r/sigma)) / r **2
 
-    
-    @partial(jax.jit, static_argnums=(3,))
-    def map_charges_to_grid(positions, q, icell, ngrid):
-        """Smears charges over a grid of specified dimensions."""
-        # Jax-md implementation https://github.com/jax-md/jax-md/blob/main/jax_md/_energy/electrostatics.py
-        Q = ngrid
-        N = positions.shape[0]
+    f = switching_fn(rij, cuton, cutoff)
+    pairwise = potential(rij)
+    shift = potential(cutoff)
+    force_shift = force(cutoff)
 
-        @partial(jnp.vectorize, signature='(),()->(p)')
-        def grid_position(u, K):
-            grid = jnp.floor(u).astype(jnp.int32)
-            grid = jnp.arange(0, 4) + grid
-            return jnp.mod(grid, K)
-
-        @partial(jnp.vectorize, signature='(d),()->(p,p,p,d),(p,p,p)')
-        def map_particle_to_grid(positions, charge):
-            u = raw_transform(icell, positions) * grid_dimensions
-            w = u - jnp.floor(u)
-            coeffs = optimized_bspline_4(w)
-
-            grid_pos = grid_position(u, grid_dimensions)
-
-            accum = charge * (coeffs[0, :, None, None] *
-                                coeffs[1, None, :, None] *
-                                coeffs[2, None, None, :])
-            grid_pos = jnp.concatenate(
-                (jnp.broadcast_to(grid_pos[[0], :, None, None], (1, 4, 4, 4)),
-                    jnp.broadcast_to(grid_pos[[1], None, :, None], (1, 4, 4, 4)),
-                    jnp.broadcast_to(grid_pos[[2], None, None, :], (1, 4, 4, 4))), axis=0)
-            grid_pos = jnp.transpose(grid_pos, (1, 2, 3, 0))
-
-            return grid_pos, accum
-
-        gp, ac = map_particle_to_grid(positions, q)
-        gp = jnp.reshape(gp, (-1, 3))
-        ac = jnp.reshape(ac, (-1,))
-
-        return Q.at[gp[:, 0], gp[:, 1], gp[:, 2]].add(ac)
-    
-    def _get_free_indices(n: int) -> str:
-        return ''.join([chr(ord('a') + i) for i in range(n)])
-
-    def raw_transform(box, R) -> Array:
-        """Apply an affine transformation to positions.
-
-        See `periodic_general` for a description of the semantics of `box`.
-
-        Args:
-            box: An affine transformation described in `periodic_general`.
-            R: Array of positions. Should have  shape `(..., spatial_dimension)`.
-
-        Returns:
-            A transformed array positions of shape `(..., spatial_dimension)`.
-        """
-        free_indices = _get_free_indices(R.ndim - 1)
-        left_indices = free_indices + 'j'
-        right_indices = free_indices + 'i'
-        return jnp.einsum(f'ij,{left_indices}->{right_indices}', box, R)
-
-
-
-    @partial(jnp.vectorize, signature='()->(p)')
-    def optimized_bspline_4(w):
-        coeffs = jnp.zeros((4,))
-
-        coeffs = coeffs.at[2].set(0.5 * w * w)
-        coeffs = coeffs.at[0].set(0.5 * (1.0-w) * (1.0-w))
-        coeffs = coeffs.at[1].set(1.0 - coeffs[0] - coeffs[2])
-
-        coeffs = coeffs.at[3].set(w * coeffs[2] / 3.0)
-        coeffs = coeffs.at[2].set(((1.0 + w) * coeffs[1] + (3.0 - w) * coeffs[2])/3.0)
-        coeffs = coeffs.at[0].set((1.0 - w) * coeffs[0] / 3.0)
-        coeffs = coeffs.at[1].set(1.0 - coeffs[0] - coeffs[2] - coeffs[3])
-
-        return coeffs
-    
-    @partial(jnp.vectorize, signature='()->()')
-    def b(m, n=4):
-        assert(n == 4)
-        k = jnp.arange(n - 1)
-        M = optimized_bspline_4(1.0)[1:][::-1]
-        prefix = jnp.exp(2 * jnp.pi * 1j * (n - 1) * m)
-        return prefix / jnp.sum(M * jnp.exp(2 * jnp.pi * 1j * m * k))
-
-
-    def B(mx, my, mz, n=4):
-        """Compute the B factors from Essmann et al. equation 4.7."""
-        b_x = b(mx)
-        b_y = b(my)
-        b_z = b(mz)
-        return jnp.abs(b_x)**2 * jnp.abs(b_y)**2 * jnp.abs(b_z)**2
-    
-
-    icell = jnp.linalg.inv(cell)
-    grid_dimensions = jnp.array(ngrid.shape)
-    grid = map_charges_to_grid(positions, q, icell, ngrid)
-    Fgrid = jnp.fft.fftn(grid)
-    mx, my, mz = frequency
-    m = (icell[None, None, None, 0] * mx[:, :, :, None] * grid_dimensions[0] +
-        icell[None, None, None, 1] * my[:, :, :, None] * grid_dimensions[1] +
-        icell[None, None, None, 2] * mz[:, :, :, None] * grid_dimensions[2])
-    m_2 = jnp.sum(m**2, axis=-1)
-    V = jnp.linalg.det(cell)
-    mask = m_2 != 0
-
-    exp_m = 1 / (2 * jnp.pi * V) * jnp.exp(-jnp.pi**2 * m_2 / alpha**2) / m_2
-    return jnp.sum(mask * exp_m * B(mx, my, mz) * jnp.abs(Fgrid)**2)
-
-
-Array = Any
+    shifted_potential = pairwise - shift - force_shift * (rij - cutoff)
+    return jnp.where(rij < cutoff, kehalf * q[idx_i] * q[idx_j] * (f * (pairwise - shift) + (1-f) * shifted_potential), 0.0)
 
 class EnergySparse(BaseSubModule):
     prop_keys: Dict
@@ -649,7 +489,11 @@ class DipoleVecSparse(BaseSubModule):
         partial_charges = self.partial_charges(inputs)['partial_charges']
         num_graphs = len(graph_mask)
 
-        mu_i = positions * partial_charges[:, None]
+        if positions is None:
+            #TODO: do not calculate DipoleVecSparse if there is no positions
+            mu_i = 1 * partial_charges[:, None]
+        else:
+            mu_i = positions * partial_charges[:, None]
 
         dipole = segment_sum(
             mu_i,
@@ -675,9 +519,11 @@ class ElectrostaticEnergySparse(BaseSubModule):
     input_convention: str = 'positions'
     partial_charges: Optional[Any] = None
     use_particle_mesh_ewald: bool = False #TODO: connect to calculator, now does nothing
-    kehalf: float = 14.399645351950548/2
+    #kehalf: float = 14.399645351950548/2 #for ASE and partition.NeighborListFormat(1)
+    kehalf: float = 14.399645351950548 #for jax-md partition.NeighborListFormat(2)
     electrostatic_energy_scale: float = 1.0
-  
+    fractional_coordinates: bool = True
+    
     @nn.compact
     def __call__(self, inputs: Dict, *args, **kwargs) -> jnp.ndarray:  
         node_mask = inputs['node_mask']  # (num_nodes)
@@ -686,40 +532,17 @@ class ElectrostaticEnergySparse(BaseSubModule):
         idx_i_lr = inputs['idx_i_lr']
         idx_j_lr = inputs['idx_j_lr']        
         d_ij_lr = inputs['d_ij_lr']
-        try:
-            ngrid = inputs['ngrid']
-        except:
-            ngrid = None
+        lr_cutoff = inputs['lr_cutoff']
 
-        # With PME
-        if isinstance(ngrid, jnp.ndarray):  # Check if ngrid is not None. Temporary solution to check if use PME
-            N = len(partial_charges)
-            positions = inputs['positions']
-            cell = inputs['cell']
-            alpha = inputs['alpha']
-            frequency = inputs['frequency']
-            atomic_electrostatic_energy_ij = _coulomb_erf_PME(partial_charges, d_ij_lr, idx_i_lr, idx_j_lr, self.kehalf, self.electrostatic_energy_scale)
+        atomic_electrostatic_energy_ij = coulomb_erf_shifted_force_smooth(partial_charges, d_ij_lr, idx_i_lr, idx_j_lr, self.kehalf, 
+                                                                            self.electrostatic_energy_scale, lr_cutoff, lr_cutoff*0.45)
 
-            atomic_electrostatic_energy = segment_sum(
-                    atomic_electrostatic_energy_ij,
-                    segment_ids=idx_i_lr,
-                    num_segments=num_nodes
-                )  # (num_nodes)
-
-            atomic_electrostatic_energy += _coulomb_pme(partial_charges, positions, cell, ngrid, alpha, frequency)/N
-            atomic_electrostatic_energy = safe_scale(atomic_electrostatic_energy, node_mask)
-        
-        # Without PME
-        else:
-            atomic_electrostatic_energy_ij = _coulomb_erf(partial_charges, d_ij_lr, idx_i_lr, idx_j_lr, self.kehalf, self.electrostatic_energy_scale)
-
-            atomic_electrostatic_energy = segment_sum(
-                    atomic_electrostatic_energy_ij,
-                    segment_ids=idx_i_lr,
-                    num_segments=num_nodes
-                )  # (num_nodes)
-
-            atomic_electrostatic_energy = safe_scale(atomic_electrostatic_energy, node_mask)
+        atomic_electrostatic_energy = segment_sum(
+                atomic_electrostatic_energy_ij,
+                segment_ids=idx_i_lr,
+                num_segments=num_nodes
+            )  # (num_nodes)
+        atomic_electrostatic_energy = safe_scale(atomic_electrostatic_energy, node_mask)
 
         return dict(electrostatic_energy=atomic_electrostatic_energy)
 
@@ -749,6 +572,8 @@ class DispersionEnergySparse(BaseSubModule):
         idx_i_lr = inputs['idx_i_lr']
         idx_j_lr = inputs['idx_j_lr']
         d_ij_lr = inputs['d_ij_lr']
+        lr_cutoff = inputs['lr_cutoff']
+        lr_cutoff_damp = inputs['lr_cutoff_damp']
 
         hirshfeld_ratios = self.hirshfeld_ratios(inputs)['hirshfeld_ratios']
 
@@ -758,19 +583,14 @@ class DispersionEnergySparse(BaseSubModule):
         # Calculate alpha_ij and C6_ij using mixing rules
         alpha_ij, C6_ij = mixing_rules(atomic_numbers, idx_i_lr, idx_j_lr, hirshfeld_ratios)
         
-        # # vdw_QDO_disp_damp
-        # # Use cubic fit for gamma
-        # gamma_ij = gamma_cubic_fit(alpha_ij)/self.dispersion_energy_scale
-
-        # # Get dispersion energy, positions are converted to to a.u.
-        # dispersion_energy_ij = vdw_QDO_disp_damp(d_ij_lr / Bohr, gamma_ij, C6_ij)
-
-        # vdw_QDO_disp_bj_damp
         # Use cubic fit for gamma
         gamma_ij = gamma_cubic_fit(alpha_ij)
 
         # Get dispersion energy, positions are converted to to a.u.
-        dispersion_energy_ij = vdw_QDO_disp_bj_damp(d_ij_lr / Bohr, gamma_ij, C6_ij, alpha_ij, self.dispersion_energy_scale)
+        dispersion_energy_ij = vdw_QDO_disp_damp(d_ij_lr / Bohr, gamma_ij, C6_ij, alpha_ij, self.dispersion_energy_scale)
+
+        w = safe_mask(d_ij_lr > 0, partial(switching_fn, x_on=lr_cutoff-lr_cutoff_damp, x_off=lr_cutoff), d_ij_lr, 0.)
+        dispersion_energy_ij = safe_scale(dispersion_energy_ij, w, 0.)
 
         atomic_dispersion_energy = segment_sum(
                 dispersion_energy_ij,

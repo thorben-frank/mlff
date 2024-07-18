@@ -46,9 +46,11 @@ def get_observable_fn_sparse(model: StackNetSparse, observable: str = None):
                 hirsh_bool: jnp.ndarray = None,
                 idx_i_lr: jnp.ndarray = None,
                 idx_j_lr: jnp.ndarray = None,
+                lr_cutoff: jnp.float32 = None,
+                lr_cutoff_damp: jnp.float32 = None,
                 ngrid: jnp.ndarray = None,
                 alpha: jnp.float32 = None,
-                frequency:jnp.ndarray=None,
+                frequency: jnp.ndarray = None,
         ):
             if batch_segments is None:
                 assert graph_mask is None
@@ -78,9 +80,11 @@ def get_observable_fn_sparse(model: StackNetSparse, observable: str = None):
                 hirsh_bool=hirsh_bool,
                 idx_i_lr=idx_i_lr,
                 idx_j_lr=idx_j_lr,
+                lr_cutoff=lr_cutoff,
+                lr_cutoff_damp=lr_cutoff_damp, 
                 ngrid=ngrid,
                 alpha=alpha,
-                frequency=frequency
+                frequency=frequency,
             )
             return model.apply(params, inputs)
     else:
@@ -103,6 +107,8 @@ def get_observable_fn_sparse(model: StackNetSparse, observable: str = None):
                 hirsh_bool: jnp.ndarray = None,
                 idx_i_lr: jnp.ndarray = None,
                 idx_j_lr: jnp.ndarray = None,
+                lr_cutoff: jnp.float32 = None,
+                lr_cutoff_damp: jnp.float32 = None,
                 ngrid: jnp.ndarray = None,
                 alpha: jnp.float32 = None,
                 frequency:jnp.ndarray=None,
@@ -135,9 +141,11 @@ def get_observable_fn_sparse(model: StackNetSparse, observable: str = None):
                 hirsh_bool=hirsh_bool,
                 idx_i_lr=idx_i_lr,
                 idx_j_lr=idx_j_lr,
+                lr_cutoff=lr_cutoff,
+                lr_cutoff_damp=lr_cutoff_damp,
                 ngrid=ngrid,
                 alpha=alpha,
-                frequency=frequency
+                frequency=frequency,
                 )
             return dict(observable=model.apply(params, inputs)[observable])
 
@@ -163,9 +171,11 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
                   hirsh_bool: jnp.ndarray = None,
                   idx_i_lr: jnp.ndarray = None,
                   idx_j_lr: jnp.ndarray = None,
+                  lr_cutoff: jnp.float32 = None,
+                  lr_cutoff_damp: jnp.float32 = None,
                   ngrid: jnp.ndarray = None,
                   alpha: jnp.float32 = None,
-                  frequency:jnp.ndarray=None):
+                  frequency:jnp.ndarray=None,):
         if batch_segments is None:
             assert graph_mask is None
             assert graph_mask_expanded is None
@@ -193,9 +203,11 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
                       hirsh_bool=hirsh_bool,
                       idx_i_lr=idx_i_lr,
                       idx_j_lr=idx_j_lr,
+                      lr_cutoff=lr_cutoff,
+                      lr_cutoff_damp=lr_cutoff_damp,
                       ngrid=ngrid,
                       alpha=alpha,
-                      frequency=frequency
+                      frequency=frequency,
                       )
 
         energy = model.apply(params, inputs)['energy']  # (num_graphs)
@@ -220,6 +232,8 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
                             hirsh_bool: jnp.ndarray = None,
                             idx_i_lr: jnp.ndarray = None,
                             idx_j_lr: jnp.ndarray = None,
+                            lr_cutoff: jnp.float32 = None,
+                            lr_cutoff_damp: jnp.float32 = None,
                             ngrid: jnp.ndarray = None,
                             alpha: jnp.float32 = None,
                             frequency:jnp.ndarray=None,
@@ -246,9 +260,11 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
                           hirsh_bool,
                           idx_i_lr,
                           idx_j_lr,
+                          lr_cutoff=lr_cutoff,
+                          lr_cutoff_damp=lr_cutoff_damp,
                           ngrid=ngrid,
                           alpha=alpha,
-                          frequency=frequency
+                          frequency=frequency,
                           )
 
         if batch_segments is None:
@@ -278,9 +294,11 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
                 hirsh_bool=hirsh_bool,
                 idx_i_lr=idx_i_lr,
                 idx_j_lr=idx_j_lr,
+                lr_cutoff=lr_cutoff, 
+                lr_cutoff_damp=lr_cutoff_damp, 
                 ngrid=ngrid,
                 alpha=alpha,
-                frequency=frequency
+                frequency=frequency,
                 )
 
         _, number_of_atoms_in_molecule = jnp.unique(batch_segments, return_counts = True, size=len(graph_mask))
