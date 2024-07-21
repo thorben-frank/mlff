@@ -8,7 +8,7 @@ setup(
     packages=find_packages(),
     install_requires=[
         "numpy",
-        "clu",
+        "clu == 0.0.9",
         # "jax == 0.4.8",
         "e3x",
         "flax",

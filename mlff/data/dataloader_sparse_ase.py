@@ -1,11 +1,13 @@
 from ase.calculators.calculator import PropertyNotImplementedError
-from ase.io import iread
+from ase.io import read, iread
 from ase.neighborlist import neighbor_list
 from ase import Atoms
 from dataclasses import dataclass
+from typing import Optional
 from tqdm import tqdm
 import numpy as np
 import jraph
+import os
 
 import logging
 
@@ -34,15 +36,25 @@ def compute_senders_and_receivers_np(
 
 @dataclass
 class AseDataLoaderSparse:
-    input_file: str
+    input_file: Optional[str] = None,
+    input_folder: Optional[str] = None,
     min_distance_filter: float = 0.
     max_force_filter: float = 1.e6
 
+
     def cardinality(self):
-        n = 0
-        for _ in iread(self.input_file):
-            n += 1
-        return n
+        print('input folder: ', self.input_folder)
+        if self.input_folder[0] is not None:
+            file_list = [f for f in os.listdir(self.input_folder) if os.path.isfile(os.path.join(self.input_folder, f))]
+            print(file_list)
+            total_atoms = 0
+            for file in file_list:
+                atoms = read(os.path.join(self.input_folder, file), index=":", format='extxyz')
+                total_atoms += len(atoms)
+            return total_atoms
+        elif self.input_file:
+            atoms = read(self.input_file, index=":", format='extxyz')
+            return len(atoms)
 
     def load(self, cutoff: float, pick_idx: np.ndarray = None):
         if pick_idx is None:
@@ -52,32 +64,46 @@ class AseDataLoaderSparse:
             def keep(idx: int):
                 return idx in pick_idx
 
-        logging.mlff(
-            f"Load data from {self.input_file} and calculate neighbors within cutoff={cutoff} Ang ..."
-        )
+        if self.input_folder[0] is not None:
+        #if self.input_folder is not None:
+            file_list = [os.path.join(self.input_folder, f) for f in os.listdir(self.input_folder) if os.path.isfile(os.path.join(self.input_folder, f))]
+        elif self.input_file:
+            file_list = [self.input_file]
+
+        print('file_list: ', file_list)
+        
         loaded_data = []
         max_num_of_nodes = 0
         max_num_of_edges = 0
+        max_num_of_pairs = 0
+        logging.mlff(f"Loading data from file_list: {file_list} ...")
+
         i = 0
-        for a in tqdm(iread(self.input_file)):
-            if keep(i):
-                graph = ASE_to_jraph(
-                    a,
-                    min_distance_filter=self.min_distance_filter,
-                    max_force_filter=self.max_force_filter,
-                    cutoff=cutoff
-                )
+        for file_path in file_list:
+            logging.mlff(
+                f"Load data from {file_path} and calculate neighbors within cutoff={cutoff} Ang ..."
+            )
+            for a in tqdm(iread(file_path, format='extxyz'), mininterval = 60, maxinterval=600):
+                if keep(i):
+                    graph = ASE_to_jraph(
+                        a,
+                        min_distance_filter=self.min_distance_filter,
+                        max_force_filter=self.max_force_filter,
+                        cutoff=cutoff
+                    )
 
-                loaded_data.append(graph)
+                    loaded_data.append(graph)
 
-                if graph is not None:
-                    num_nodes = len(graph.nodes['atomic_numbers'])
-                    num_edges = len(graph.receivers)
-                    max_num_of_nodes = max_num_of_nodes if num_nodes <= max_num_of_nodes else num_nodes
-                    max_num_of_edges = max_num_of_edges if num_edges <= max_num_of_edges else num_edges
-            else:
-                pass
-            i += 1
+                    if graph is not None:
+                        num_nodes = len(graph.nodes['atomic_numbers'])
+                        num_edges = len(graph.receivers)
+                        num_pairs = num_nodes * (num_nodes - 1)
+                        max_num_of_nodes = max_num_of_nodes if num_nodes <= max_num_of_nodes else num_nodes
+                        max_num_of_edges = max_num_of_edges if num_edges <= max_num_of_edges else num_edges
+                        max_num_of_pairs = max_num_of_pairs if num_pairs <= max_num_of_pairs else num_pairs
+                else:
+                    pass
+                i += 1
 
         if pick_idx is not None:
             if max(pick_idx) >= i:
@@ -86,8 +112,7 @@ class AseDataLoaderSparse:
                 )
         logging.mlff("... done!")
 
-        return loaded_data, {'max_num_of_nodes': max_num_of_nodes, 'max_num_of_edges': max_num_of_edges}
-
+        return loaded_data, {'max_num_of_nodes': max_num_of_nodes, 'max_num_of_edges': max_num_of_edges, 'max_num_of_pairs': max_num_of_pairs}
 
 def ASE_to_jraph(
     mol: Atoms,
@@ -110,6 +135,7 @@ def ASE_to_jraph(
     """
 
     atomic_numbers = mol.get_atomic_numbers()
+    n_atoms = len(atomic_numbers)
     positions = mol.get_positions()
     if mol.get_calculator() is not None:
         try:
@@ -124,13 +150,34 @@ def ASE_to_jraph(
             stress = mol.get_stress()
         except PropertyNotImplementedError:
             stress = None
+        #TODO: Read Hirshfeld ratios only when they are needed, 
+        #Now they are set to 0 if not present 
+        #hirsh_bool is used in observable_funnction_sparse.py before passing values to loss function
+        try:
+            hirshfeld_ratios = mol.arrays['hirsh_ratios']
+        except:
+            hirshfeld_ratios = [0.] * n_atoms
+        try:
+            dipole = mol.get_dipole_moment()
+        except:
+            dipole = None
+        try:
+            total_charge = mol.info['charge']
+        except:
+            total_charge = 0.
+        try:
+            multiplicity = mol.info['multiplicity']
+        except:
+            multiplicity = 1
+
     else:
         energy = None
         forces = None
         stress = None
-
-    total_charge = mol.info.get('total_charge')
-    multiplicity = mol.info.get('multiplicity')
+        hirshfeld_ratios = None
+        dipole = None
+        total_charge = None
+        multiplicity = None
 
     if mol.get_pbc().any():
         i, j, S = neighbor_list('ijS', mol, cutoff, self_interaction=self_interaction)
@@ -142,39 +189,53 @@ def ASE_to_jraph(
         senders = np.array(j)
         receivers = np.array(i)
     else:
-        # i, j = neighbor_list('ij', mol, cutoff, self_interaction=self_interaction)
+        i, j = neighbor_list('ij', mol, cutoff, self_interaction=self_interaction)
         edge_features = {
             "cell": None,
             "cell_offset": None
         }
-        
-        if len(atomic_numbers) == 1:
-            return None
 
-        senders, receivers, minimal_distance = compute_senders_and_receivers_np(
-            positions,
-            cutoff=cutoff
-        )
+        senders = np.array(j)
+        receivers = np.array(i)
 
-        if (
-                minimal_distance < min_distance_filter or
-                np.abs(forces).max() > max_force_filter
-        ):
-            return None
+        # if len(atomic_numbers) == 1:
+        #     return None
+
+        # senders, receivers, minimal_distance = compute_senders_and_receivers_np(
+        #     positions,
+        #     cutoff=cutoff
+        # )
+
+        # if (
+        #         minimal_distance < min_distance_filter or
+        #         np.abs(forces).max() > max_force_filter
+        # ):
+        #     return None
 
     node_features = {
             "positions": np.array(positions),
             "atomic_numbers": np.array(atomic_numbers),
             "forces": np.array(forces) if forces is not None else None,
+            "hirshfeld_ratios": np.array(hirshfeld_ratios) if hirshfeld_ratios is not None else None
             }
+    
+    idx_i_lr, idx_j_lr = neighbor_list('ij', mol, 100, self_interaction=self_interaction)
+    idx_i_lr = np.array(idx_i_lr)
+    idx_j_lr = np.array(idx_j_lr)
 
-    n_node = np.array([mol.get_global_number_of_atoms()])
+    # n_node = np.array([mol.get_global_number_of_atoms()])
+    n_node = np.array([n_atoms])
+
     n_edge = np.array([len(senders)])
+    n_pairs = np.array([len(idx_i_lr)])
+
 
     global_context = {
-        "energy": np.array([energy]).reshape(-1) if energy is not None else None,
+        "energy": np.array([energy]) if energy is not None else None,
         "stress": np.array(stress) if stress is not None else None,
-        "total_charge": np.array([total_charge]) if total_charge is not None else None,
+        "dipole_vec": np.array(dipole.reshape(-1,3)) if dipole is not None else None,
+        "total_charge": np.array(total_charge, dtype=np.int16).reshape(-1) if total_charge is not None else None,
+        "hirsh_bool": (np.array([0]) if hirshfeld_ratios[0] == 0. else np.array([1])) if hirshfeld_ratios is not None else None,
         "num_unpaired_electrons": np.array([multiplicity]) - 1 if multiplicity is not None else None,
     }
 
@@ -185,5 +246,8 @@ def ASE_to_jraph(
                 receivers=receivers,
                 n_node=n_node,
                 n_edge=n_edge,
-                globals=global_context
+                globals=global_context,
+                n_pairs = n_pairs,
+                idx_i_lr = idx_i_lr,
+                idx_j_lr = idx_j_lr
     )

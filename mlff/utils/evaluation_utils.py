@@ -19,6 +19,7 @@ def evaluate(
         batch_max_num_nodes,
         batch_max_num_edges,
         batch_max_num_graphs,
+        batch_max_num_pairs,
         write_batch_metrics_to: str = None
 ):
     """Evaluate a model given its params on the testing data.
@@ -50,7 +51,9 @@ def evaluate(
         testing_data,
         n_node=batch_max_num_nodes,
         n_edge=batch_max_num_edges,
-        n_graph=batch_max_num_graphs
+        n_graph=batch_max_num_graphs,
+        n_pairs=batch_max_num_pairs,
+        # n_pairs=batch_max_num_nodes*(batch_max_num_nodes-1)//(batch_max_num_graphs)
     )
 
     # Create a collections object for the test targets.
@@ -66,6 +69,8 @@ def evaluate(
 
         node_mask = batch_testing['node_mask']
         graph_mask = batch_testing['graph_mask']
+        graph_mask_expanded = batch_testing['graph_mask_expanded']
+        # graph_mask_expanded = jnp.repeat(graph_mask,3).reshape(-1,3)
 
         inputs = {k: v for (k, v) in batch_testing.items() if k not in testing_targets}
         output_prediction = obs_fn(params, **inputs)
@@ -78,18 +83,43 @@ def evaluate(
                 msk = node_mask
             elif t == 'stress':
                 msk = graph_mask
+            elif t == 'dipole_vec':
+                msk = graph_mask_expanded
+            elif t == 'hirshfeld_ratios':
+                msk = node_mask
+            elif t == 'dispersion_energy':
+                msk = graph_mask
+            elif t == 'electrostatic_energy':
+                msk = graph_mask
+            # elif t == 'electrostatic_energy':
+            #     msk = graph_mask
+            # elif t == 'dispersion_energy':
+            #     msk = graph_mask
+            # elif t == 'partial_charges':
+            #     msk = node_mask
             else:
                 raise ValueError(
                     f"Evaluate not implemented for target={t}."
                 )
-
+            # if t == 'electrostatic_energy':
+            #     print(f"electrostatic_energy output_prediction[t]: {output_prediction[t]}")
+            #     metrics_dict[f"{t}_prediction"] = output_prediction[t][msk]
+            # elif t =='dispersion_energy':
+            #     print(f"dispersion_energy output_prediction[t]: {output_prediction[t]}")
+            #     metrics_dict[f"{t}_prediction"] = output_prediction[t][msk]
+            # elif t == 'partial_charges':
+            #     print(f"partial_charges output_prediction[t]: {output_prediction[t]}")
+            #     metrics_dict[f"{t}_prediction"] = output_prediction[t][msk]
+            # else:
             metrics_dict[f"{t}_mae"] = calculate_mae(
                 y_predicted=output_prediction[t], y_true=batch_testing[t], msk=msk
             )
             metrics_dict[f"{t}_mse"] = calculate_mse(
                 y_predicted=output_prediction[t], y_true=batch_testing[t], msk=msk
             )
-
+            metrics_dict[f"{t}_true"] = batch_testing[t][msk]
+            metrics_dict[f"{t}_predicted"] = output_prediction[t][msk]
+     
         # Track the metrics per batch if they are written to file.
         if write_batch_metrics_to is not None:
             row_metrics += [jax.device_get(metrics_dict)]
