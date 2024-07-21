@@ -53,6 +53,14 @@ def evaluate_itp_net_on():
         help='How many edges to put in a batch. If not set is determined from max_num_graphs and max_num_edges in '
              '--datafile.'
     )
+    parser.add_argument( #TODO: remove --max_num_pairs
+        "--max_num_pairs",
+        type=int,
+        default=None,
+        required=False,
+        help='How many edges to put in a batch. If not set is determined from max_num_graphs and max_num_edges in '
+             '--datafile.'
+    )
     parser.add_argument(
         '--num_test',
         type=int,
@@ -95,6 +103,7 @@ def evaluate_itp_net_on():
     cfg.training.batch_max_num_graphs = args.max_num_graphs
     cfg.training.batch_max_num_edges = args.max_num_edges
     cfg.training.batch_max_num_nodes = args.max_num_nodes
+    cfg.training.batch_max_num_pairs = args.max_num_pairs
 
     if args.write_batch_metrics_to is not None and cfg.training.batch_max_num_graphs > 2:
         raise ValueError(

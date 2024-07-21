@@ -3,6 +3,7 @@ import json
 from mlff.config import from_config
 from ml_collections import config_dict
 import pathlib
+from typing import Optional, Sequence
 
 
 def evaluate_so3krates_sparse_on():
@@ -70,6 +71,14 @@ def evaluate_so3krates_sparse_on():
                              '`batch_max_num_nodes = 2` which allows one graph per batch, following the `jraph` logic '
                              'that one graph in used as padding graph.'
                         )
+    # parser.add_argument(
+    #     '--testing_targets',
+    #     type=str,
+    #     required=False,
+    #     nargs='+',
+    #     default=['forces'],
+    #     help='Targets for which the metrics should be calculated. Defaults to `forces`.'
+    # )
     args = parser.parse_args()
 
     if args.num_test is not None and args.write_batch_metrics_to is not None:
@@ -119,9 +128,10 @@ def evaluate_so3krates_sparse_on():
         config=cfg,
         num_test=args.num_test,
         pick_idx=None,
-        write_batch_metrics_to=write_batch_metrics_to
-    )
-    print(metrics)
+        write_batch_metrics_to=write_batch_metrics_to,
+        # testing_targets=args.testing_targets
+        )
+    print(f"metrics: {metrics}")
 
 
 if __name__ == '__main__':

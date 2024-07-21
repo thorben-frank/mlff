@@ -4,7 +4,7 @@ import numpy as np
 import logging
 from typing import Callable, Type
 from flax import struct
-from mlff.utils import Graph
+from mlff.utils import Graph 
 from mlff.mdx.potential.machine_learning_potential import MachineLearningPotential
 from mlff.nn.stacknet.observable_function_sparse import get_observable_fn_sparse
 import pathlib
@@ -151,11 +151,19 @@ class MLFFPotentialSparse(MachineLearningPotential):
         def graph_to_mlff_input(graph: Graph):
 
             x = {
-                'positions': None,
+                'positions': graph.positions,
                 'displacements': graph.edges,
                 'atomic_numbers': graph.nodes,
                 'idx_i': graph.centers,
-                'idx_j': graph.others
+                'idx_j': graph.others,
+                'total_charge': graph.total_charge,
+                'num_unpaired_electrons': graph.num_unpaired_electrons,
+                'displacements_lr': graph.edges_lr,
+                'idx_i_lr': graph.idx_i_lr,
+                'idx_j_lr': graph.idx_j_lr,
+                'lr_cutoff': getattr(graph, 'lr_cutoff', 10.),
+                'lr_cutoff_damp': getattr(graph, 'lr_cutoff_damp', 2.),
+                'cell': getattr(graph, 'cell', None),
             }
 
             return x

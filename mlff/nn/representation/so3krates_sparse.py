@@ -3,8 +3,8 @@ import jax
 from mlff.nn.stacknet import StackNetSparse
 from mlff.nn.embed import GeometryEmbedSparse, AtomTypeEmbedSparse, ChargeEmbedSparse, SpinEmbedSparse
 from mlff.nn.layer import SO3kratesLayerSparse
-from mlff.nn.observable import EnergySparse
 from .representation_utils import make_embedding_modules
+from mlff.nn.observable import EnergySparse, DipoleVecSparse, HirshfeldSparse, PartialChargesSparse, ElectrostaticEnergySparse, DispersionEnergySparse, ZBLRepulsionSparse
 from typing import Sequence
 
 
@@ -34,7 +34,12 @@ def init_so3krates_sparse(
         energy_activation_fn: str = 'identity',
         energy_learn_atomic_type_scales: bool = False,
         energy_learn_atomic_type_shifts: bool = False,
-        input_convention: str = 'positions'
+        input_convention: str = 'positions',
+        electrostatic_energy_bool: bool = False,
+        electrostatic_energy_scale: float = 1.0,
+        dispersion_energy_bool: bool = False,
+        dispersion_energy_scale: float = 1.0,
+        zbl_repulsion_bool: bool = False,
 ):
     embedding_modules = make_embedding_modules(
         num_features=num_features,
@@ -68,6 +73,60 @@ def init_so3krates_sparse(
         behave_like_identity_fn_at_init=layers_behave_like_identity_fn_at_init
     ) for i in range(num_layers)]
 
+    partial_charges = PartialChargesSparse(
+        prop_keys=None,
+        output_is_zero_at_init=output_is_zero_at_init,
+        regression_dim=energy_regression_dim,
+        activation_fn=getattr(
+            nn.activation, energy_activation_fn
+        ) if energy_activation_fn != 'identity' else lambda u: u,
+    )
+
+    hirshfeld_ratios = HirshfeldSparse(
+        prop_keys=None,
+        output_is_zero_at_init=output_is_zero_at_init,
+        regression_dim=energy_regression_dim,
+        activation_fn=getattr(
+            nn.activation, energy_activation_fn
+        ) if energy_activation_fn != 'identity' else lambda u: u,
+    ) 
+
+    dispersion_energy = DispersionEnergySparse(
+        prop_keys=None,
+        output_is_zero_at_init=output_is_zero_at_init,
+        hirshfeld_ratios=hirshfeld_ratios,
+        regression_dim=energy_regression_dim,
+        activation_fn=getattr(
+            nn.activation, energy_activation_fn
+        ) if energy_activation_fn != 'identity' else lambda u: u,
+        dispersion_energy_scale=dispersion_energy_scale
+    )
+
+    electrostatic_energy = ElectrostaticEnergySparse(
+        prop_keys=None,
+        output_is_zero_at_init=output_is_zero_at_init,
+        regression_dim=energy_regression_dim,
+        activation_fn=getattr(
+            nn.activation, energy_activation_fn
+        ) if energy_activation_fn != 'identity' else lambda u: u,
+        partial_charges=partial_charges,
+        electrostatic_energy_scale=electrostatic_energy_scale
+    )
+
+    dipole_vec = DipoleVecSparse(
+        prop_keys=None,
+        output_is_zero_at_init=output_is_zero_at_init,
+        regression_dim=energy_regression_dim,
+        activation_fn=getattr(
+            nn.activation, energy_activation_fn
+        ) if energy_activation_fn != 'identity' else lambda u: u,
+        partial_charges=partial_charges
+    )
+
+    zbl_repulsion = ZBLRepulsionSparse(
+        prop_keys=None
+    )
+    
     energy = EnergySparse(
         prop_keys=None,
         output_is_zero_at_init=output_is_zero_at_init,
@@ -77,12 +136,18 @@ def init_so3krates_sparse(
         ) if energy_activation_fn != 'identity' else lambda u: u,
         learn_atomic_type_scales=energy_learn_atomic_type_scales,
         learn_atomic_type_shifts=energy_learn_atomic_type_shifts,
+        electrostatic_energy=electrostatic_energy,
+        dispersion_energy=dispersion_energy,
+        zbl_repulsion=zbl_repulsion,
+        electrostatic_energy_bool=electrostatic_energy_bool,
+        dispersion_energy_bool=dispersion_energy_bool,
+        zbl_repulsion_bool=zbl_repulsion_bool
     )
 
     return StackNetSparse(
         geometry_embeddings=[geometry_embed],
         feature_embeddings=embedding_modules,
         layers=layers,
-        observables=[energy],
+        observables=[energy, dipole_vec, hirshfeld_ratios],
         prop_keys=None
     )

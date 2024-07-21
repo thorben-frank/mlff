@@ -39,6 +39,11 @@ model:
   energy_learn_atomic_type_scales: false
   energy_learn_atomic_type_shifts: false
   input_convention: positions  # Input convention.
+  electrostatic_energy_bool: false
+  electrostatic_energy_scale: 1.0
+  dispersion_energy_bool: false
+  dispersion_energy_scale: 1.0
+  zbl_repulsion_bool: true
 optimizer:
   name: adam  # Name of the optimizer. See https://optax.readthedocs.io/en/latest/api.html#common-optimizers for available ones.
   optimizer_args: null
@@ -57,6 +62,7 @@ training:
   num_valid: 50  # Number of validation points to draw from data.filepath.
   batch_max_num_nodes: null  # Maximal number of nodes per batch. Must be at least maximal number of atoms + 1 in the data set.
   batch_max_num_edges: null  # Maximal number of edges per batch. Must be at least maximal number of edges + 1 in the data set.
+  batch_max_num_pairs: null
   # If batch_max_num_nodes and batch_max_num_edges is set to null, they will be determined from the max_num_of_graphs.
   # If they are set to values, each batch will contain as many molecular structures/graphs such none of the three values
   # batch_max_num_nodes, batch_max_num_edges and batch_max_num_of_graphs is exceeded.
@@ -66,6 +72,8 @@ training:
   loss_weights:
     energy: 0.01  # Loss weight for the energy.
     forces: 0.99  # Loss weight for the forces.
+    dipole_vec: 0.01 
+    hirshfeld_ratios: 0.01
   model_seed: 0  # Seed used for the initialization of the model parameters.
   training_seed: 0  # Seed used for shuffling the batches during training.
   log_gradient_values: False  # Log the norm of the gradients for each set of weights.

@@ -14,8 +14,20 @@ property_to_mask = {
     'energy': 'graph_mask',
     'stress': 'graph_mask',
     'forces': 'node_mask',
+    'dipole_vec': 'graph_mask_expanded',
+    'hirshfeld_ratios': 'node_mask',
+    'dispersion_energy': 'graph_mask',
+    'electrostatic_energy': 'graph_mask'
 }
 
+def print_metrics(epoch, eval_metrics):
+    formatted_output = f"{epoch}: "
+    for key, value in eval_metrics.items():
+        if isinstance(value, np.ndarray) and value.size == 1:
+            formatted_output += f"{key}={value.item():.4f}, "
+        else:
+            formatted_output += f"{key}={', '.join(map('{:.4f}'.format, value))}, " if isinstance(value, np.ndarray) else f"{key}={value:.4f}, "
+    return formatted_output.rstrip(", ")
 
 def scaled_mse_loss(y, y_label, scale, mask):
     full_mask = ~jnp.isnan(y_label) & jnp.expand_dims(mask, [y_label.ndim - 1 - o for o in range(0, y_label.ndim - 1)])
@@ -94,7 +106,10 @@ property_to_loss = {
     'energy': graph_mse_loss,
     'stress': graph_mse_loss,
     'forces': node_mse_loss,
+    'dipole_vec': graph_mse_loss,
+    'hirshfeld_ratios': node_mse_loss,
 }
+
 
 
 def make_loss_fn(obs_fn: Callable, weights: Dict, scales: Dict = None):
@@ -166,6 +181,8 @@ def make_training_step_fn(optimizer, loss_fn, log_gradient_values):
         #     metrics['grad_norm'] = unfreeze(jax.tree_map(lambda x: jnp.linalg.norm(x.reshape(-1), axis=0), grads))
         updates, opt_state = optimizer.update(grads, opt_state, params)
         params = optax.apply_updates(params=params, updates=updates)
+        # print('params', params)
+        # print('number of parameters', sum(x.size for x in jax.tree_leaves(params)))
         metrics['grad_norm'] = optax.global_norm(grads)
         return params, opt_state, metrics
 
@@ -201,6 +218,7 @@ def fit(
         batch_max_num_nodes,
         batch_max_num_edges,
         batch_max_num_graphs,
+        batch_max_num_pairs,
         params=None,
         num_epochs: int = 100,
         ckpt_dir: str = None,
@@ -274,13 +292,17 @@ def fit(
     for epoch in range(num_epochs):
         # Shuffle the training data.
         numpy_rng.shuffle(training_data)
-
+        # print(f"Epoch {epoch}")
+        # print(batch_max_num_nodes, batch_max_num_edges, batch_max_num_graphs, batch_max_num_pairs)
         # Create batched graphs from list of graphs.
         iterator_training = jraph.dynamically_batch(
             training_data,
             n_node=batch_max_num_nodes,
             n_edge=batch_max_num_edges,
-            n_graph=batch_max_num_graphs
+            n_graph=batch_max_num_graphs,
+            n_pairs=batch_max_num_pairs,
+            # n_pairs=batch_max_num_nodes*(batch_max_num_nodes-1)//(batch_max_num_graphs//2),
+            # n_pairs=batch_max_num_nodes*(batch_max_num_nodes-1)//(batch_max_num_graphs*jnp.sqrt(2)),
         )
 
         # Start iteration over batched graphs.
@@ -328,13 +350,19 @@ def fit(
                     step=step
                 )
 
+            # Print train metrics
+            # print(print_metrics(f"train_{epoch}_{step}:", train_metrics_np))
+
             # Start validation process.
             if step % eval_every_num_steps == 0:
                 iterator_validation = jraph.dynamically_batch(
                     validation_data,
                     n_node=batch_max_num_nodes,
                     n_edge=batch_max_num_edges,
-                    n_graph=batch_max_num_graphs
+                    n_graph=batch_max_num_graphs,
+                    n_pairs=batch_max_num_pairs,
+                    # n_pairs=batch_max_num_nodes*(batch_max_num_nodes-1)//(batch_max_num_graphs//2),
+                    # n_pairs=batch_max_num_nodes*(batch_max_num_nodes-1)//(batch_max_num_graphs*jnp.sqrt(2)),
                 )
 
                 # Start iteration over validation batches.
@@ -366,6 +394,9 @@ def fit(
                 eval_metrics = {
                     f'eval_{k}': float(v) for k, v in eval_metrics.items()
                 }
+
+                # Print eval_metrics
+                print(print_metrics(f"val_{epoch}_{step}:", eval_metrics))
 
                 # Save checkpoint.
                 ckpt_mngr.save(
@@ -616,40 +647,5 @@ def make_optimizer(
         opt
     )
 
-
-def freeze_parameters(optimizer, trainable_subset_keys):
-    """Freeze parameters by giving keys for trainable subsets. Thus, all parameters that are NOT in
-    `trainable_subset_keys` are frozen.
-
-    Args:
-        optimizer (): optax.GradientTransformation.
-        trainable_subset_keys (Sequence): Keys which belong to entries in the PyTree that are trainable. Note that
-        for a pyTree like {'a': {'b': *, 'c': *}, 'd': *} and trainable_subset_keys = ['a'] one gets the following
-        {'a': {'b': 'trainable', 'c': 'trainable'}, 'd': 'frozen'}. If 'c' and 'd' should be trainable one has to
-        pass trainable_subset_keys = ['c', 'd'].
-
-    Returns:
-
-    """
-
-    return optax.multi_transform(
-        {'trainable': optimizer, 'frozen': zero_grads()},
-        param_labels=make_annotation_fn(trainable_subset_keys)
-    )
-
-
-def make_annotation_fn(keys):
-    return lambda params: traverse_util.path_aware_map(
-        lambda path, v: 'trainable' if len(set(keys) & set(path)) > 0 else 'frozen', params
-    )
-
-
-def zero_grads():
-
-    def init_fn(_):
-        return ()
-
-    def update_fn(updates, state, params=None):
-        return jax.tree_map(jnp.zeros_like, updates), ()
-
-    return optax.GradientTransformation(init_fn, update_fn)
+    # return optax.apply_if_finite(opt, max_consecutive_errors=num_of_nans_to_ignore)
+    # return opt

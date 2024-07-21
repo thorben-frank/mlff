@@ -42,8 +42,8 @@ class BernsteinBasis(nn.Module):
             Returns:
 
             """
-            k_x = jnp.where(k != 0, k * jnp.log(x), 0)
-            kk_x = jnp.where(k_rev != 0, k_rev * jnp.log(1 - x), 0)
+            k_x = k * jnp.log(jnp.where(k != 0., x, 1.))
+            kk_x = k_rev * jnp.log(jnp.where(k_rev != 0., 1 - x, 1.))
 
             return b + k_x + kk_x
 
