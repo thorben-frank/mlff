@@ -36,14 +36,28 @@ def compute_senders_and_receivers_np(
 
 @dataclass
 class AseDataLoaderSparse:
-    input_file: Optional[str] = None,
-    input_folder: Optional[str] = None,
-    min_distance_filter: float = 0.
-    max_force_filter: float = 1.e6
+    input_file: Optional[str] = None
+    input_folder: Optional[str] = None
 
+    def make_file_list(self):
+        if self.input_folder is not None:
+            if self.input_file is not None:
+                raise ValueError(
+                    f"Only input_folder or input_file can be specified. "
+                    f"Received {self.input_folder=} and {self.input_file=}."
+                )
+            file_list = [os.path.join(self.input_folder, f) for f in os.listdir(self.input_folder) if os.path.isfile(os.path.join(self.input_folder, f))]
+        else:
+            if self.input_file is None:
+                raise ValueError(
+                    f"Either input_folder or input_file must be set. "
+                    f"Received {self.input_folder=} and {self.input_file=}."
+                )
+            file_list = [self.input_file]
+
+        return file_list
 
     def cardinality(self):
-        print('input folder: ', self.input_folder)
         if self.input_folder[0] is not None:
             file_list = [f for f in os.listdir(self.input_folder) if os.path.isfile(os.path.join(self.input_folder, f))]
             print(file_list)
@@ -56,7 +70,13 @@ class AseDataLoaderSparse:
             atoms = read(self.input_file, index=":", format='extxyz')
             return len(atoms)
 
-    def load(self, cutoff: float, pick_idx: np.ndarray = None):
+    def load(
+            self,
+            cutoff: float,
+            calculate_neighbors_lr: bool = False,
+            cutoff_lr: Optional[float] = None,
+            pick_idx: np.ndarray = None
+    ):
         if pick_idx is None:
             def keep(idx: int):
                 return True
@@ -64,32 +84,34 @@ class AseDataLoaderSparse:
             def keep(idx: int):
                 return idx in pick_idx
 
-        if self.input_folder[0] is not None:
-        #if self.input_folder is not None:
-            file_list = [os.path.join(self.input_folder, f) for f in os.listdir(self.input_folder) if os.path.isfile(os.path.join(self.input_folder, f))]
-        elif self.input_file:
-            file_list = [self.input_file]
-
-        print('file_list: ', file_list)
-        
         loaded_data = []
         max_num_of_nodes = 0
         max_num_of_edges = 0
         max_num_of_pairs = 0
+
+        file_list = self.make_file_list()
+
         logging.mlff(f"Loading data from file_list: {file_list} ...")
 
         i = 0
         for file_path in file_list:
             logging.mlff(
-                f"Load data from {file_path} and calculate neighbors within cutoff={cutoff} Ang ..."
+                f"Load data from {file_path}."
             )
-            for a in tqdm(iread(file_path, format='extxyz'), mininterval = 60, maxinterval=600):
+            logging.mlff(
+                f"Calculate short range neighbors within cutoff={cutoff} Ang."
+            )
+            if calculate_neighbors_lr:
+                logging.mlff(
+                    f"Calculate long-range neighbors within cutoff_lr={cutoff_lr} Ang."
+                )
+            for a in tqdm(iread(file_path, format='extxyz'), mininterval=60, maxinterval=600):
                 if keep(i):
                     graph = ASE_to_jraph(
                         a,
-                        min_distance_filter=self.min_distance_filter,
-                        max_force_filter=self.max_force_filter,
-                        cutoff=cutoff
+                        cutoff=cutoff,
+                        calculate_neighbors_lr=calculate_neighbors_lr,
+                        cutoff_lr=cutoff_lr
                     )
 
                     loaded_data.append(graph)
@@ -114,70 +136,98 @@ class AseDataLoaderSparse:
 
         return loaded_data, {'max_num_of_nodes': max_num_of_nodes, 'max_num_of_edges': max_num_of_edges, 'max_num_of_pairs': max_num_of_pairs}
 
+
 def ASE_to_jraph(
-    mol: Atoms,
-    cutoff: float,
-    min_distance_filter: float,
-    max_force_filter: float,
-    self_interaction: bool = False,
+        mol: Atoms,
+        cutoff: float,
+        self_interaction: bool = False,
+        calculate_neighbors_lr: bool = True,
+        cutoff_lr: float = Optional[None]
 ):
     """Convert an ASE Atoms object to a jraph.GraphTuple object.
 
     Args:
         mol (Atoms): ASE Atoms object.
         cutoff (float): Cutoff radius for neighbor interactions.
-        min_distance_filter (float):
-        max_force_filter (float):
         self_interaction (bool): Include self-interaction in neighbor list.
+        calculate_neighbors_lr (bool): Calculate long-range neighborhood.
+        cutoff_lr (float): Cutoff for the long-range neighborhood.
 
     Returns:
         jraph.GraphsTuple: Jraph graph representation of the Atoms object if filter != True else None.
     """
 
-    atomic_numbers = mol.get_atomic_numbers()
-    n_atoms = len(atomic_numbers)
-    positions = mol.get_positions()
+    atomic_numbers = np.array(mol.get_atomic_numbers(), dtype=np.int64)
+    positions = np.array(mol.get_positions())
+
+    num_atoms = len(atomic_numbers)
+
     if mol.get_calculator() is not None:
         try:
-            energy = mol.get_potential_energy()
+            energy = np.array(mol.get_potential_energy()).reshape(-1)
         except PropertyNotImplementedError:
             energy = None
         try:
-            forces = mol.get_forces()
+            forces = np.array(mol.get_forces())
         except PropertyNotImplementedError:
             forces = None
         try:
-            stress = mol.get_stress()
+            stress = np.array(mol.get_stress())
         except PropertyNotImplementedError:
             stress = None
-        #TODO: Read Hirshfeld ratios only when they are needed, 
-        #Now they are set to 0 if not present 
-        #hirsh_bool is used in observable_funnction_sparse.py before passing values to loss function
         try:
-            hirshfeld_ratios = mol.arrays['hirsh_ratios']
-        except:
-            hirshfeld_ratios = [0.] * n_atoms
-        try:
-            dipole = mol.get_dipole_moment()
-        except:
+            dipole = np.array(mol.get_dipole_moment())
+        except PropertyNotImplementedError:
             dipole = None
-        try:
-            total_charge = mol.info['charge']
-        except:
-            total_charge = 0.
-        try:
-            multiplicity = mol.info['multiplicity']
-        except:
-            multiplicity = 1
-
     else:
         energy = None
         forces = None
         stress = None
-        hirshfeld_ratios = None
         dipole = None
-        total_charge = None
-        multiplicity = None
+
+    # Forces are NaN when not present.
+    if forces is None:
+        forces = np.empty((num_atoms, 3))
+        forces[:] = np.nan
+
+    # Energy is NaN when not present.
+    if energy is None:
+        # Energy from ASE is only a scalar.
+        energy = np.nan
+
+    # Dipoles are NaN when not present.
+    if dipole is None:
+        dipole = np.empty((3, ))
+        dipole[:] = np.nan
+
+    # Stress is NaN when not present.
+    if stress is None:
+        stress = np.empty((6, ))
+        stress[:] = np.nan
+
+    # Read additional properties from .info and .arrays in Atoms object.
+    total_charge = mol.info.get('charge')
+    multiplicity = mol.info.get('multiplicity')
+    hirshfeld_ratios = mol.arrays.get('hirsh_ratios')
+
+    # Total charges are assumed to be zero when not specified.
+    if total_charge is None:
+        total_charge = np.array(0, np.int16).reshape(-1)
+    else:
+        total_charge = np.array(total_charge, dtype=np.int16).reshape(-1)
+
+    # Multiplicity is assumed to be one when not specified.
+    if multiplicity is None:
+        multiplicity = np.array(1, dtype=np.int16).reshape(-1)
+    else:
+        multiplicity = np.array(multiplicity, dtype=np.int16).reshape(-1)
+
+    # Hirshfeld ratios are set to NaN when not present.
+    if hirshfeld_ratios is None:
+        hirshfeld_ratios = np.empty((num_atoms, ))
+        hirshfeld_ratios[:] = np.nan
+    else:
+        hirshfeld_ratios = np.array(hirshfeld_ratios).reshape(num_atoms, )
 
     if mol.get_pbc().any():
         i, j, S = neighbor_list('ijS', mol, cutoff, self_interaction=self_interaction)
@@ -190,54 +240,56 @@ def ASE_to_jraph(
         receivers = np.array(i)
     else:
         i, j = neighbor_list('ij', mol, cutoff, self_interaction=self_interaction)
-        edge_features = {
-            "cell": None,
-            "cell_offset": None
-        }
+        edge_features = dict()
 
         senders = np.array(j)
         receivers = np.array(i)
 
-        # if len(atomic_numbers) == 1:
-        #     return None
+    if calculate_neighbors_lr:
+        if mol.get_pbc().any():
+            raise NotImplementedError(
+                'Long-range neighborhoods can only be calculated for non-PBC at the moment.'
+            )
+        if cutoff_lr is None:
+            raise ValueError(
+                f'cutoff_lr must be specified for {calculate_neighbors_lr=}. Received {cutoff_lr=}.'
+            )
+        idx_i_lr, idx_j_lr = neighbor_list('ij', mol, cutoff_lr, self_interaction=self_interaction)
+        idx_i_lr = np.array(idx_i_lr)
+        idx_j_lr = np.array(idx_j_lr)
+    else:
+        # No long-range indices are calculated.
+        idx_i_lr = np.array([])
+        idx_j_lr = np.array([])
 
-        # senders, receivers, minimal_distance = compute_senders_and_receivers_np(
-        #     positions,
-        #     cutoff=cutoff
-        # )
-
-        # if (
-        #         minimal_distance < min_distance_filter or
-        #         np.abs(forces).max() > max_force_filter
-        # ):
-        #     return None
-
-    node_features = {
-            "positions": np.array(positions),
-            "atomic_numbers": np.array(atomic_numbers),
-            "forces": np.array(forces) if forces is not None else None,
-            "hirshfeld_ratios": np.array(hirshfeld_ratios) if hirshfeld_ratios is not None else None
-            }
-    
-    idx_i_lr, idx_j_lr = neighbor_list('ij', mol, 100, self_interaction=self_interaction)
-    idx_i_lr = np.array(idx_i_lr)
-    idx_j_lr = np.array(idx_j_lr)
-
-    # n_node = np.array([mol.get_global_number_of_atoms()])
-    n_node = np.array([n_atoms])
+    n_node = np.array([num_atoms])
 
     n_edge = np.array([len(senders)])
+
+    # Evaluates to zero if long-range edges are not calculated. When batching the graphs, this ensures that
+    # n_pairs can not lead to overflow when no long-range indices are present.
     n_pairs = np.array([len(idx_i_lr)])
 
-
+    # Add axis one for vector quantities such that batching yields e.g. (num_graphs, 6) for stress and (num_graphs, 3)
+    # for dipole_vec. Otherwise batching via jraph yields (num_graphs*6, ) and (num_graphs*3, ). This is ultimately
+    # convention that has to be taken into account when calculating the loss. Scalars like energy are represented
+    # as (num_graphs, ).
     global_context = {
-        "energy": np.array([energy]) if energy is not None else None,
-        "stress": np.array(stress) if stress is not None else None,
-        "dipole_vec": np.array(dipole.reshape(-1,3)) if dipole is not None else None,
-        "total_charge": np.array(total_charge, dtype=np.int16).reshape(-1) if total_charge is not None else None,
-        "hirsh_bool": (np.array([0]) if hirshfeld_ratios[0] == 0. else np.array([1])) if hirshfeld_ratios is not None else None,
-        "num_unpaired_electrons": np.array([multiplicity]) - 1 if multiplicity is not None else None,
+        "energy": energy.reshape(-1),
+        "stress": stress.reshape(1, 6),
+        "dipole_vec": dipole.reshape(1, 3),
+        "total_charge": total_charge.reshape(-1),
+        "num_unpaired_electrons": multiplicity.reshape(-1) - 1,
     }
+
+    # Edges follow a similar convention where e.g. for positions and forces one has (num_nodes, 3) and for scalars
+    # like hirshfeld volumes (num_nodes, ).
+    node_features = {
+            "positions": positions.reshape(num_atoms, 3),
+            "atomic_numbers": atomic_numbers.reshape(num_atoms),
+            "forces": forces.reshape(num_atoms, 3),
+            "hirshfeld_ratios": hirshfeld_ratios.reshape(num_atoms)
+            }
 
     return jraph.GraphsTuple(
                 nodes=node_features,
@@ -247,7 +299,7 @@ def ASE_to_jraph(
                 n_node=n_node,
                 n_edge=n_edge,
                 globals=global_context,
-                n_pairs = n_pairs,
-                idx_i_lr = idx_i_lr,
-                idx_j_lr = idx_j_lr
+                n_pairs=n_pairs,
+                idx_i_lr=idx_i_lr,
+                idx_j_lr=idx_j_lr
     )
