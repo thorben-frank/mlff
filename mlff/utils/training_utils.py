@@ -240,6 +240,7 @@ def fit(
         batch_max_num_nodes (int): Maximal number of nodes per batch.
         batch_max_num_edges (int): Maximal number of edges per batch.
         batch_max_num_graphs (int): Maximal number of graphs per batch.
+        batch_max_num_pairs (int): Maximal number of pairs in long-range indices.
         params: Parameters to start from during training. If not given, either new parameters are initialized randomly
             or loaded from ckpt_dir if the checkpoint already exists and `allow_restart=True`.
         num_epochs (int): Number of training epochs.
@@ -289,8 +290,6 @@ def fit(
     for epoch in range(num_epochs):
         # Shuffle the training data.
         numpy_rng.shuffle(training_data)
-        # print(f"Epoch {epoch}")
-        # print(batch_max_num_nodes, batch_max_num_edges, batch_max_num_graphs, batch_max_num_pairs)
         # Create batched graphs from list of graphs.
         iterator_training = jraph.dynamically_batch(
             training_data,
@@ -298,8 +297,6 @@ def fit(
             n_edge=batch_max_num_edges,
             n_graph=batch_max_num_graphs,
             n_pairs=batch_max_num_pairs,
-            # n_pairs=batch_max_num_nodes*(batch_max_num_nodes-1)//(batch_max_num_graphs//2),
-            # n_pairs=batch_max_num_nodes*(batch_max_num_nodes-1)//(batch_max_num_graphs*jnp.sqrt(2)),
         )
 
         # Start iteration over batched graphs.
@@ -347,9 +344,6 @@ def fit(
                     step=step
                 )
 
-            # Print train metrics
-            # print(print_metrics(f"train_{epoch}_{step}:", train_metrics_np))
-
             # Start validation process.
             if step % eval_every_num_steps == 0:
                 iterator_validation = jraph.dynamically_batch(
@@ -358,8 +352,6 @@ def fit(
                     n_edge=batch_max_num_edges,
                     n_graph=batch_max_num_graphs,
                     n_pairs=batch_max_num_pairs,
-                    # n_pairs=batch_max_num_nodes*(batch_max_num_nodes-1)//(batch_max_num_graphs//2),
-                    # n_pairs=batch_max_num_nodes*(batch_max_num_nodes-1)//(batch_max_num_graphs*jnp.sqrt(2)),
                 )
 
                 # Start iteration over validation batches.
