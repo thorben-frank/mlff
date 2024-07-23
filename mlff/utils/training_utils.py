@@ -77,7 +77,7 @@ def node_mse_loss(y, y_label, batch_segments, graph_mask, scale):
     # Note that padding graphs still have zero valued entries.
     data_msk = ~jnp.isnan(
         jax.ops.segment_max(
-            data=y_label,
+            data=jnp.max(y_label.reshape(len(y_label), -1), axis=-1),
             segment_ids=batch_segments,
             num_segments=len(graph_mask)
         )  # evaluates to NaN if one entry in the segment is NaN.
