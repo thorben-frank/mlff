@@ -60,6 +60,10 @@ class SpiceDataLoaderSparse:
             def keep(idx: int):
                 return idx in pick_idx
 
+        raise NotImplementedError(
+            'Loading SPICE dataset is not supported at the moment.'
+        )
+
         data = h5py.File(self.input_file)
 
         max_num_of_nodes = 0
@@ -70,9 +74,6 @@ class SpiceDataLoaderSparse:
         loaded_data = []
         i = 0
         for k in tqdm(data):
-            raise NotImplementedError(
-                'Loading SPICE dataset is not supported at the moment.'
-            )
             conformations = data[k]['conformations']
             atomic_numbers = data[k]['atomic_numbers']
             forces = data[k]['dft_total_gradient']
