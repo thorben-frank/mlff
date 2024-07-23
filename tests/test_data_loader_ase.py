@@ -1,4 +1,3 @@
-import jax.numpy as jnp
 import numpy as np
 import jraph
 import numpy.testing as npt
@@ -20,6 +19,7 @@ def test_data_load_no_pbc(calculate_neighbors_lr: bool):
     )
 
     npt.assert_equal(len(all_data), 100)
+    npt.assert_equal(loader.cardinality(), 100)
     npt.assert_equal(data_stats['max_num_of_nodes'], 24)
 
     npt.assert_(isinstance(all_data[0], jraph.GraphsTuple))
@@ -150,7 +150,7 @@ def test_data_load_with_pbc(calculate_neighbors_lr: bool):
             npt.assert_equal(senders.dtype, np.int64)
             npt.assert_equal(receivers.dtype, np.int64)
             npt.assert_equal(cell.dtype, np.float64)
-            npt.assert_equal(cell_offset.dtype, jnp.int64)
+            npt.assert_equal(cell_offset.dtype, np.int64)
 
             stress_expected = np.empty((1, 6))
             stress_expected[:] = np.nan

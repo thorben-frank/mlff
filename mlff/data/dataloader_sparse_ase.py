@@ -8,6 +8,7 @@ from tqdm import tqdm
 import numpy as np
 import jraph
 import os
+from pathlib import Path
 
 import logging
 
@@ -46,29 +47,27 @@ class AseDataLoaderSparse:
                     f"Only input_folder or input_file can be specified. "
                     f"Received {self.input_folder=} and {self.input_file=}."
                 )
-            file_list = [os.path.join(self.input_folder, f) for f in os.listdir(self.input_folder) if os.path.isfile(os.path.join(self.input_folder, f))]
+            input_folder = Path(self.input_folder).expanduser().resolve()
+
+            file_list = [Path(f).expanduser().resolve() for f in os.listdir(input_folder) if Path(f).is_file()]
         else:
             if self.input_file is None:
                 raise ValueError(
                     f"Either input_folder or input_file must be set. "
                     f"Received {self.input_folder=} and {self.input_file=}."
                 )
-            file_list = [self.input_file]
+            input_file = Path(self.input_file).expanduser().resolve()
+            file_list = [input_file]
 
         return file_list
 
     def cardinality(self):
-        if self.input_folder[0] is not None:
-            file_list = [f for f in os.listdir(self.input_folder) if os.path.isfile(os.path.join(self.input_folder, f))]
-            print(file_list)
-            total_atoms = 0
-            for file in file_list:
-                atoms = read(os.path.join(self.input_folder, file), index=":", format='extxyz')
-                total_atoms += len(atoms)
-            return total_atoms
-        elif self.input_file:
-            atoms = read(self.input_file, index=":", format='extxyz')
-            return len(atoms)
+        file_list = self.make_file_list()
+        total_atoms = 0
+        for file in file_list:
+            atoms = ['' for _ in iread(file)]
+            total_atoms += len(atoms)
+        return total_atoms
 
     def load(
             self,
@@ -240,7 +239,7 @@ def ASE_to_jraph(
         receivers = np.array(i)
     else:
         i, j = neighbor_list('ij', mol, cutoff, self_interaction=self_interaction)
-        edge_features = dict()
+        edge_features = dict()  # No edge features.
 
         senders = np.array(j)
         receivers = np.array(i)
