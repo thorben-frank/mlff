@@ -70,6 +70,9 @@ class SpiceDataLoaderSparse:
         loaded_data = []
         i = 0
         for k in tqdm(data):
+            raise NotImplementedError(
+                'Loading SPICE dataset is not supported at the moment.'
+            )
             conformations = data[k]['conformations']
             atomic_numbers = data[k]['atomic_numbers']
             forces = data[k]['dft_total_gradient']
