@@ -17,127 +17,6 @@ from mlff.masking.mask import safe_scale
 from mlff.nn.activation_function.activation_function import softplus_inverse, softplus
 
 
-@jax.jit
-def sigma(x):
-    return safe_mask(x > 0, fn=lambda u: jnp.exp(-1. / u), operand=x, placeholder=0)
-
-
-@jax.jit
-def switching_fn(x, x_on, x_off):
-    c = (x - x_on) / (x_off - x_on)
-    return sigma(1 - c) / (sigma(1 - c) + sigma(c))
-
-
-# TODO(thorben-frank): make factor 0.5 input of function.
-@jax.jit
-def vdw_QDO_disp_damp(R, gamma, C6, alpha_ij, gamma_scale):
-    #  Compute the vdW-QDO dispersion energy (in eV)
-    C8 = 5 / gamma * C6
-    C10 = 245 / 8 / gamma ** 2 * C6
-    p = gamma_scale * 2 * 2.54 * alpha_ij ** 1 / 7
-    V3 = -C6 / (R ** 6 + p ** 6) - C8 / (R ** 8 + p ** 8) - C10 / (R ** 10 + p ** 10)
-    # return V3*0.5*Hartree  #for ASE and partition.NeighborListFormat(1)
-    return V3 * Hartree  # for partition.NeighborListFormat(2)
-
-
-@jax.jit
-def mixing_rules(
-        atomic_numbers: jnp.ndarray,
-        idx_i: jnp.ndarray,
-        idx_j: jnp.ndarray,
-        hirshfeld_ratios: jnp.ndarray,
-) -> Tuple[jnp.ndarray, jnp.ndarray]:
-    dtype = hirshfeld_ratios.dtype
-
-    atomic_number_i = atomic_numbers[idx_i] - 1
-    atomic_number_j = atomic_numbers[idx_j] - 1
-    hirshfeld_ratio_i = hirshfeld_ratios[idx_i]
-    hirshfeld_ratio_j = hirshfeld_ratios[idx_j]
-
-    alpha_i = jnp.asarray(alphas[atomic_number_i], dtype=dtype) * hirshfeld_ratio_i
-    C6_i = jnp.asarray(C6_coef[atomic_number_i], dtype=dtype) * jnp.square(hirshfeld_ratio_i)
-    alpha_j = jnp.asarray(alphas[atomic_number_j], dtype=dtype) * hirshfeld_ratio_j
-    C6_j = jnp.asarray(C6_coef[atomic_number_j], dtype=dtype) * jnp.square(hirshfeld_ratio_j)
-
-    alpha_ij = (alpha_i + alpha_j) / 2
-    C6_ij = 2 * C6_i * C6_j * alpha_j * alpha_i / (alpha_i ** 2 * C6_j + alpha_j ** 2 * C6_i)
-
-    return alpha_ij, C6_ij
-
-
-@jax.jit
-def gamma_cubic_fit(alpha):
-    input_dtype = alpha.dtype
-
-    vdW_radius = fine_structure ** (jnp.asarray(-4. / 21, input_dtype)) * alpha ** jnp.asarray(1. / 7, input_dtype)
-    b0 = jnp.asarray(-0.00433008, dtype=input_dtype)
-    b1 = jnp.asarray(0.24428889, dtype=input_dtype)
-    b2 = jnp.asarray(0.04125273, dtype=input_dtype)
-    b3 = jnp.asarray(-0.00078893, dtype=input_dtype)
-
-    sigma = b3 * jnp.power(vdW_radius, 3) + b2 * jnp.square(vdW_radius) + b1 * vdW_radius + b0
-    gamma = jnp.asarray(1. / 2, dtype=input_dtype) / jnp.square(sigma)
-    return gamma
-
-
-@jax.jit
-def coulomb_erf(
-        q: jnp.ndarray,
-        rij: jnp.ndarray,
-        idx_i: jnp.ndarray,
-        idx_j: jnp.ndarray,
-        kehalf: float,
-        sigma: float
-) -> jnp.ndarray:
-    """ Pairwise Coulomb interaction with erf damping """
-    input_dtype = rij.dtype
-
-    # Cast constants to input dtype
-    _kehalf = jnp.asarray(kehalf, dtype=input_dtype)
-    _sigma = jnp.asarray(sigma, dtype=input_dtype)
-
-    pairwise = _kehalf * q[idx_i] * q[idx_j] * jax.lax.erf(rij / _sigma) / rij
-
-    return pairwise
-
-
-@jax.jit
-def coulomb_erf_shifted_force_smooth(
-        q: jnp.ndarray,
-        rij: jnp.ndarray,
-        idx_i: jnp.ndarray,
-        idx_j: jnp.ndarray,
-        kehalf: float,
-        sigma: float,
-        cutoff: float,
-        cuton: float,
-) -> jnp.ndarray:
-    """ Pairwise Coulomb interaction with erf damping, using Shifted Force method """
-
-    input_dtype = rij.dtype
-
-    # Cast the constants to input dtype
-    _sigma = jnp.asarray(sigma, dtype=input_dtype)
-    _kehalf = jnp.asarray(kehalf, dtype=input_dtype)
-    _cutoff = jnp.asarray(cutoff, dtype=input_dtype)
-    _cuton = jnp.asarray(cuton, dtype=input_dtype)
-
-    def potential(r):
-        return jax.lax.erf(r / _sigma) / r
-
-    def force(r):
-        return (2 * r * jnp.exp(-(r / _sigma) ** 2) / (jnp.sqrt(jnp.pi) * _sigma) - jax.lax.erf(r / _sigma)) / r ** 2
-
-    f = switching_fn(rij, _cuton, _cutoff)
-    pairwise = potential(rij)
-    shift = potential(_cutoff)
-    force_shift = force(_cutoff)
-
-    shifted_potential = pairwise - shift - force_shift * (rij - _cutoff)
-    return jnp.where(rij < _cutoff,
-                     _kehalf * q[idx_i] * q[idx_j] * (f * (pairwise - shift) + (1 - f) * shifted_potential), 0.0)
-
-
 class EnergySparse(BaseSubModule):
     prop_keys: Dict
     zmax: int = 118
@@ -274,73 +153,6 @@ class EnergySparse(BaseSubModule):
                                    'dispersion_energy_bool': self.dispersion_energy_bool,
                                    'prop_keys': self.prop_keys}
                 }
-
-
-class ZBLRepulsionSparse(BaseSubModule):
-    """
-    Ziegler-Biersack-Littmark repulsion.
-    """
-    prop_keys: Dict
-    input_convention: str = 'positions'
-    module_name: str = 'zbl_repulsion'
-    a0: float = 0.5291772105638411
-    ke: float = 14.399645351950548
-
-    @nn.compact
-    def __call__(self,
-                 inputs: Dict,
-                 *args,
-                 **kwargs) -> Dict[str, jnp.ndarray]:
-        a1 = softplus(self.param('a1', constant(softplus_inverse(3.20000)), (1,)))  # shape: (1)
-        a2 = softplus(self.param('a2', constant(softplus_inverse(0.94230)), (1,)))  # shape: (1)
-        a3 = softplus(self.param('a3', constant(softplus_inverse(0.40280)), (1,)))  # shape: (1)
-        a4 = softplus(self.param('a4', constant(softplus_inverse(0.20160)), (1,)))  # shape: (1)
-        c1 = softplus(self.param('c1', constant(softplus_inverse(0.18180)), (1,)))  # shape: (1)
-        c2 = softplus(self.param('c2', constant(softplus_inverse(0.50990)), (1,)))  # shape: (1)
-        c3 = softplus(self.param('c3', constant(softplus_inverse(0.28020)), (1,)))  # shape: (1)
-        c4 = softplus(self.param('c4', constant(softplus_inverse(0.02817)), (1,)))  # shape: (1)
-        p = softplus(self.param('p', constant(softplus_inverse(0.23)), (1,)))  # shape: (1)
-        d = softplus(self.param('d', constant(softplus_inverse(1 / (0.8854 * self.a0))), (1,)))  # shape: (1)
-
-        c_sum = c1 + c2 + c3 + c4
-        c1 = c1 / c_sum
-        c2 = c2 / c_sum
-        c3 = c3 / c_sum
-        c4 = c4 / c_sum
-
-        atomic_numbers = inputs['atomic_numbers']
-        node_mask = inputs['node_mask']
-        phi_r_cut_ij = inputs['cut']
-        idx_i = inputs['idx_i']
-        idx_j = inputs['idx_j']
-        d_ij = inputs['d_ij']
-
-        num_nodes = len(node_mask)
-
-        z_i = atomic_numbers[idx_i]
-        z_j = atomic_numbers[idx_j]
-
-        z_d_ij = safe_mask(mask=d_ij != 0,
-                           operand=d_ij,
-                           fn=lambda u: z_i * z_j / u,
-                           placeholder=0.
-                           )
-
-        x = self.ke * phi_r_cut_ij * z_d_ij
-
-        rzd = d_ij * (jnp.power(z_i, p) + jnp.power(z_j, p)) * d
-        y = c1 * jnp.exp(-a1 * rzd) + c2 * jnp.exp(-a2 * rzd) + c3 * jnp.exp(-a3 * rzd) + c4 * jnp.exp(-a4 * rzd)
-
-        w = switching_fn(d_ij, x_on=0, x_off=1.5)
-
-        e_rep_edge = w * x * y / jnp.asarray(2, dtype=d_ij.dtype)
-        e_rep_edge = segment_sum(e_rep_edge, segment_ids=idx_i, num_segments=num_nodes)
-        e_rep_edge = safe_scale(e_rep_edge, node_mask)
-
-        return dict(zbl_repulsion=e_rep_edge)
-
-    def reset_output_convention(self, output_convention):
-        self.output_convention = output_convention
 
 
 class HirshfeldSparse(BaseSubModule):
@@ -532,19 +344,260 @@ class DipoleVecSparse(BaseSubModule):
         self.output_convention = output_convention
 
 
+@jax.jit
+def sigma(x):
+    return safe_mask(x > 0, fn=lambda u: jnp.exp(-1. / u), operand=x, placeholder=0)
+
+
+@jax.jit
+def switching_fn(x, x_on, x_off):
+    c = (x - x_on) / (x_off - x_on)
+    return sigma(1 - c) / (sigma(1 - c) + sigma(c))
+
+
+@jax.jit
+def vdw_QDO_disp_damp(
+        R,
+        gamma,
+        C6,
+        alpha_ij,
+        gamma_scale,
+        neighborlist_format: str = 'sparse'
+):
+    # Determine the input dtype
+    input_dtype = R.dtype
+
+    #  Compute the vdW-QDO dispersion energy (in eV)
+    if neighborlist_format == 'sparse':
+        c = jnp.asarray(0.5, dtype=input_dtype)
+    elif neighborlist_format == 'ordered_sparse':
+        c = jnp.asarray(1.0, dtype=input_dtype)
+    else:
+        raise ValueError(
+            f"neighborlist_format must be one of either 'ordered_sparse' or 'sparse'. "
+            f"received {neighborlist_format=}"
+        )
+
+    C8 = 5 / gamma * C6
+    C10 = 245 / 8 / gamma ** 2 * C6
+    p = gamma_scale * 2 * 2.54 * alpha_ij ** 1 / 7
+
+    C8 = jnp.asarray(C8, dtype=input_dtype)
+    C10 = jnp.asarray(C10, dtype=input_dtype)
+    p = jnp.asarray(p, dtype=input_dtype)
+
+    V3 = -C6 / (jnp.power(R, 6) + jnp.power(p, 6)) - C8 / (jnp.power(R, 8) + jnp.power(p, 8)) - C10 / (
+                jnp.power(R, 10) + jnp.power(p, 10))
+
+    return c * V3 * jnp.asarray(Hartree, dtype=input_dtype)
+
+
+@jax.jit
+def mixing_rules(
+        atomic_numbers: jnp.ndarray,
+        idx_i: jnp.ndarray,
+        idx_j: jnp.ndarray,
+        hirshfeld_ratios: jnp.ndarray,
+) -> Tuple[jnp.ndarray, jnp.ndarray]:
+    dtype = hirshfeld_ratios.dtype
+
+    atomic_number_i = atomic_numbers[idx_i] - 1
+    atomic_number_j = atomic_numbers[idx_j] - 1
+    hirshfeld_ratio_i = hirshfeld_ratios[idx_i]
+    hirshfeld_ratio_j = hirshfeld_ratios[idx_j]
+
+    alpha_i = jnp.asarray(alphas[atomic_number_i], dtype=dtype) * hirshfeld_ratio_i
+    C6_i = jnp.asarray(C6_coef[atomic_number_i], dtype=dtype) * jnp.square(hirshfeld_ratio_i)
+    alpha_j = jnp.asarray(alphas[atomic_number_j], dtype=dtype) * hirshfeld_ratio_j
+    C6_j = jnp.asarray(C6_coef[atomic_number_j], dtype=dtype) * jnp.square(hirshfeld_ratio_j)
+
+    alpha_ij = (alpha_i + alpha_j) / 2
+    C6_ij = 2 * C6_i * C6_j * alpha_j * alpha_i / (alpha_i ** 2 * C6_j + alpha_j ** 2 * C6_i)
+
+    return alpha_ij, C6_ij
+
+
+@jax.jit
+def gamma_cubic_fit(alpha):
+    input_dtype = alpha.dtype
+
+    vdW_radius = fine_structure ** (jnp.asarray(-4. / 21, input_dtype)) * alpha ** jnp.asarray(1. / 7, input_dtype)
+    b0 = jnp.asarray(-0.00433008, dtype=input_dtype)
+    b1 = jnp.asarray(0.24428889, dtype=input_dtype)
+    b2 = jnp.asarray(0.04125273, dtype=input_dtype)
+    b3 = jnp.asarray(-0.00078893, dtype=input_dtype)
+
+    sigma = b3 * jnp.power(vdW_radius, 3) + b2 * jnp.square(vdW_radius) + b1 * vdW_radius + b0
+    gamma = jnp.asarray(1. / 2, dtype=input_dtype) / jnp.square(sigma)
+    return gamma
+
+
+@jax.jit
+def coulomb_erf(
+        q: jnp.ndarray,
+        rij: jnp.ndarray,
+        idx_i: jnp.ndarray,
+        idx_j: jnp.ndarray,
+        kehalf: float,
+        sigma: float,
+        neighborlist_format: str = 'sparse'
+) -> jnp.ndarray:
+    """ Pairwise Coulomb interaction with erf damping """
+    input_dtype = rij.dtype
+
+    if neighborlist_format == 'sparse':
+        c = jnp.asarray(0.5, dtype=input_dtype)
+    elif neighborlist_format == 'ordered_sparse':
+        c = jnp.asarray(1.0, dtype=input_dtype)
+    else:
+        raise ValueError(
+            f"neighborlist_format must be one of either 'ordered_sparse' or 'sparse'. "
+            f"received {neighborlist_format=}"
+        )
+
+    # Cast constants to input dtype
+    _kehalf = jnp.asarray(kehalf, dtype=input_dtype)
+    _sigma = jnp.asarray(sigma, dtype=input_dtype)
+
+    pairwise = c * _kehalf * q[idx_i] * q[idx_j] * jax.lax.erf(rij / _sigma) / rij
+
+    return pairwise
+
+
+@jax.jit
+def coulomb_erf_shifted_force_smooth(
+        q: jnp.ndarray,
+        rij: jnp.ndarray,
+        idx_i: jnp.ndarray,
+        idx_j: jnp.ndarray,
+        kehalf: float,
+        sigma: float,
+        cutoff: float,
+        cuton: float,
+        neighborlist_format: str = 'sparse'
+) -> jnp.ndarray:
+    """ Pairwise Coulomb interaction with erf damping, using Shifted Force method """
+
+    input_dtype = rij.dtype
+
+    if neighborlist_format == 'sparse':
+        c = jnp.asarray(0.5, dtype=input_dtype)
+    elif neighborlist_format == 'ordered_sparse':
+        c = jnp.asarray(1.0, dtype=input_dtype)
+    else:
+        raise ValueError(
+            f"neighborlist_format must be one of either 'ordered_sparse' or 'sparse'. "
+            f"received {neighborlist_format=}"
+        )
+
+    # Cast the constants to input dtype
+    _sigma = jnp.asarray(sigma, dtype=input_dtype)
+    _kehalf = jnp.asarray(kehalf, dtype=input_dtype)
+    _cutoff = jnp.asarray(cutoff, dtype=input_dtype)
+    _cuton = jnp.asarray(cuton, dtype=input_dtype)
+
+    def potential(r):
+        return jax.lax.erf(r / _sigma) / r
+
+    def force(r):
+        return (2 * r * jnp.exp(-(r / _sigma) ** 2) / (jnp.sqrt(jnp.pi) * _sigma) - jax.lax.erf(r / _sigma)) / r ** 2
+
+    f = switching_fn(rij, _cuton, _cutoff)
+    pairwise = potential(rij)
+    shift = potential(_cutoff)
+    force_shift = force(_cutoff)
+
+    shifted_potential = pairwise - shift - force_shift * (rij - _cutoff)
+
+    return jnp.where(
+        rij < _cutoff,
+        c * _kehalf * q[idx_i] * q[idx_j] * (f * (pairwise - shift) + (1 - f) * shifted_potential),
+        0.0
+    )
+
+
+class ZBLRepulsionSparse(BaseSubModule):
+    """
+    Ziegler-Biersack-Littmark repulsion.
+    """
+    prop_keys: Dict
+    # input_convention: str = 'positions'
+    module_name: str = 'zbl_repulsion'
+    a0: float = 0.5291772105638411
+    ke: float = 14.399645351950548
+
+    @nn.compact
+    def __call__(self,
+                 inputs: Dict,
+                 *args,
+                 **kwargs) -> Dict[str, jnp.ndarray]:
+        a1 = softplus(self.param('a1', constant(softplus_inverse(3.20000)), (1,)))  # shape: (1)
+        a2 = softplus(self.param('a2', constant(softplus_inverse(0.94230)), (1,)))  # shape: (1)
+        a3 = softplus(self.param('a3', constant(softplus_inverse(0.40280)), (1,)))  # shape: (1)
+        a4 = softplus(self.param('a4', constant(softplus_inverse(0.20160)), (1,)))  # shape: (1)
+        c1 = softplus(self.param('c1', constant(softplus_inverse(0.18180)), (1,)))  # shape: (1)
+        c2 = softplus(self.param('c2', constant(softplus_inverse(0.50990)), (1,)))  # shape: (1)
+        c3 = softplus(self.param('c3', constant(softplus_inverse(0.28020)), (1,)))  # shape: (1)
+        c4 = softplus(self.param('c4', constant(softplus_inverse(0.02817)), (1,)))  # shape: (1)
+        p = softplus(self.param('p', constant(softplus_inverse(0.23)), (1,)))  # shape: (1)
+        d = softplus(self.param('d', constant(softplus_inverse(1 / (0.8854 * self.a0))), (1,)))  # shape: (1)
+
+        c_sum = c1 + c2 + c3 + c4
+        c1 = c1 / c_sum
+        c2 = c2 / c_sum
+        c3 = c3 / c_sum
+        c4 = c4 / c_sum
+
+        atomic_numbers = inputs['atomic_numbers']
+        node_mask = inputs['node_mask']
+        phi_r_cut_ij = inputs['cut']
+        idx_i = inputs['idx_i']
+        idx_j = inputs['idx_j']
+        d_ij = inputs['d_ij']
+
+        num_nodes = len(node_mask)
+
+        z_i = atomic_numbers[idx_i]
+        z_j = atomic_numbers[idx_j]
+
+        z_d_ij = safe_mask(mask=d_ij != 0,
+                           operand=d_ij,
+                           fn=lambda u: z_i * z_j / u,
+                           placeholder=0.
+                           )
+
+        x = self.ke * phi_r_cut_ij * z_d_ij
+
+        rzd = d_ij * (jnp.power(z_i, p) + jnp.power(z_j, p)) * d
+        y = c1 * jnp.exp(-a1 * rzd) + c2 * jnp.exp(-a2 * rzd) + c3 * jnp.exp(-a3 * rzd) + c4 * jnp.exp(-a4 * rzd)
+
+        w = switching_fn(d_ij, x_on=0, x_off=1.5)
+
+        e_rep_edge = w * x * y / jnp.asarray(2, dtype=d_ij.dtype)
+        e_rep_edge = segment_sum(e_rep_edge, segment_ids=idx_i, num_segments=num_nodes)
+        e_rep_edge = safe_scale(e_rep_edge, node_mask)
+
+        return dict(zbl_repulsion=e_rep_edge)
+
+    def reset_output_convention(self, output_convention):
+        pass
+
+
 class ElectrostaticEnergySparse(BaseSubModule):
     prop_keys: Dict
-    regression_dim: int = None
-    activation_fn: Callable[[Any], Any] = lambda u: u
-    output_is_zero_at_init: bool = True
-    module_name: str = 'electrostatic_energy'
-    input_convention: str = 'positions'
-    partial_charges: Optional[Any] = None
-    use_particle_mesh_ewald: bool = False  # TODO: connect to calculator, now does nothing
-    # kehalf: float = 14.399645351950548/2 #for ASE and partition.NeighborListFormat(1)
-    kehalf: float = 14.399645351950548  # for jax-md partition.NeighborListFormat(2)
+    partial_charges: Any
+    cutoff_lr: float
+    ke: float = 14.399645351950548
     electrostatic_energy_scale: float = 1.0
-    fractional_coordinates: bool = True
+    neighborlist_format: str = 'sparse'  # or 'ordered_sparse'
+    module_name: str = 'electrostatic_energy'
+    # regression_dim: int = None
+    # activation_fn: Callable[[Any], Any] = lambda u: u
+    # output_is_zero_at_init: bool = True
+    # use_particle_mesh_ewald: bool = False
+    # fractional_coordinates: bool = True
+    # input_convention: str = 'positions'
+    # module_usage: str = 'training'  # or 'simulation'
 
     @nn.compact
     def __call__(self, inputs: Dict, *args, **kwargs) -> Dict[str, jnp.ndarray]:
@@ -553,22 +606,43 @@ class ElectrostaticEnergySparse(BaseSubModule):
         idx_i_lr = inputs['idx_i_lr']
         idx_j_lr = inputs['idx_j_lr']
         d_ij_lr = inputs['d_ij_lr']
-        lr_cutoff = inputs['lr_cutoff']
+        # lr_cutoff = inputs['lr_cutoff']  # TODO: make a property of module?
 
         # Calculate partial charges
         partial_charges = self.partial_charges(inputs)['partial_charges']
 
-        # Calculate electrostatic energies per long-range edge
-        atomic_electrostatic_energy_ij = coulomb_erf_shifted_force_smooth(
-            partial_charges,
-            d_ij_lr,
-            idx_i_lr,
-            idx_j_lr,
-            kehalf=self.kehalf,
-            sigma=self.electrostatic_energy_scale,
-            cutoff=lr_cutoff,
-            cuton=lr_cutoff * jnp.asarray(0.45, dtype=lr_cutoff.dtype)
-        )
+        # If cutoff is set, we apply damping with error function with smoothing to zero at cutoff_lr.
+        # We also apply force shifting to reduce discontinuity artifacts.
+        if self.cutoff_lr is not None:
+            if self.cutoff_lr_damping is None:
+                raise ValueError(
+                    f"cutoff_lr is but cutoff_lr_damping is not set. "
+                    f"received {self.cutoff_lr=} and {self.cutoff_lr_damping}."
+                )
+            # Calculate electrostatic energies per long-range edge
+            atomic_electrostatic_energy_ij = coulomb_erf_shifted_force_smooth(
+                partial_charges,
+                d_ij_lr,
+                idx_i_lr,
+                idx_j_lr,
+                kehalf=self.ke,
+                sigma=self.electrostatic_energy_scale,
+                cutoff=self.cutoff_lr,
+                cuton=self.cutoff_lr * 0.45,
+                neighborlist_format=self.neighborlist_format
+            )
+        # If no cutoff is set, we just apply damping with error function and no explicit smoothing to zero.
+        else:
+            # Calculate electrostatic energies per long-range edge
+            atomic_electrostatic_energy_ij = coulomb_erf(
+                partial_charges,
+                d_ij_lr,
+                idx_i_lr,
+                idx_j_lr,
+                kehalf=self.ke,
+                sigma=self.electrostatic_energy_scale,
+                neighborlist_format=self.neighborlist_format
+            )
 
         # Calculate electrostatic atomic energies via summing over long-range neighbors
         atomic_electrostatic_energy = segment_sum(
@@ -583,24 +657,21 @@ class ElectrostaticEnergySparse(BaseSubModule):
         return dict(electrostatic_energy=atomic_electrostatic_energy)
 
     def reset_output_convention(self, output_convention):
-        self.output_convention = output_convention
+        pass
 
 
-class DispersionEnergySparse(BaseSubModule):
+class DispersionEnergySparse(nn.Module):
     prop_keys: Dict
-    hirshfeld_ratios: Optional[Any] = None
-    activation_fn: Callable[[Any], Any] = lambda u: u
-    regression_dim: int = None
-    module_name = 'dispersion_energy'
-    input_convention: str = 'positions'
-    output_is_zero_at_init: bool = True
+    cutoff_lr: float
+    cutoff_lr_damping: float
+    hirshfeld_ratios: Optional[Any]
     dispersion_energy_scale: float = 1.0
 
-    def setup(self):
-        if self.output_is_zero_at_init:
-            self.kernel_init = nn.initializers.zeros_init()
-        else:
-            self.kernel_init = nn.initializers.lecun_normal()
+    module_name = 'dispersion_energy'
+    # activation_fn: Callable[[Any], Any] = lambda u: u
+    # regression_dim: int = None
+    # input_convention: str = 'positions'
+    # output_is_zero_at_init: bool = True
 
     @nn.compact
     def __call__(self, inputs: Dict, *args, **kwargs) -> Dict[str, jnp.ndarray]:
@@ -609,8 +680,8 @@ class DispersionEnergySparse(BaseSubModule):
         idx_i_lr = inputs['idx_i_lr']
         idx_j_lr = inputs['idx_j_lr']
         d_ij_lr = inputs['d_ij_lr']
-        lr_cutoff = inputs['lr_cutoff']
-        lr_cutoff_damp = inputs['lr_cutoff_damp']
+        # lr_cutoff = inputs['lr_cutoff']
+        # lr_cutoff_damp = inputs['lr_cutoff_damp']
 
         # Determine input dtype
         input_dtype = d_ij_lr.dtype
@@ -641,13 +712,22 @@ class DispersionEnergySparse(BaseSubModule):
             jnp.asarray(self.dispersion_energy_scale, dtype=input_dtype)
         )
 
-        w = safe_mask(
-            d_ij_lr > 0,
-            partial(switching_fn, x_on=lr_cutoff - lr_cutoff_damp, x_off=lr_cutoff),
-            d_ij_lr, 0.
-        )
+        # If long-range cutoff is given, one needs to damp dispersion smoothly to zero at cutoff_lr.
+        if self.cutoff_lr is not None:
+            if self.cutoff_lr_damping is None:
+                raise ValueError(
+                    f"cutoff_lr is but cutoff_lr_damping is not set. "
+                    f"received {self.cutoff_lr=} and {self.cutoff_lr_damping}."
+                )
 
-        dispersion_energy_ij = safe_scale(dispersion_energy_ij, w, 0.)
+            w = safe_mask(
+                d_ij_lr > 0,
+                partial(switching_fn, x_on=self.cutoff_lr - self.cutoff_lr_damping, x_off=self.cutoff_lr),
+                d_ij_lr,
+                0.
+            )
+
+            dispersion_energy_ij = safe_scale(dispersion_energy_ij, w, 0.)
 
         atomic_dispersion_energy = segment_sum(
             dispersion_energy_ij,
@@ -660,4 +740,4 @@ class DispersionEnergySparse(BaseSubModule):
         return dict(dispersion_energy=atomic_dispersion_energy)
 
     def reset_output_convention(self, output_convention):
-        self.output_convention = output_convention
+        pass
