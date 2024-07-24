@@ -44,8 +44,6 @@ def get_observable_fn_sparse(model: StackNetSparse, observable: str = None):
                 num_unpaired_electrons: jnp.ndarray = None,
                 idx_i_lr: jnp.ndarray = None,
                 idx_j_lr: jnp.ndarray = None,
-                lr_cutoff: jnp.float32 = None,
-                lr_cutoff_damp: jnp.float32 = None,
         ):
             if batch_segments is None:
                 assert graph_mask is None
@@ -71,8 +69,6 @@ def get_observable_fn_sparse(model: StackNetSparse, observable: str = None):
                 num_unpaired_electrons=num_unpaired_electrons,
                 idx_i_lr=idx_i_lr,
                 idx_j_lr=idx_j_lr,
-                lr_cutoff=lr_cutoff,
-                lr_cutoff_damp=lr_cutoff_damp,
             )
             return model.apply(params, inputs)
     else:
@@ -92,9 +88,7 @@ def get_observable_fn_sparse(model: StackNetSparse, observable: str = None):
                 total_charge: jnp.ndarray = None,
                 num_unpaired_electrons: jnp.ndarray = None,
                 idx_i_lr: jnp.ndarray = None,
-                idx_j_lr: jnp.ndarray = None,
-                lr_cutoff: jnp.float32 = None,
-                lr_cutoff_damp: jnp.float32 = None,
+                idx_j_lr: jnp.ndarray = None
         ):
             if batch_segments is None:
                 assert graph_mask is None
@@ -120,8 +114,6 @@ def get_observable_fn_sparse(model: StackNetSparse, observable: str = None):
                 num_unpaired_electrons=num_unpaired_electrons,
                 idx_i_lr=idx_i_lr,
                 idx_j_lr=idx_j_lr,
-                lr_cutoff=lr_cutoff,
-                lr_cutoff_damp=lr_cutoff_damp,
             )
             return dict(observable=model.apply(params, inputs)[observable])
 
@@ -145,8 +137,7 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
                   num_unpaired_electrons: jnp.ndarray = None,
                   idx_i_lr: jnp.ndarray = None,
                   idx_j_lr: jnp.ndarray = None,
-                  lr_cutoff: jnp.float32 = None,
-                  lr_cutoff_damp: jnp.float32 = None, ):
+                  ):
         if batch_segments is None:
             assert graph_mask is None
             assert node_mask is None
@@ -170,8 +161,6 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
                       num_unpaired_electrons=num_unpaired_electrons,
                       idx_i_lr=idx_i_lr,
                       idx_j_lr=idx_j_lr,
-                      lr_cutoff=lr_cutoff,
-                      lr_cutoff_damp=lr_cutoff_damp,
                       )
 
         energy = model.apply(params, inputs)['energy']  # (num_graphs)
@@ -195,8 +184,6 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
             num_unpaired_electrons: jnp.ndarray = None,
             idx_i_lr: jnp.ndarray = None,
             idx_j_lr: jnp.ndarray = None,
-            lr_cutoff: jnp.float32 = None,
-            lr_cutoff_damp: jnp.float32 = None,  # TODO: make this a property of Dispersion observable?
             *args,
             **kwargs
     ):
@@ -218,9 +205,7 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
                           total_charge,
                           num_unpaired_electrons,
                           idx_i_lr,
-                          idx_j_lr,
-                          lr_cutoff=lr_cutoff,
-                          lr_cutoff_damp=lr_cutoff_damp,
+                          idx_j_lr
                           )
 
         if batch_segments is None:
@@ -245,9 +230,7 @@ def get_energy_and_force_fn_sparse(model: StackNetSparse):
                       total_charge=total_charge,
                       num_unpaired_electrons=num_unpaired_electrons,
                       idx_i_lr=idx_i_lr,
-                      idx_j_lr=idx_j_lr,
-                      lr_cutoff=lr_cutoff,
-                      lr_cutoff_damp=lr_cutoff_damp,
+                      idx_j_lr=idx_j_lr
                       )
 
         _, number_of_atoms_in_molecule = jnp.unique(batch_segments, return_counts=True, size=len(graph_mask))

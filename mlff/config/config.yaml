@@ -5,10 +5,14 @@ data:
   length_unit: Angstrom  # Length unit. Is converted to the data set units internally.
   shift_mode: null  # Options are null, mean, custom.
   energy_shifts: null  # Energy shifts to subtract.
-  split_seed: 0  # Seed using for splitting the data into training, validation and test.
+  neighbors_lr_bool: false  # Calculate long-range neighborhood indices. Required for modules like DispersionEnergy.
+  neighbors_lr_cutoff: null  # Cutoff for calculating the long-range neighborhoods. Note that it is not required to be
+  # equal to the lr_cutoff of the model. E.g. one can calculate neighbors up to 50 Ang and use no long-range cutoff
+  # in the model during training at all. More details see README.
   filter:
     min_distance: 0.75  # Minimal allowed distance in Angstrom. Is converted to the data set units internally.
     max_force: 25.  # Maximal allowed force component in eV/Angstrom. Is converted to the data set units internally.
+  split_seed: 0  # Seed using for splitting the data into training, validation and test.
 model:
   num_layers: 2  # Number of message passing layers.
   num_features: 128  # Number of invariant features.
@@ -21,6 +25,8 @@ model:
     - 4
   cutoff: 5.0  # Local cutoff to use.
   cutoff_fn: cosine  # Cutoff function to use.
+  cutoff_lr: null  # Long-range cutoff used in the long range modules. It is possible to use no long range cutoff in
+  # the modules. Details see README.
   num_radial_basis_fn: 32  # Number of radial basis functions.
   radial_basis_fn: physnet  # Radial basis function to use.
   activation_fn: silu  # Activation function used in the MLPs.
@@ -42,6 +48,7 @@ model:
   electrostatic_energy_bool: false
   electrostatic_energy_scale: 1.0
   dispersion_energy_bool: false
+  dispersion_energy_cutoff_lr_damping: null
   dispersion_energy_scale: 1.0
   zbl_repulsion_bool: true
 optimizer:

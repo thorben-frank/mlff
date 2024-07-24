@@ -2,7 +2,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import logging
-from typing import Callable, Type
+from typing import Any, Callable, Type, Dict
 from flax import struct
 from mlff.utils import Graph 
 from mlff.mdx.potential.machine_learning_potential import MachineLearningPotential
@@ -32,24 +32,9 @@ def load_model_from_workdir(workdir: str, model='so3krates'):
         options=checkpoint.CheckpointManagerOptions(step_prefix="ckpt"),
     )
 
-    # loaded_mngr = checkpoint.CheckpointManager(
-    #     pathlib.Path(workdir) / "checkpoints",
-    #     {
-    #         "params": checkpoint.PyTreeCheckpointer(),
-    #     },
-    #     options=checkpoint.CheckpointManagerOptions(step_prefix="ckpt"),
-    # )
-
     mngr_state = loaded_mngr.restore(
         loaded_mngr.latest_step()
     )
-
-    # mgr_state = loaded_mngr.restore(
-    #     loaded_mngr.latest_step(),
-    #     {
-    #         "params": checkpoint.PyTreeCheckpointer(),
-    #     })
-    # params = mgr_state.get("params")
 
     params = mngr_state.get('params')
 
@@ -97,6 +82,7 @@ class MLFFPotentialSparse(MachineLearningPotential):
             cls,
             workdir: str,
             add_shift: bool = False,
+            long_range_kwargs: Dict[str, Any] = None,
             dtype=jnp.float32,
             model: str = 'so3krates',
     ):
@@ -106,6 +92,7 @@ class MLFFPotentialSparse(MachineLearningPotential):
         Args:
             workdir ():
             add_shift ():
+            long_range_kwargs (): Dictionary with keyword arguments for the long-range modules.
             dtype ():
             model ():
             has_aux (): If the potential returns the full output of the model in addition to the atomic energies.
@@ -128,6 +115,15 @@ class MLFFPotentialSparse(MachineLearningPotential):
         net.reset_input_convention('displacements')
         net.reset_output_convention('per_atom')
 
+        # For local model both are false.
+        if (cfg.model.electrostatic_energy_bool is True) or (cfg.model.dispersion_energy_bool is True):
+            assert long_range_kwargs is not None
+            cfg.model.cutoff_lr = long_range_kwargs['cutoff_lr']
+            cfg.neighborlist_format_lr = long_range_kwargs['neighborlist_format_lr']
+
+            if cfg.model.dispersion_energy_bool is True:
+                cfg.model.dispersion_energy_cutoff_lr_damping = long_range_kwargs['dispersion_energy_cutoff_lr_damping']
+
         cutoff = cfg.model.cutoff
         # ITPNet is strictly local so has effectively "one" MP layer in terms of effective cutoff.
         steps = cfg.model.num_layers if model != 'itp_net' else 1
@@ -149,7 +145,7 @@ class MLFFPotentialSparse(MachineLearningPotential):
         obs_fn = get_observable_fn_sparse(net)
 
         def graph_to_mlff_input(graph: Graph):
-
+            # Local case corresponds to no having idx_lr_i, idx_lr_j, displacements_lr = None, None, None
             x = {
                 'positions': graph.positions,
                 'displacements': graph.edges,
@@ -161,8 +157,8 @@ class MLFFPotentialSparse(MachineLearningPotential):
                 'displacements_lr': graph.edges_lr,
                 'idx_i_lr': graph.idx_i_lr,
                 'idx_j_lr': graph.idx_j_lr,
-                'lr_cutoff': getattr(graph, 'lr_cutoff', 10.),
-                'lr_cutoff_damp': getattr(graph, 'lr_cutoff_damp', 2.),
+                # 'lr_cutoff': getattr(graph, 'lr_cutoff', 10.),
+                # 'lr_cutoff_damp': getattr(graph, 'lr_cutoff_damp', 2.),
                 'cell': getattr(graph, 'cell', None),
             }
 

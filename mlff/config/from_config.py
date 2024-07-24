@@ -43,6 +43,7 @@ def make_so3krates_sparse_from_config(config: config_dict.ConfigDict = None):
         num_radial_basis_fn=model_config.num_radial_basis_fn,
         cutoff_fn=model_config.cutoff_fn,
         cutoff=model_config.cutoff,
+        cutoff_lr=model_config.cutoff_lr,
         degrees=model_config.degrees,
         residual_mlp_1=model_config.residual_mlp_1,
         residual_mlp_2=model_config.residual_mlp_2,
@@ -64,8 +65,10 @@ def make_so3krates_sparse_from_config(config: config_dict.ConfigDict = None):
         electrostatic_energy_bool=model_config.electrostatic_energy_bool,
         electrostatic_energy_scale=model_config.electrostatic_energy_scale,
         dispersion_energy_bool=model_config.dispersion_energy_bool,
+        dispersion_energy_cutoff_lr_damping=model_config.dispersion_energy_cutoff_lr_damping,
         dispersion_energy_scale=model_config.dispersion_energy_scale,
         zbl_repulsion_bool=model_config.zbl_repulsion_bool,
+        neighborlist_format_lr=model_config.neighborlist_format_lr,
     )
 
 
@@ -163,6 +166,10 @@ def run_training(config: config_dict.ConfigDict, model: str = 'so3krates'):
     energy_unit = eval(config.data.energy_unit)
     length_unit = eval(config.data.length_unit)
 
+    # Currently, training is always performed with sparse neighborlist_format for long range blocks.
+    config.neighborlist_format_lr = config_dict.placeholder(str)
+    config.neighborlist_format_lr = 'sparse'
+
     # TFDSDataSets need to be processed in a special manner.
     tf_record_present = False
 
@@ -238,6 +245,8 @@ def run_training(config: config_dict.ConfigDict, model: str = 'so3krates'):
         # Cutoff is in Angstrom, so we have to divide the cutoff by the length unit.
         training_and_validation_data, data_stats = loader.load(
             cutoff=config.model.cutoff / length_unit,
+            cutoff_lr=config.data.neighbors_lr_cutoff,
+            calculate_neighbors_lr=config.data.neighbors_lr_bool,
             pick_idx=training_and_validation_indices
         )
         # Since the training and validation indices are sorted, the index i at the n-th entry in
