@@ -22,8 +22,49 @@ def load_hyperparameters(workdir: str):
     return cfg
 
 
-def load_model_from_workdir(workdir: str, model='so3krates'):
+def load_model_from_workdir(workdir: str, model='so3krates', long_range_kwargs: Dict[str, Any] = None):
     cfg = load_hyperparameters(workdir)
+
+    dispersion_energy_bool = cfg.model.dispersion_energy_bool
+    electrostatic_energy_bool = cfg.model.electrostatic_energy_bool
+
+    # For local model both are false.
+    if (electrostatic_energy_bool is True) or (dispersion_energy_bool is True):
+        if long_range_kwargs is None:
+            raise ValueError(
+                "For a potential with long-range electrostatic and/or dispersion corrections, long_range_kwargs must "
+                f"be specified. Received {long_range_kwargs=}."
+            )
+
+        cutoff_lr = long_range_kwargs['cutoff_lr']
+        neighborlist_format = long_range_kwargs['neighborlist_format_lr']
+        if cutoff_lr is not None:
+            if cutoff_lr < 0:
+                raise ValueError(
+                    f"For a potential with long range components the long range cutoff value must be greater "
+                    f"than zero. received {cutoff_lr=}."
+                )
+
+        cfg.model.cutoff_lr = cutoff_lr
+        cfg.neighborlist_format_lr = neighborlist_format
+
+        if dispersion_energy_bool is True:
+            dispersion_energy_cutoff_lr_damping = long_range_kwargs['dispersion_energy_cutoff_lr_damping']
+            if cutoff_lr is not None:
+                if dispersion_energy_cutoff_lr_damping is None:
+                    raise ValueError(
+                        f"dispersion_energy_cutoff_lr_damping must not be None if dispersion_energy_bool is True and "
+                        f"cutoff_lr has a finite value. received {dispersion_energy_bool=}, {cutoff_lr=} and "
+                        f"{dispersion_energy_cutoff_lr_damping=}."
+                    )
+            if cutoff_lr is None:
+                if dispersion_energy_cutoff_lr_damping is not None:
+                    raise ValueError(
+                        f"dispersion_energy_cutoff_lr_damping must be None if dispersion_energy_bool is True and "
+                        f"cutoff_lr is infinite (specified via lr_cutoff=None). received {dispersion_energy_bool=}, "
+                        f"{dispersion_energy_cutoff_lr_damping=} and {cutoff_lr=}"
+                    )
+            cfg.model.dispersion_energy_cutoff_lr_damping = dispersion_energy_cutoff_lr_damping
 
     loaded_mngr = checkpoint.CheckpointManager(
         pathlib.Path(workdir) / "checkpoints",
@@ -54,6 +95,9 @@ def load_model_from_workdir(workdir: str, model='so3krates'):
 class MLFFPotentialSparse(MachineLearningPotential):
     cutoff: float = struct.field(pytree_node=False)
     effective_cutoff: float = struct.field(pytree_node=False)
+
+    long_range_bool: bool = struct.field(pytree_node=False)
+    long_range_cutoff: float = struct.field(pytree_node=False)
 
     potential_fn: Callable[[Graph, bool], jnp.ndarray] = struct.field(pytree_node=False)
     dtype: Type = struct.field(pytree_node=False)  # TODO: remove and determine based on dtype of atomsx
@@ -111,28 +155,23 @@ class MLFFPotentialSparse(MachineLearningPotential):
                             ' suggest to disable the energy shift since increasing the precision slows down'
                             ' computation.')
 
-        net, params = load_model_from_workdir(workdir=workdir, model=model)
+        net, params = load_model_from_workdir(
+            workdir=workdir,
+            model=model,
+            long_range_kwargs=long_range_kwargs
+        )
+
         cfg = load_hyperparameters(workdir=workdir)
 
         net.reset_input_convention('displacements')
         net.reset_output_convention('per_atom')
 
-        # For local model both are false.
-        if (cfg.model.electrostatic_energy_bool is True) or (cfg.model.dispersion_energy_bool is True):
-            assert long_range_kwargs is not None
-            cfg.model.cutoff_lr = long_range_kwargs['cutoff_lr']
-            cfg.neighborlist_format_lr = long_range_kwargs['neighborlist_format_lr']
-
-            if cfg.model.dispersion_energy_bool is True:
-                cfg.model.dispersion_energy_cutoff_lr_damping = long_range_kwargs['dispersion_energy_cutoff_lr_damping']
-                # TODO: raise Error if IS None and cutoff_lr NOT None
-                #       raise Error if NOT None cutoff_lr IS None.
+        long_range_bool = (cfg.model.electrostatic_energy_bool is True) or (cfg.model.dispersion_energy_bool is True)
 
         cutoff = cfg.model.cutoff
         # ITPNet is strictly local so has effectively "one" MP layer in terms of effective cutoff.
         steps = cfg.model.num_layers if model != 'itp_net' else 1
 
-        # TODO: how does lr should change this
         effective_cutoff = steps * cutoff
 
         if add_shift:
@@ -151,6 +190,8 @@ class MLFFPotentialSparse(MachineLearningPotential):
 
         def graph_to_mlff_input(graph: Graph):
             # Local case corresponds to no having idx_lr_i, idx_lr_j, displacements_lr = None, None, None
+            # TODO: make num_unpaired_electrons, total charge optional maybe using getattr(., ., None)
+            #  as this would ensure compatibility with Graph as used in glp.
             x = {
                 'positions': graph.positions,
                 'displacements': graph.edges,
@@ -159,15 +200,16 @@ class MLFFPotentialSparse(MachineLearningPotential):
                 'idx_j': graph.others,
                 'total_charge': graph.total_charge,
                 'num_unpaired_electrons': graph.num_unpaired_electrons,
-                'displacements_lr': graph.edges_lr,
-                'idx_i_lr': graph.idx_i_lr,
-                'idx_j_lr': graph.idx_j_lr,
-                # 'lr_cutoff': getattr(graph, 'lr_cutoff', 10.),
-                # 'lr_cutoff_damp': getattr(graph, 'lr_cutoff_damp', 2.),
                 'cell': getattr(graph, 'cell', None),
             }
-            # TODO: make lr parts (total charge, num_unpaired_electrons) optional maybe using getattr(., ., None)
-            #  as this would ensure compatibility with Graph as used in glp.
+            if long_range_bool is True:
+                x_lr = {
+                    'displacements_lr': graph.edges_lr,
+                    'idx_i_lr': graph.idx_i_lr,
+                    'idx_j_lr': graph.idx_j_lr,
+                }
+
+                x.update(x_lr)
 
             return x
 
@@ -181,6 +223,8 @@ class MLFFPotentialSparse(MachineLearningPotential):
 
         return cls(cutoff=cutoff,
                    effective_cutoff=effective_cutoff,
+                   long_range_bool=long_range_bool,
+                   long_range_cutoff=long_range_kwargs['cutoff_lr'] if long_range_bool is True else None,
                    potential_fn=potential_fn,
                    dtype=dtype)
 

@@ -4,6 +4,7 @@ import numpy as np
 import logging
 
 from collections import namedtuple
+from functools import partial, partialmethod
 from typing import Any
 
 from ase.calculators.calculator import Calculator
@@ -20,10 +21,21 @@ except ImportError:
 
 SpatialPartitioning = namedtuple(
     "SpatialPartitioning",
-    ("allocate_fn", "update_fn", "cutoff", "lr_cutoff", "skin", "capacity_multiplier", "buffer_size_multiplier")
+    (
+        "allocate_fn",
+        "update_fn",
+        "cutoff",
+        "lr_cutoff",
+        "skin",
+        "capacity_multiplier",
+        "buffer_size_multiplier"
+    )
 )
 
-logging.basicConfig(level=logging.INFO)
+logging.MLFF = 35
+logging.addLevelName(logging.MLFF, 'MLFF')
+logging.Logger.trace = partialmethod(logging.Logger.log, logging.MLFF)
+logging.mlff = partial(logging.log, logging.MLFF)
 
 StackNet = Any
 
@@ -62,18 +74,21 @@ class mlffCalculatorSparse(Calculator):
     implemented_properties = ['energy', 'forces', 'stress', 'free_energy']
 
     @classmethod
-    def create_from_ckpt_dir(cls,
-                             ckpt_dir: str,
-                             calculate_stress: bool = False,
-                             lr_cutoff: float = 10.,
-                             dispersion_energy_lr_cutoff_damping: float = 2.,
-                             capacity_multiplier: float = 1.25,
-                             buffer_size_multiplier: float = 1.25,
-                             skin: float = 0.,
-                             add_energy_shift: bool = False,
-                             dtype: np.dtype = np.float32,
-                             model: str = 'so3krates',
-                             has_aux: bool = False):
+    def create_from_ckpt_dir(
+            cls,
+            ckpt_dir: str,
+            calculate_stress: bool = False,
+            lr_neighbors_bool: bool = True,
+            lr_cutoff: float = 10.,
+            dispersion_energy_lr_cutoff_damping: float = 2.,
+            capacity_multiplier: float = 1.25,
+            buffer_size_multiplier: float = 1.25,
+            skin: float = 0.,
+            add_energy_shift: bool = False,
+            dtype: np.dtype = np.float32,
+            model: str = 'so3krates',
+            has_aux: bool = False
+    ):
 
         mlff_potential = MLFFPotentialSparse.create_from_ckpt_dir(
             ckpt_dir=ckpt_dir,
@@ -81,7 +96,7 @@ class mlffCalculatorSparse(Calculator):
             long_range_kwargs=dict(
                 cutoff_lr=lr_cutoff,
                 dispersion_energy_cutoff_lr_damping=dispersion_energy_lr_cutoff_damping,
-                neighborlist_format_lr='sparse',
+                neighborlist_format_lr='sparse',  # ASECalculator has sparse format.
             ),
             dtype=dtype,
             model=model,
@@ -92,6 +107,7 @@ class mlffCalculatorSparse(Calculator):
                    capacity_multiplier=capacity_multiplier,
                    buffer_size_multiplier=buffer_size_multiplier,
                    skin=skin,
+                   lr_neighbors_bool=lr_neighbors_bool,
                    lr_cutoff=lr_cutoff,
                    dtype=dtype,
                    has_aux=has_aux
@@ -100,13 +116,12 @@ class mlffCalculatorSparse(Calculator):
     def __init__(
             self,
             potential,
-            capacity_multiplier: float = 1.25,
-            buffer_size_multiplier: float = 1.25,
-            skin: float = 0.,
-            calculate_stress: bool = False,
-            lr_cutoff: float = 10.,
-            dtype: np.dtype = np.float32,
-            has_aux: bool = False,
+            capacity_multiplier: float,
+            buffer_size_multiplier: float,
+            skin: float,
+            calculate_stress: bool,
+            dtype: np.dtype,
+            has_aux: bool,
             *args,
             **kwargs
     ):
@@ -115,11 +130,7 @@ class mlffCalculatorSparse(Calculator):
         """
 
         super(mlffCalculatorSparse, self).__init__(*args, **kwargs)
-        self.log = logging.getLogger(__name__)
-        self.log.warning(
-            'Please remember to specify the proper conversion factors, if your model does not use '
-            '\'eV\' and \'Ang\' as units.'
-        )
+
         if calculate_stress:
             def energy_fn(system, strain: jnp.ndarray, neighbors):
                 system = strain_system(system, strain)
@@ -202,8 +213,42 @@ class mlffCalculatorSparse(Calculator):
         self.capacity_multiplier = capacity_multiplier
         self.buffer_size_multiplier = buffer_size_multiplier
         self.skin = skin
-        self.cutoff = potential.cutoff  # cutoff for the neighbor list
-        self.lr_cutoff = lr_cutoff  # cutoff for electrostatics
+        self.cutoff = potential.cutoff  # cutoff for the local neighbor list
+
+        # Check if the ML potential has long-range components
+        long_range_bool = potential.long_range_bool
+
+        # Determine the cutoff for the neighborlist.
+        if long_range_bool is False:
+            # Corresponds to having a (semi)-local ML potential as constructed by MPNN.
+            logging.mlff(
+                f'Running a local model with local cutoff {potential.cutoff}.'
+            )
+            self.lr_cutoff = -1.
+            # Setting neighborlist cutoff to -1 corresponds to long range indices which equal the local indices.
+            # Currently, NL list implementation does not allow to skip the calculation of lr indices as a whole.
+            # TODO(kabylda): Maybe fix this? Not sure about the overhead due to this for a local model.
+        else:
+            # Corresponds to having a (semi)-local ML potential as constructed by MPNN and a long-range part
+            # of electrostatics and/or dispersion energy.
+
+            if potential.long_range_cutoff is None:
+                logging.mlff(
+                    f'Running a model with long-range corrections. The local cutoff is {potential.cutoff} Ang and '
+                    f'no explicit long-range cutoff.'
+                )
+                # Take all atoms into account for long range NL list calculation if the potential has no cutoff
+                # but is long-ranged. Can only be applied for structures in vacuum.
+                self.lr_cutoff = 1e6
+            else:
+                logging.mlff(
+                    f'Running a model with long-range corrections. The local cutoff is {potential.cutoff} Ang and '
+                    f'the long-range cutoff is {potential.long_range_cutoff}.'
+                )
+                # Take all atoms up to long range cutoff for long range NL list calculation into account.
+                # Common setting for simulations in a box of water.
+                self.lr_cutoff = potential.long_range_cutoff
+
         self.dtype = dtype
 
     def calculate(self, atoms=None, *args, **kwargs):
@@ -212,18 +257,21 @@ class mlffCalculatorSparse(Calculator):
         system = atoms_to_system(atoms)
 
         if atoms.get_pbc().any():
-            cell = jnp.array(np.array(atoms.get_cell()), dtype=self.dtype).T  # (3,3)
+            cell = jnp.array(np.array(atoms.get_cell()), dtype=self.dtype).T  # (3, 3)
         else:
             cell = None
 
         if self.spatial_partitioning is None:
-            self.neighbors, self.spatial_partitioning = neighbor_list(positions=system.R,
-                                                                      cell=cell,
-                                                                      cutoff=self.cutoff,
-                                                                      skin=self.skin,
-                                                                      capacity_multiplier=self.capacity_multiplier,
-                                                                      buffer_size_multiplier=self.buffer_size_multiplier,
-                                                                      lr_cutoff=self.lr_cutoff)
+            self.neighbors, self.spatial_partitioning = neighbor_list(
+                positions=system.R,
+                cell=cell,
+                cutoff=self.cutoff,
+                skin=self.skin,
+                capacity_multiplier=self.capacity_multiplier,
+                buffer_size_multiplier=self.buffer_size_multiplier,
+                lr_cutoff=self.lr_cutoff,
+            )
+
         neighbors = self.spatial_partitioning.update_fn(system.R, self.neighbors, new_cell=cell)
         if neighbors.overflow:
             raise RuntimeError('Spatial overflow.')
@@ -292,16 +340,25 @@ def add_batch_dim(tree):
     return jax.tree_map(lambda x: x[None], tree)
 
 
-def neighbor_list(positions: jnp.ndarray, cutoff: float, skin: float = 0., cell: jnp.ndarray = None,
-                  capacity_multiplier: float = 1.25, lr_cutoff: float = 10., buffer_size_multiplier: float = 1.25):
+def neighbor_list(
+        positions: jnp.ndarray,
+        cutoff: float,
+        lr_cutoff: float,
+        skin: float = 0.,
+        cell: jnp.ndarray = None,
+        capacity_multiplier: float = 1.25,
+        buffer_size_multiplier: float = 1.25
+):
     """
 
     Args:
         positions ():
         cutoff ():
+        lr_cutoff ():
         skin ():
         cell (): ASE cell.
         capacity_multiplier ():
+        buffer_size_multiplier ():
 
     Returns:
 
@@ -312,7 +369,12 @@ def neighbor_list(positions: jnp.ndarray, cutoff: float, skin: float = 0., cell:
         raise ImportError('For neighborhood list, please install the glp package from ...')
 
     allocate, update = quadratic_neighbor_list(
-        cell, cutoff, skin, capacity_multiplier=capacity_multiplier, use_cell_list=True, lr_cutoff=lr_cutoff,
+        cell,
+        cutoff,
+        skin,
+        capacity_multiplier=capacity_multiplier,
+        use_cell_list=True,
+        lr_cutoff=lr_cutoff,
         buffer_size_multiplier=buffer_size_multiplier
     )
     neighbors = allocate(positions)
@@ -322,4 +384,5 @@ def neighbor_list(positions: jnp.ndarray, cutoff: float, skin: float = 0., cell:
                                           skin=skin,
                                           capacity_multiplier=capacity_multiplier,
                                           buffer_size_multiplier=buffer_size_multiplier,
-                                          lr_cutoff=lr_cutoff)
+                                          lr_cutoff=lr_cutoff
+                                          )

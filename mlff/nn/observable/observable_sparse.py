@@ -304,12 +304,6 @@ class DipoleVecSparse(BaseSubModule):
     partial_charges: Optional[Any] = None
     module_name: str = 'dipole_vec'
 
-    def setup(self):
-        if self.output_is_zero_at_init:
-            self.kernel_init = nn.initializers.zeros_init()
-        else:
-            self.kernel_init = nn.initializers.lecun_normal()
-
     @nn.compact
     def __call__(self,
                  inputs: Dict,
@@ -356,7 +350,7 @@ def switching_fn(x, x_on, x_off):
     return sigma(1 - c) / (sigma(1 - c) + sigma(c))
 
 
-@jax.jit
+@partial(jax.jit, static_argnames=('neighborlist_format',))
 def vdw_QDO_disp_damp(
         R,
         gamma,
@@ -407,10 +401,10 @@ def mixing_rules(
     hirshfeld_ratio_i = hirshfeld_ratios[idx_i]
     hirshfeld_ratio_j = hirshfeld_ratios[idx_j]
 
-    alpha_i = jnp.asarray(alphas[atomic_number_i], dtype=dtype) * hirshfeld_ratio_i
-    C6_i = jnp.asarray(C6_coef[atomic_number_i], dtype=dtype) * jnp.square(hirshfeld_ratio_i)
-    alpha_j = jnp.asarray(alphas[atomic_number_j], dtype=dtype) * hirshfeld_ratio_j
-    C6_j = jnp.asarray(C6_coef[atomic_number_j], dtype=dtype) * jnp.square(hirshfeld_ratio_j)
+    alpha_i = jnp.asarray(jnp.take(alphas, atomic_number_i, axis=0), dtype=dtype) * hirshfeld_ratio_i
+    C6_i = jnp.asarray(jnp.take(C6_coef, atomic_number_i, axis=0), dtype=dtype) * jnp.square(hirshfeld_ratio_i)
+    alpha_j = jnp.asarray(jnp.take(alphas, atomic_number_j, axis=0), dtype=dtype) * hirshfeld_ratio_j
+    C6_j = jnp.asarray(jnp.take(C6_coef, atomic_number_j, axis=0), dtype=dtype) * jnp.square(hirshfeld_ratio_j)
 
     alpha_ij = (alpha_i + alpha_j) / 2
     C6_ij = 2 * C6_i * C6_j * alpha_j * alpha_i / (alpha_i ** 2 * C6_j + alpha_j ** 2 * C6_i)
@@ -433,7 +427,7 @@ def gamma_cubic_fit(alpha):
     return gamma
 
 
-@jax.jit
+@partial(jax.jit, static_argnames=('neighborlist_format',))
 def coulomb_erf(
         q: jnp.ndarray,
         rij: jnp.ndarray,
@@ -465,7 +459,7 @@ def coulomb_erf(
     return pairwise
 
 
-@jax.jit
+@partial(jax.jit, static_argnames=('neighborlist_format',))
 def coulomb_erf_shifted_force_smooth(
         q: jnp.ndarray,
         rij: jnp.ndarray,
@@ -615,11 +609,6 @@ class ElectrostaticEnergySparse(BaseSubModule):
         # If cutoff is set, we apply damping with error function with smoothing to zero at cutoff_lr.
         # We also apply force shifting to reduce discontinuity artifacts.
         if self.cutoff_lr is not None:
-            if self.cutoff_lr_damping is None:
-                raise ValueError(
-                    f"cutoff_lr is but cutoff_lr_damping is not set. "
-                    f"received {self.cutoff_lr=} and {self.cutoff_lr_damping}."
-                )
             # Calculate electrostatic energies per long-range edge
             atomic_electrostatic_energy_ij = coulomb_erf_shifted_force_smooth(
                 partial_charges,
