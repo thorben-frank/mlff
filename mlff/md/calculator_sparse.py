@@ -84,8 +84,6 @@ class mlffCalculatorSparse(Calculator):
     def __init__(
             self,
             potential,
-            E_to_eV: float = 1.,
-            F_to_eV_Ang: float = 1.,
             capacity_multiplier: float = 1.25,
             buffer_size_multiplier: float = 1.25,
             skin: float = 0.,
@@ -98,18 +96,8 @@ class mlffCalculatorSparse(Calculator):
     ):
         """
         ASE calculator given a StackNet and parameters.
-
-        A calculator takes atomic numbers and atomic positions from an Atoms object and calculates the energy and
-        forces.
-
-        Args:
-            E_to_eV (float): Conversion factor from whatever energy unit is used by the model to eV.
-                By default this parameter is set to convert from kcal/mol.
-            F_to_eV_Ang (float): Conversion factor from whatever length unit is used by the model to Angstrom. By
-                default, the length unit is not converted (assumed to be in Angstrom)
-            *args ():
-            **kwargs ():
         """
+
         super(mlffCalculatorSparse, self).__init__(*args, **kwargs)
         self.log = logging.getLogger(__name__)
         self.log.warning(
@@ -119,7 +107,7 @@ class mlffCalculatorSparse(Calculator):
         if calculate_stress:
             def energy_fn(system, strain: jnp.ndarray, neighbors):
                 system = strain_system(system, strain)
-                graph = system_to_graph(system, neighbors)
+                graph = system_to_graph(system, neighbors, pme=False)
 
                 out = potential(graph, has_aux=has_aux)
                 if isinstance(out, tuple):
@@ -159,7 +147,7 @@ class mlffCalculatorSparse(Calculator):
 
         else:
             def energy_fn(system, neighbors):
-                graph = system_to_graph(system, neighbors)
+                graph = system_to_graph(system, neighbors, pme=False)
                 out = potential(graph, has_aux=has_aux)
                 if isinstance(out, tuple):
                     if not has_aux:
