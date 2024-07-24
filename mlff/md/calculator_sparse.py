@@ -10,6 +10,7 @@ from ase.calculators.calculator import Calculator
 
 from mlff.utils.structures import Graph
 from mlff.mdx.potential import MLFFPotentialSparse
+
 try:
     from glp.calculators.utils import strain_graph, get_strain, strain_system
     from glp import System, atoms_to_system
@@ -18,7 +19,8 @@ except ImportError:
     raise ImportError('Please install GLP package for running MD.')
 
 SpatialPartitioning = namedtuple(
-    "SpatialPartitioning", ("allocate_fn", "update_fn", "cutoff", "lr_cutoff", "skin", "capacity_multiplier", "buffer_size_multiplier")
+    "SpatialPartitioning",
+    ("allocate_fn", "update_fn", "cutoff", "lr_cutoff", "skin", "capacity_multiplier", "buffer_size_multiplier")
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -64,6 +66,7 @@ class mlffCalculatorSparse(Calculator):
                              ckpt_dir: str,
                              calculate_stress: bool = False,
                              lr_cutoff: float = 10.,
+                             dispersion_energy_lr_cutoff_damping: float = 2.,
                              capacity_multiplier: float = 1.25,
                              buffer_size_multiplier: float = 1.25,
                              skin: float = 0.,
@@ -75,6 +78,11 @@ class mlffCalculatorSparse(Calculator):
         mlff_potential = MLFFPotentialSparse.create_from_ckpt_dir(
             ckpt_dir=ckpt_dir,
             add_shift=add_energy_shift,
+            long_range_kwargs=dict(
+                cutoff_lr=lr_cutoff,
+                dispersion_energy_cutoff_lr_damping=dispersion_energy_lr_cutoff_damping,
+                neighborlist_format_lr='sparse',
+            ),
             dtype=dtype,
             model=model,
         )
@@ -138,7 +146,7 @@ class mlffCalculatorSparse(Calculator):
                     system,
                     strain,
                     neighbors
-                  )
+                )
 
                 forces = - grads[0].R
                 volume = jnp.abs(jnp.dot(jnp.cross(system.cell[0], system.cell[1]), system.cell[2]))
@@ -194,8 +202,8 @@ class mlffCalculatorSparse(Calculator):
         self.capacity_multiplier = capacity_multiplier
         self.buffer_size_multiplier = buffer_size_multiplier
         self.skin = skin
-        self.cutoff = potential.cutoff # cutoff for the neighbor list
-        self.lr_cutoff = lr_cutoff # cutoff for electrostatics
+        self.cutoff = potential.cutoff  # cutoff for the neighbor list
+        self.lr_cutoff = lr_cutoff  # cutoff for electrostatics
         self.dtype = dtype
 
     def calculate(self, atoms=None, *args, **kwargs):
@@ -207,14 +215,14 @@ class mlffCalculatorSparse(Calculator):
             cell = jnp.array(np.array(atoms.get_cell()), dtype=self.dtype).T  # (3,3)
         else:
             cell = None
-            
+
         if self.spatial_partitioning is None:
             self.neighbors, self.spatial_partitioning = neighbor_list(positions=system.R,
                                                                       cell=cell,
                                                                       cutoff=self.cutoff,
                                                                       skin=self.skin,
                                                                       capacity_multiplier=self.capacity_multiplier,
-                                                                      buffer_size_multiplier=self.buffer_size_multiplier, 
+                                                                      buffer_size_multiplier=self.buffer_size_multiplier,
                                                                       lr_cutoff=self.lr_cutoff)
         neighbors = self.spatial_partitioning.update_fn(system.R, self.neighbors, new_cell=cell)
         if neighbors.overflow:
@@ -224,17 +232,20 @@ class mlffCalculatorSparse(Calculator):
         if neighbors.cell_list is not None:
             # If cell list needs to be reallocated, then reallocate neighbors
             if neighbors.cell_list.reallocate:
-                self.neighbors, self.spatial_partitioning = neighbor_list(positions=system.R,
-                                                                      cell=cell,
-                                                                      cutoff=self.cutoff,
-                                                                      skin=self.skin,
-                                                                      capacity_multiplier=self.capacity_multiplier,
-                                                                      buffer_size_multiplier=self.buffer_size_multiplier,
-                                                                      lr_cutoff=self.lr_cutoff)
-            #self.neighbors now contains Neighbors namedtuple with idx_i_lr etc
+                # self.neighbors now contains Neighbors namedtuple with idx_i_lr etc.
+                self.neighbors, self.spatial_partitioning = neighbor_list(
+                    positions=system.R,
+                    cell=cell,
+                    cutoff=self.cutoff,
+                    skin=self.skin,
+                    capacity_multiplier=self.capacity_multiplier,
+                    buffer_size_multiplier=self.buffer_size_multiplier,
+                    lr_cutoff=self.lr_cutoff
+                )
 
         output = self.calculate_fn(system, neighbors)  # note different cell convention
         self.results = jax.tree_map(lambda x: np.array(x), output)
+
 
 def to_displacement(cell):
     """
@@ -253,6 +264,7 @@ def to_displacement(cell):
 
     # reverse sign convention bc feels more natural
     return lambda Ra, Rb: displacement(Rb, Ra)
+
 
 @jax.jit
 def to_graph(atomic_numbers, positions, cell, neighbors):
@@ -281,7 +293,7 @@ def add_batch_dim(tree):
 
 
 def neighbor_list(positions: jnp.ndarray, cutoff: float, skin: float = 0., cell: jnp.ndarray = None,
-        capacity_multiplier: float = 1.25, lr_cutoff: float = 10., buffer_size_multiplier: float = 1.25):
+                  capacity_multiplier: float = 1.25, lr_cutoff: float = 10., buffer_size_multiplier: float = 1.25):
     """
 
     Args:
@@ -300,7 +312,8 @@ def neighbor_list(positions: jnp.ndarray, cutoff: float, skin: float = 0., cell:
         raise ImportError('For neighborhood list, please install the glp package from ...')
 
     allocate, update = quadratic_neighbor_list(
-        cell, cutoff, skin, capacity_multiplier=capacity_multiplier, use_cell_list=True, lr_cutoff=lr_cutoff, buffer_size_multiplier=buffer_size_multiplier
+        cell, cutoff, skin, capacity_multiplier=capacity_multiplier, use_cell_list=True, lr_cutoff=lr_cutoff,
+        buffer_size_multiplier=buffer_size_multiplier
     )
     neighbors = allocate(positions)
     return neighbors, SpatialPartitioning(allocate_fn=allocate,
@@ -308,5 +321,5 @@ def neighbor_list(positions: jnp.ndarray, cutoff: float, skin: float = 0., cell:
                                           cutoff=cutoff,
                                           skin=skin,
                                           capacity_multiplier=capacity_multiplier,
-                                          buffer_size_multiplier=buffer_size_multiplier, 
+                                          buffer_size_multiplier=buffer_size_multiplier,
                                           lr_cutoff=lr_cutoff)

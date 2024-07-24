@@ -63,6 +63,7 @@ class MLFFPotentialSparse(MachineLearningPotential):
             cls,
             ckpt_dir: str,
             add_shift: bool = False,
+            long_range_kwargs: Dict[str, Any] = None,
             dtype=jnp.float32,
             model: str = 'so3krates',
     ):
@@ -73,6 +74,7 @@ class MLFFPotentialSparse(MachineLearningPotential):
         return cls.create_from_workdir(
             ckpt_dir,
             add_shift,
+            long_range_kwargs,
             dtype,
             model,
         )

@@ -77,11 +77,12 @@ class EnergySparse(BaseSubModule):
             energy_offset = jnp.zeros((1,), dtype=x.dtype)
 
         if self.learn_atomic_type_scales:
-            atomic_scales = self.param(
-                'atomic_scales',
-                nn.initializers.ones_init(),
-                (self.zmax + 1,)
-            )[atomic_numbers]  # (num_nodes)
+            atomic_scales = jnp.take(
+                self.param(
+                    'atomic_scales',
+                    nn.initializers.ones_init(),
+                    (self.zmax + 1,)
+                ), atomic_numbers)  # (num_nodes)
         else:
             atomic_scales = jnp.ones((1,), dtype=x.dtype)
 
