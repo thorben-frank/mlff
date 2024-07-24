@@ -667,6 +667,7 @@ class DispersionEnergySparse(nn.Module):
     hirshfeld_ratios: Optional[Any]
     dispersion_energy_scale: float = 1.0
 
+    neighborlist_format: str = 'sparse'  # or 'ordered_sparse'
     module_name = 'dispersion_energy'
     # activation_fn: Callable[[Any], Any] = lambda u: u
     # regression_dim: int = None
@@ -709,7 +710,8 @@ class DispersionEnergySparse(nn.Module):
             gamma_ij,
             C6_ij,
             alpha_ij,
-            jnp.asarray(self.dispersion_energy_scale, dtype=input_dtype)
+            jnp.asarray(self.dispersion_energy_scale, dtype=input_dtype),
+            self.neighborlist_format
         )
 
         # If long-range cutoff is given, one needs to damp dispersion smoothly to zero at cutoff_lr.

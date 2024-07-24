@@ -68,7 +68,7 @@ def make_so3krates_sparse_from_config(config: config_dict.ConfigDict = None):
         dispersion_energy_cutoff_lr_damping=model_config.dispersion_energy_cutoff_lr_damping,
         dispersion_energy_scale=model_config.dispersion_energy_scale,
         zbl_repulsion_bool=model_config.zbl_repulsion_bool,
-        neighborlist_format_lr=model_config.neighborlist_format_lr,
+        neighborlist_format_lr=config.neighborlist_format_lr,
     )
 
 
