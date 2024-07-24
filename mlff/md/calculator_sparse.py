@@ -25,6 +25,7 @@ logging.basicConfig(level=logging.INFO)
 
 StackNet = Any
 
+
 def matrix_to_voigt(matrix):
     """
     Convert a 3x3 matrix to a 6-component stress vector in Voigt notation.
@@ -35,14 +36,25 @@ def matrix_to_voigt(matrix):
     Returns:
         jnp.ndarray: A 6-component stress vector in Voigt notation.
     """
-    ## Check input
+
+    # Check input
     if matrix.shape != (3, 3):
         raise ValueError("Input must be a 3x3 matrix. Shape is ", matrix.shape)
 
-    ## Form Voigt vector
-    voigt_vector = jnp.array([matrix[0,0], matrix[1,1], matrix[2,2], (matrix[1,2]+matrix[2,1])/2, (matrix[0,2]+matrix[2,0])/2, (matrix[0,1]+matrix[1,0])/2])
+    # Form Voigt vector
+    voigt_vector = jnp.array(
+        [
+            matrix[0, 0],
+            matrix[1, 1],
+            matrix[2, 2],
+            (matrix[1, 2] + matrix[2, 1]) / 2,
+            (matrix[0, 2] + matrix[2, 0]) / 2,
+            (matrix[0, 1] + matrix[1, 0]) / 2
+        ]
+    )
 
     return voigt_vector
+
 
 class mlffCalculatorSparse(Calculator):
     implemented_properties = ['energy', 'forces', 'stress', 'free_energy']
@@ -52,8 +64,6 @@ class mlffCalculatorSparse(Calculator):
                              ckpt_dir: str,
                              calculate_stress: bool = False,
                              lr_cutoff: float = 10.,
-                             E_to_eV: float = 1.,
-                             F_to_eV_Ang: float = 1.,
                              capacity_multiplier: float = 1.25,
                              buffer_size_multiplier: float = 1.25,
                              skin: float = 0.,
@@ -71,8 +81,6 @@ class mlffCalculatorSparse(Calculator):
 
         return cls(potential=mlff_potential,
                    calculate_stress=calculate_stress,
-                   E_to_eV=E_to_eV,
-                   F_to_eV_Ang=F_to_eV_Ang,
                    capacity_multiplier=capacity_multiplier,
                    buffer_size_multiplier=buffer_size_multiplier,
                    skin=skin,
