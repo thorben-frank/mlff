@@ -123,11 +123,14 @@ class MLFFPotentialSparse(MachineLearningPotential):
 
             if cfg.model.dispersion_energy_bool is True:
                 cfg.model.dispersion_energy_cutoff_lr_damping = long_range_kwargs['dispersion_energy_cutoff_lr_damping']
+                # TODO: raise Error if IS None and cutoff_lr NOT None
+                #       raise Error if NOT None cutoff_lr IS None.
 
         cutoff = cfg.model.cutoff
         # ITPNet is strictly local so has effectively "one" MP layer in terms of effective cutoff.
         steps = cfg.model.num_layers if model != 'itp_net' else 1
 
+        # TODO: how does lr should change this
         effective_cutoff = steps * cutoff
 
         if add_shift:
@@ -161,6 +164,8 @@ class MLFFPotentialSparse(MachineLearningPotential):
                 # 'lr_cutoff_damp': getattr(graph, 'lr_cutoff_damp', 2.),
                 'cell': getattr(graph, 'cell', None),
             }
+            # TODO: make lr parts (total charge, num_unpaired_electrons) optional maybe using getattr(., ., None)
+            #  as this would ensure compatibility with Graph as used in glp.
 
             return x
 
