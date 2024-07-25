@@ -433,7 +433,7 @@ def coulomb_erf(
         rij: jnp.ndarray,
         idx_i: jnp.ndarray,
         idx_j: jnp.ndarray,
-        kehalf: float,
+        ke: float,
         sigma: float,
         neighborlist_format: str = 'sparse'
 ) -> jnp.ndarray:
@@ -451,10 +451,10 @@ def coulomb_erf(
         )
 
     # Cast constants to input dtype
-    _kehalf = jnp.asarray(kehalf, dtype=input_dtype)
+    _ke = jnp.asarray(ke, dtype=input_dtype)
     _sigma = jnp.asarray(sigma, dtype=input_dtype)
 
-    pairwise = c * _kehalf * q[idx_i] * q[idx_j] * jax.lax.erf(rij / _sigma) / rij
+    pairwise = c * _ke * q[idx_i] * q[idx_j] * jax.lax.erf(rij / _sigma) / rij
 
     return pairwise
 
@@ -465,7 +465,7 @@ def coulomb_erf_shifted_force_smooth(
         rij: jnp.ndarray,
         idx_i: jnp.ndarray,
         idx_j: jnp.ndarray,
-        kehalf: float,
+        ke: float,
         sigma: float,
         cutoff: float,
         cuton: float,
@@ -487,7 +487,7 @@ def coulomb_erf_shifted_force_smooth(
 
     # Cast the constants to input dtype
     _sigma = jnp.asarray(sigma, dtype=input_dtype)
-    _kehalf = jnp.asarray(kehalf, dtype=input_dtype)
+    _ke = jnp.asarray(ke, dtype=input_dtype)
     _cutoff = jnp.asarray(cutoff, dtype=input_dtype)
     _cuton = jnp.asarray(cuton, dtype=input_dtype)
 
@@ -506,7 +506,7 @@ def coulomb_erf_shifted_force_smooth(
 
     return jnp.where(
         rij < _cutoff,
-        c * _kehalf * q[idx_i] * q[idx_j] * (f * (pairwise - shift) + (1 - f) * shifted_potential),
+        c * _ke * q[idx_i] * q[idx_j] * (f * (pairwise - shift) + (1 - f) * shifted_potential),
         0.0
     )
 
@@ -586,13 +586,6 @@ class ElectrostaticEnergySparse(BaseSubModule):
     electrostatic_energy_scale: float = 1.0
     neighborlist_format: str = 'sparse'  # or 'ordered_sparse'
     module_name: str = 'electrostatic_energy'
-    # regression_dim: int = None
-    # activation_fn: Callable[[Any], Any] = lambda u: u
-    # output_is_zero_at_init: bool = True
-    # use_particle_mesh_ewald: bool = False
-    # fractional_coordinates: bool = True
-    # input_convention: str = 'positions'
-    # module_usage: str = 'training'  # or 'simulation'
 
     @nn.compact
     def __call__(self, inputs: Dict, *args, **kwargs) -> Dict[str, jnp.ndarray]:
@@ -601,7 +594,6 @@ class ElectrostaticEnergySparse(BaseSubModule):
         idx_i_lr = inputs['idx_i_lr']
         idx_j_lr = inputs['idx_j_lr']
         d_ij_lr = inputs['d_ij_lr']
-        # lr_cutoff = inputs['lr_cutoff']  # TODO: make a property of module?
 
         # Calculate partial charges
         partial_charges = self.partial_charges(inputs)['partial_charges']
@@ -615,7 +607,7 @@ class ElectrostaticEnergySparse(BaseSubModule):
                 d_ij_lr,
                 idx_i_lr,
                 idx_j_lr,
-                kehalf=self.ke,
+                ke=self.ke,
                 sigma=self.electrostatic_energy_scale,
                 cutoff=self.cutoff_lr,
                 cuton=self.cutoff_lr * 0.45,
@@ -629,7 +621,7 @@ class ElectrostaticEnergySparse(BaseSubModule):
                 d_ij_lr,
                 idx_i_lr,
                 idx_j_lr,
-                kehalf=self.ke,
+                ke=self.ke,
                 sigma=self.electrostatic_energy_scale,
                 neighborlist_format=self.neighborlist_format
             )
@@ -659,10 +651,6 @@ class DispersionEnergySparse(nn.Module):
 
     neighborlist_format: str = 'sparse'  # or 'ordered_sparse'
     module_name = 'dispersion_energy'
-    # activation_fn: Callable[[Any], Any] = lambda u: u
-    # regression_dim: int = None
-    # input_convention: str = 'positions'
-    # output_is_zero_at_init: bool = True
 
     @nn.compact
     def __call__(self, inputs: Dict, *args, **kwargs) -> Dict[str, jnp.ndarray]:
@@ -671,8 +659,6 @@ class DispersionEnergySparse(nn.Module):
         idx_i_lr = inputs['idx_i_lr']
         idx_j_lr = inputs['idx_j_lr']
         d_ij_lr = inputs['d_ij_lr']
-        # lr_cutoff = inputs['lr_cutoff']
-        # lr_cutoff_damp = inputs['lr_cutoff_damp']
 
         # Determine input dtype
         input_dtype = d_ij_lr.dtype
@@ -709,7 +695,7 @@ class DispersionEnergySparse(nn.Module):
             if self.cutoff_lr_damping is None:
                 raise ValueError(
                     f"cutoff_lr is but cutoff_lr_damping is not set. "
-                    f"received {self.cutoff_lr=} and {self.cutoff_lr_damping}."
+                    f"received {self.cutoff_lr=} and {self.cutoff_lr_damping=}."
                 )
 
             w = safe_mask(

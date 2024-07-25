@@ -46,8 +46,16 @@ class GeometryEmbedE3x(BaseSubModule):
             )(idx_i, idx_j)  # (num_pairs, 3)
 
             r_ij_lr = None
-            # If indices for long range corrections are present they are used.
+            long_range_indices_present = False
+
             if idx_i_lr is not None:
+                assert idx_j_lr is not None
+                if len(idx_i_lr) > 0:
+                    assert len(idx_j_lr) > 0
+                    long_range_indices_present = True
+
+            # If indices for long range corrections are present they are used.
+            if long_range_indices_present is True:
                 # Calculate pairwise distance vectors on long range indices.
                 r_ij_lr = jax.vmap(
                     lambda i, j: positions[j] - positions[i]
@@ -61,7 +69,7 @@ class GeometryEmbedE3x(BaseSubModule):
                     cell_offsets=cell_offsets
                 )  # shape: (num_pairs,3)
 
-                if idx_i_lr is not None:
+                if long_range_indices_present:
                     if cell_offsets_lr is None:
                         raise ValueError(
                             '`cell_offsets_lr` are required in GeometryEmbed when using global indices with periodic'
@@ -79,7 +87,7 @@ class GeometryEmbedE3x(BaseSubModule):
 
         # Here it is assumed that PBC (if present) have already been respected in displacement calculation.
         elif self.input_convention == 'displacements':
-            positions = inputs['positions'] # we need positions for dipole moment calculation
+            positions = inputs['positions']  # we need positions for dipole moment calculation
             r_ij = inputs['displacements']
             r_ij_lr = inputs.get('displacements_lr')  # shape : (num_pairs_lr, 3)
         else:
@@ -178,9 +186,17 @@ class GeometryEmbedSparse(BaseSubModule):
             )(idx_i, idx_j)  # (num_pairs, 3)
 
             r_ij_lr = None
+            long_range_indices_present = False
+
             # If indices for long range corrections are present they are used.
             if idx_i_lr is not None:
-                # Calculate pairwise distance vectors on long range indices.
+                assert idx_j_lr is not None
+                if len(idx_i_lr) > 0:
+                    assert len(idx_j_lr) > 0
+                    long_range_indices_present = True
+
+            # Calculate pairwise distance vectors on long range indices.
+            if long_range_indices_present is True:
                 r_ij_lr = jax.vmap(
                     lambda i, j: positions[j] - positions[i]
                 )(idx_i_lr, idx_j_lr)  # (num_pairs_lr, 3)
@@ -193,7 +209,7 @@ class GeometryEmbedSparse(BaseSubModule):
                     cell_offsets=cell_offsets
                 )  # shape: (num_pairs,3)
 
-                if idx_i_lr is not None:
+                if long_range_indices_present is True:
                     if cell_offsets_lr is None:
                         raise ValueError(
                             '`cell_offsets_lr` are required in GeometryEmbed when using global indices with periodic'

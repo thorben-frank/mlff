@@ -416,6 +416,8 @@ def run_training(config: config_dict.ConfigDict, model: str = 'so3krates'):
 
     if config.training.batch_max_num_nodes is None:
         assert config.training.batch_max_num_edges is None
+        assert config.training.batch_max_num_pairs is None
+
         if tf_record_present:
             raise ValueError(
                 'When reading TFDSDataSet, max_num_nodes and max_num_edges can not be auto-'
@@ -425,7 +427,14 @@ def run_training(config: config_dict.ConfigDict, model: str = 'so3krates'):
 
         batch_max_num_nodes = data_stats['max_num_of_nodes'] * (config.training.batch_max_num_graphs - 1) + 1
         batch_max_num_edges = data_stats['max_num_of_edges'] * (config.training.batch_max_num_graphs - 1) + 1
-        batch_max_num_pairs = data_stats['max_num_of_nodes'] * (data_stats['max_num_of_nodes'] - 1) * (config.training.batch_max_num_graphs - 1) + 1
+
+        if config.data.neighbors_lr_bool is True:
+            # TODO: This always creates num_pairs to be quadratic in the number of nodes. Add data_stats about max
+            #  num_pairs which is important for the case of lr_cutoff smaller than largest separation in the data
+            #  as this allows to safe cost.
+            batch_max_num_pairs = data_stats['max_num_of_nodes'] * (data_stats['max_num_of_nodes'] - 1) * (config.training.batch_max_num_graphs - 1) + 1
+        else:
+            batch_max_num_pairs = 0
 
         config.training.batch_max_num_nodes = batch_max_num_nodes
         config.training.batch_max_num_edges = batch_max_num_edges
