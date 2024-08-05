@@ -13,7 +13,7 @@ setup(
         "jaxopt",
         "jraph",
         "optax",
-        "orbax-checkpoint",
+        "orbax-checkpoint == 0.5.23",
         "portpicker",
         # 'tensorflow',
         "scikit-learn",
