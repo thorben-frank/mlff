@@ -1,8 +1,7 @@
 # MLFF
-Repository for training, testing and developing machine learned force fields using the `So3krates` transformer (check
-out the [NeurIPS paper](https://proceedings.neurips.cc/paper_files/paper/2022/hash/bcf4ca90a8d405201d29dd47d75ac896-Abstract-Conference.html)).
+Repository for training, testing and developing machine learned force fields using the `SO3krates` transformer.
 ## Installation
-Assuming you have already set up an virtual environment with python version `>= 3.8.` In order to ensure compatibility
+Assuming you have already set up an virtual environment with python version `>= 3.9.` In order to ensure compatibility
 with CUDA `jax/jaxlib` have to be installed manually. Therefore **before** you install `MLFF` run one of the following 
 commands (depending on your CUDA version)
 ```
@@ -19,24 +18,11 @@ pip install --upgrade "jax[cuda11_pip]" -f https://storage.googleapis.com/jax-re
 for details check the official [`JAX`](https://github.com/google/jax#pip-installation-gpu-cuda-installed-via-pip-easier) 
 repository.
 
-Since the `optax` package has a `tensorflow` dependency for checkpointing and does not install it itself, we also have to 
-install `tensorflow`, although the models in `mlff` are written in `JAX`. It can be installed running
-```
-pip install tensorflow
-```
-**Apple ARM M1/M2** 
-
-In case you have an Apple ARM M1/M2 chip, the designated `tensorflow` package called `tensorflow-maxos` has to be 
-installed. More details on doing so can be found e.g. [here](https://stackoverflow.com/questions/72964800/what-is-the-proper-way-to-install-tensorflow-on-apple-m1-in-2022)
-or [here](https://developer.apple.com/metal/tensorflow-plugin/) (the metal plugin is not needed). 
-Unfortunately, we didn't found an M1 for testing, so we are happy about reported issues.
-
 Next clone the `mlff` repository by running
 ```
 git clone https://github.com/thorben-frank/mlff.git
 ```
  
-
 Now do
 ```
 cd mlff
@@ -52,7 +38,7 @@ wandb login
 and log in with your account.
 # Quickstart
 Following we will give a quick start how to train, evaluate and run an MD simulation with the 
-`So3krates` model.
+`SO3krates` model.
 ## Training
 Train your fist `So3krates` model by running
 ```
@@ -70,9 +56,8 @@ evaluate
 ``` 
 As before, when your data is not in eV and Angstrom add the `--units` keyword. The reported metrics are then in eV and
 Angstrom (e.g. `--units energy='kcal/mol',force='kcal/(mol*Ang)'` if the energy in your data is in `kcal/mol`).
-## Molecular Dynamics
-You can use the `mdx` package which is the `mlff` internal MD package, fully relying on `jax` and thus fully 
-optimized for XLA compilation on GPU. Before you can use it make sure you install the [`glp`](https://github.com/sirmarcel/glp) 
+## ASE Calculator
+Before you can use the calculator make sure you install the [`glp`](https://github.com/sirmarcel/glp) 
 package by cloning the `glp` repository and install it
 ```
 git clone git@github.com:sirmarcel/glp.git
@@ -80,6 +65,19 @@ cd glp
 
 pip install .
 ```
+After training you can create an ASE Calculator from the trained model via
+```python
+from mlff.md.calculator import mlffCalculator
+import numpy as np
+
+calculator = mlffCalculator.create_from_ckpt_dir(
+    'path_to_ckpt_dir',   # directory where e.g. hyperparameters.json is saved.
+    dtype=np.float32
+)
+```
+## Molecular Dynamics
+You can use the `mdx` package which is the `mlff` internal MD package, fully relying on `jax` and thus fully 
+optimized for XLA compilation on GPU.
 First, lets create a relaxed structure, using the LBFGS optimizer
 ```
 run_relaxation  --qn_max_steps 1000 --qn_tol 0.0001 --use_mdx
