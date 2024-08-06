@@ -250,7 +250,7 @@ If you use parts of the code please cite the corresponding papers
 }
 
 @article{frank2024euclidean,
-  title={A Euclidean transformer for fast and stable machine learned force fields },
+  title={A Euclidean transformer for fast and stable machine learned force fields},
   author={Frank, Thorben and Unke, Oliver and M{\"u}ller, Klaus-Robert and Chmiela, Stefan},
   journal={Nature Communications},
   volume={15},
