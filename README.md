@@ -1,5 +1,5 @@
 # MLFF
-Repository for training, testing and developing machine learned force fields using the `SO3krates` transformer.
+Repository for training, testing and developing machine learned force fields using the `SO3krates` transformer [1, 2].
 ## Installation
 Assuming you have already set up an virtual environment with python version `>= 3.9.` In order to ensure compatibility
 with CUDA `jax/jaxlib` have to be installed manually. Therefore **before** you install `MLFF` run one of the following 
@@ -155,7 +155,7 @@ train_so3krates --ckpt_dir dha_module --train_file dha.npz --n_train 1000 --n_va
 Note the character strings for the units, which are necessary in the course of internal processing. This will internally
 rescale the energy and the forces to `eV` and `eV/Ang`.
 ### Minimal Image Convention
-In [1] `So3krates` was used to calculate EOS and heat flux in solids, such that it must be capable of
+In [3] `So3krates` was used to calculate EOS and heat flux in solids, such that it must be capable of
 handling periodic boundary conditions. If you want to apply the minimal image convention, you can specify this by 
 adding the corresponding flag to the training command 
 ```
@@ -238,7 +238,7 @@ The test suite can be run with pytest as:
 pytest tests/
 ```
 ## Cite
-If you use parts of the code please cite the corresponding paper
+If you use parts of the code please cite the corresponding papers
 ```
 @article{frank2022so3krates,
   title={So3krates: Equivariant attention for interactions on arbitrary length-scales in molecular systems},
@@ -248,6 +248,18 @@ If you use parts of the code please cite the corresponding paper
   pages={29400--29413},
   year={2022}
 }
+
+@article{frank2024euclidean,
+  title={A Euclidean transformer for fast and stable machine learned force fields },
+  author={Frank, Thorben and Unke, Oliver and M{\"u}ller, Klaus-Robert and Chmiela, Stefan},
+  journal={Nature Communications},
+  volume={15},
+  number={6539},
+  year={2024}
+}
+
 ```
 ## References
-* [1] M.F. Langer, J.T. Frank, and F. Knoop.  [*Stress and heat flux via automatic differentiation*](https://arxiv.org/abs/2305.01401), arxiv 2305.01401 (2023)
+* [1] J.T. Frank, O.T. Unke, and K.R. Müller.  [*So3krates: Equivariant attention for interactions on arbitrary length-scales in molecular systems*](https://proceedings.neurips.cc/paper_files/paper/2022/hash/bcf4ca90a8d405201d29dd47d75ac896-Abstract-Conference.html), Advances in Neural Information Processing Systems 35 (2022): 29400-29413.
+* [2] J.T. Frank, O.T. Unke, K.R. Müller and S. Chmiela.  [*A Euclidean transformer for fast and stable machine learned force fields*](https://www.nature.com/articles/s41467-024-50620-6), Nature Communications **15** (2024): 6539.
+* [3] M.F. Langer, J.T. Frank, and F. Knoop.  [*Stress and heat flux via automatic differentiation*](https://pubs.aip.org/aip/jcp/article/159/17/174105/2919546/Stress-and-heat-flux-via-automatic-differentiation), The Journal of Chemical Physics 159.17 (2023)
