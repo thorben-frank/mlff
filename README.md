@@ -254,7 +254,8 @@ If you use parts of the code please cite the corresponding papers
   author={Frank, Thorben and Unke, Oliver and M{\"u}ller, Klaus-Robert and Chmiela, Stefan},
   journal={Nature Communications},
   volume={15},
-  number={6539},
+  number={1},
+  pages={6539},
   year={2024}
 }
 
