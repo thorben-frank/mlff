@@ -1,5 +1,6 @@
 from ase.calculators.calculator import PropertyNotImplementedError
 from ase.io import read, iread
+from ase.io.formats import ioformats
 from ase.neighborlist import neighbor_list
 from ase import Atoms
 from dataclasses import dataclass
@@ -48,8 +49,10 @@ class AseDataLoaderSparse:
                     f"Received {self.input_folder=} and {self.input_file=}."
                 )
             input_folder = Path(self.input_folder).expanduser().resolve()
-
-            file_list = [Path(f).expanduser().resolve() for f in os.listdir(input_folder) if Path(f).is_file()]
+            file_list = []
+            for entry in os.scandir(input_folder):
+                if Path(entry.path).suffix[1:] in set(ioformats.keys()):
+                    file_list.append(Path(entry.path).expanduser().resolve())
         else:
             if self.input_file is None:
                 raise ValueError(
@@ -104,7 +107,7 @@ class AseDataLoaderSparse:
                 logging.mlff(
                     f"Calculate long-range neighbors within cutoff_lr={cutoff_lr} Ang."
                 )
-            for a in tqdm(iread(file_path, format='extxyz'), mininterval=60, maxinterval=600):
+            for a in tqdm(iread(file_path), mininterval=60, maxinterval=600):
                 if keep(i):
                     graph = ASE_to_jraph(
                         a,

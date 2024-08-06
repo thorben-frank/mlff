@@ -32,7 +32,9 @@ class NpzDataLoaderSparse:
                 )
             input_folder = Path(self.input_folder).expanduser().resolve()
 
-            file_list = [Path(f).expanduser().resolve() for f in os.listdir(input_folder) if Path(f).is_file()]
+            file_list = [
+                Path(x.path).expanduser().resolve() for x in os.scandir(input_folder) if Path(x.path).suffix == '.npz'
+            ]
         else:
             if self.input_file is None:
                 raise ValueError(

@@ -157,14 +157,8 @@ def run_training(config: config_dict.ConfigDict, model: str = 'so3krates'):
     Returns:
 
     """
-    workdir = Path(config.workdir).expanduser().resolve()
+    workdir = workdir_from_config(config=config)
     workdir.mkdir(exist_ok=config.training.allow_restart)
-
-    data_filepath = config.data.filepath
-    data_filepath = Path(data_filepath).expanduser().resolve()
-
-    energy_unit = eval(config.data.energy_unit)
-    length_unit = eval(config.data.length_unit)
 
     # Currently, training is always performed with sparse neighborlist_format for long range blocks.
     config.neighborlist_format_lr = config_dict.placeholder(str)
@@ -177,101 +171,113 @@ def run_training(config: config_dict.ConfigDict, model: str = 'so3krates'):
         config=config
     )
 
+    if config.data.neighbors_lr_bool is True:
+        if tf_record_present is True:
+            raise NotImplementedError(
+                "long-range neighbors are not supported for tf record data loader yet."
+            )
+
+    training_data, validation_data, data_stats = prepare_training_and_validation_data(
+        config=config,
+        loader=loader,
+        tf_record_present=tf_record_present
+    )
+
     # Get the total number of data points
-    num_data = loader.cardinality()
-    num_train = config.training.num_train
-    num_valid = config.training.num_valid
+    # num_data = loader.cardinality()
+    # num_train = config.training.num_train
+    # num_valid = config.training.num_valid
+    #
+    # if num_train + num_valid > num_data:
+    #     raise ValueError(f"num_train + num_valid = {num_train + num_valid} exceeds the number of data points {num_data}"
+    #                      f" in {data_filepath}.")
+    #
+    # split_seed = config.data.split_seed
+    # if not tf_record_present:
+    #     numpy_rng = np.random.RandomState(split_seed)
+    #
+    #     # Choose the data points that are used training (training + validation data).
+    #     all_indices = np.arange(num_data)
+    #     numpy_rng.shuffle(all_indices)
+    #     # We sort the indices after extracting them from the shuffled list, since we iteratively load the data with the
+    #     # data loader. This will ensure that the index i at the n-th entry in training_and_validation_indices
+    #     # corresponds to the n-th entry in training_and_validation_data which is the i-th data entry in the loaded data.
+    #     training_and_validation_indices = np.sort(all_indices[:(num_train+num_valid)])
+    #     test_indices = np.sort(all_indices[(num_train+num_valid):])
+    #
+    #     # Cutoff is in Angstrom, so we have to divide the cutoff by the length unit.
+    #     training_and_validation_data, data_stats = loader.load(
+    #         cutoff=config.model.cutoff / length_unit,
+    #         cutoff_lr=config.data.neighbors_lr_cutoff / length_unit,
+    #         calculate_neighbors_lr=config.data.neighbors_lr_bool,
+    #         pick_idx=training_and_validation_indices
+    #     )
+    #     # Since the training and validation indices are sorted, the index i at the n-th entry in
+    #     # training_and_validation_indices corresponds to the n-th entry in training_and_validation_data which is the
+    #     # i-th data entry in the loaded data.
+    #     split_indices = np.arange(num_train + num_valid)
+    #     numpy_rng.shuffle(split_indices)
+    #     internal_train_indices = split_indices[:num_train]
+    #     internal_validation_indices = split_indices[num_train:]
+    #
+    #     # Entries are None when filtered out.
+    #     training_data = [
+    #         training_and_validation_data[i_train] for i_train in internal_train_indices if training_and_validation_data[i_train] is not None
+    #     ]
+    #     validation_data = [
+    #         training_and_validation_data[i_val] for i_val in internal_validation_indices if training_and_validation_data[i_val] is not None
+    #     ]
+    #     del training_and_validation_data
+    #
+    #     assert len(internal_train_indices) == num_train
+    #     assert len(internal_validation_indices) == num_valid
+    #
+    #     # internal_*_indices only run from [0, num_train+num_valid]. To get their original position in the full data set
+    #     # we collect them from training_and_validation_indices. Since we will load training and validation data as
+    #     # training_and_validation_data[internal_*_indices], we need to make sure that training_and_validation_indices
+    #     # and training_and_validation_data have the same order in the sense of referencing indices. This is achieved by
+    #     # sorting the indices as described above.
+    #     train_indices = training_and_validation_indices[internal_train_indices]
+    #     validation_indices = training_and_validation_indices[internal_validation_indices]
+    #
+    #     assert len(train_indices) == num_train
+    #     assert len(validation_indices) == num_valid
+    #
+    #     # Save the splits.
+    #     with open(workdir / 'data_splits.json', 'w') as fp:
+    #         j = dict(
+    #             training=train_indices.tolist(),
+    #             validation=validation_indices.tolist(),
+    #             test=test_indices.tolist()
+    #         )
+    #         json.dump(j, fp)
+    # # tensorflow records are present
+    # else:
+    #     training_data, validation_data = loader.load(
+    #         cutoff=config.model.cutoff / length_unit,
+    #         num_train=num_train,
+    #         num_valid=num_valid
+    #     )
+    #     # Save the splits.
+    #     with open(workdir / 'data_splits.json', 'w') as fp:
+    #         j = dict(
+    #             training='tfds',
+    #             validation='tfds',
+    #             test='tfds',
+    #         )
+    #         json.dump(j, fp)
 
-    if num_train + num_valid > num_data:
-        raise ValueError(f"num_train + num_valid = {num_train + num_valid} exceeds the number of data points {num_data}"
-                         f" in {data_filepath}.")
-
-    split_seed = config.data.split_seed
-    if not tf_record_present:
-        numpy_rng = np.random.RandomState(split_seed)
-
-        # Choose the data points that are used training (training + validation data).
-        all_indices = np.arange(num_data)
-        numpy_rng.shuffle(all_indices)
-        # We sort the indices after extracting them from the shuffled list, since we iteratively load the data with the
-        # data loader. This will ensure that the index i at the n-th entry in training_and_validation_indices
-        # corresponds to the n-th entry in training_and_validation_data which is the i-th data entry in the loaded data.
-        training_and_validation_indices = np.sort(all_indices[:(num_train+num_valid)])
-        test_indices = np.sort(all_indices[(num_train+num_valid):])
-
-        # Cutoff is in Angstrom, so we have to divide the cutoff by the length unit.
-        training_and_validation_data, data_stats = loader.load(
-            cutoff=config.model.cutoff / length_unit,
-            cutoff_lr=config.data.neighbors_lr_cutoff,
-            calculate_neighbors_lr=config.data.neighbors_lr_bool,
-            pick_idx=training_and_validation_indices
-        )
-        # Since the training and validation indices are sorted, the index i at the n-th entry in
-        # training_and_validation_indices corresponds to the n-th entry in training_and_validation_data which is the
-        # i-th data entry in the loaded data.
-        split_indices = np.arange(num_train + num_valid)
-        numpy_rng.shuffle(split_indices)
-        internal_train_indices = split_indices[:num_train]
-        internal_validation_indices = split_indices[num_train:]
-
-        # Entries are None when filtered out.
-        training_data = [
-            training_and_validation_data[i_train] for i_train in internal_train_indices if training_and_validation_data[i_train] is not None
-        ]
-        validation_data = [
-            training_and_validation_data[i_val] for i_val in internal_validation_indices if training_and_validation_data[i_val] is not None
-        ]
-        del training_and_validation_data
-
-        assert len(internal_train_indices) == num_train
-        assert len(internal_validation_indices) == num_valid
-
-        # internal_*_indices only run from [0, num_train+num_valid]. To get their original position in the full data set
-        # we collect them from training_and_validation_indices. Since we will load training and validation data as
-        # training_and_validation_data[internal_*_indices], we need to make sure that training_and_validation_indices
-        # and training_and_validation_data have the same order in the sense of referencing indices. This is achieved by
-        # sorting the indices as described above.
-        train_indices = training_and_validation_indices[internal_train_indices]
-        validation_indices = training_and_validation_indices[internal_validation_indices]
-
-        assert len(train_indices) == num_train
-        assert len(validation_indices) == num_valid
-
-        # Save the splits.
-        with open(workdir / 'data_splits.json', 'w') as fp:
-            j = dict(
-                training=train_indices.tolist(),
-                validation=validation_indices.tolist(),
-                test=test_indices.tolist()
-            )
-            json.dump(j, fp)
-    # tensorflow records are present
-    else:
-        training_data, validation_data = loader.load(
-            cutoff=config.model.cutoff / length_unit,
-            num_train=num_train,
-            num_valid=num_valid
-        )
-        # Save the splits.
-        with open(workdir / 'data_splits.json', 'w') as fp:
-            j = dict(
-                training='tfds',
-                validation='tfds',
-                test='tfds',
-            )
-            json.dump(j, fp)
-
-    if config.data.shift_mode == 'mean':
-        config.data.energy_shifts = config_dict.placeholder(dict)
-        energy_mean = np.array(data.transformations.calculate_energy_mean(training_data)).item() * energy_unit
-        num_nodes = np.array(data.transformations.calculate_average_number_of_nodes(training_data)).item()
-        energy_shifts = {str(a): float(energy_mean / num_nodes) for a in range(119)}
-        config.data.energy_shifts = energy_shifts
-    elif config.data.shift_mode == 'custom':
-        if config.data.energy_shifts is None:
-            raise ValueError('For config.data.shift_mode == custom config.data.energy_shifts must be given.')
-    else:
-        config.data.energy_shifts = {str(a): 0. for a in range(119)}
+    # if config.data.shift_mode == 'mean':
+    #     config.data.energy_shifts = config_dict.placeholder(dict)
+    #     energy_mean = np.array(data.transformations.calculate_energy_mean(training_data)).item() * energy_unit
+    #     num_nodes = np.array(data.transformations.calculate_average_number_of_nodes(training_data)).item()
+    #     energy_shifts = {str(a): float(energy_mean / num_nodes) for a in range(119)}
+    #     config.data.energy_shifts = energy_shifts
+    # elif config.data.shift_mode == 'custom':
+    #     if config.data.energy_shifts is None:
+    #         raise ValueError('For config.data.shift_mode == custom config.data.energy_shifts must be given.')
+    # else:
+    #     config.data.energy_shifts = {str(a): 0. for a in range(119)}
 
     # If messages are normalized by the average number of neighbors, we need to calculate this quantity from the
     # training data or read it from the config when provided.
@@ -297,65 +303,65 @@ def run_training(config: config_dict.ConfigDict, model: str = 'so3krates'):
             config.data.avg_num_neighbors = np.array(avg_num_neighbors).item()
             logging.mlff('... done.')
 
-    if not tf_record_present:
-        training_data = list(data.transformations.subtract_atomic_energy_shifts(
-            data.transformations.unit_conversion(
-                training_data,
-                energy_unit=energy_unit,
-                length_unit=length_unit
-            ),
-            atomic_energy_shifts={int(k): v for (k, v) in config.data.energy_shifts.items()}
-        ))
-
-        validation_data = list(data.transformations.subtract_atomic_energy_shifts(
-            data.transformations.unit_conversion(
-                validation_data,
-                energy_unit=energy_unit,
-                length_unit=length_unit
-            ),
-            atomic_energy_shifts={int(k): v for (k, v) in config.data.energy_shifts.items()}
-        ))
-    else:
-        if config.data.shift_mode in ['custom', 'mean']:
-            raise NotImplementedError(
-                'For TFDSDataSets, energy shifting is not supported yet.'
-            )
-
-        # Convert the units.
-        training_data = training_data.map(
-            lambda graph: data.transformations.unit_conversion_graph(
-                graph,
-                energy_unit=energy_unit,
-                length_unit=length_unit
-            )
-        )
-        validation_data = validation_data.map(
-            lambda graph: data.transformations.unit_conversion_graph(
-                graph,
-                energy_unit=energy_unit,
-                length_unit=length_unit
-            )
-        )
-        #
-        # # Subtract energy shifts.
-        # train_ds = train_ds.map(
-        #     lambda graph: subtract_atomic_energy_shift_graph(
-        #         graph,
-        #         atomic_energy_shifts=np.zeros((119,), dtype=float)
-        #     )
-        # )
-        # valid_ds = valid_ds.map(
-        #     lambda graph: subtract_atomic_energy_shift_graph(
-        #         graph,
-        #         atomic_energy_shifts=np.zeros((119,), dtype=float)
-        #     )
-        # )
-
-        training_data = training_data.shuffle(
-            buffer_size=10_000,
-            reshuffle_each_iteration=True,
-            seed=config.training.training_seed
-        ).repeat(config.training.num_epochs)
+    # if not tf_record_present:
+    #     training_data = list(data.transformations.subtract_atomic_energy_shifts(
+    #         data.transformations.unit_conversion(
+    #             training_data,
+    #             energy_unit=energy_unit,
+    #             length_unit=length_unit
+    #         ),
+    #         atomic_energy_shifts={int(k): v for (k, v) in config.data.energy_shifts.items()}
+    #     ))
+    #
+    #     validation_data = list(data.transformations.subtract_atomic_energy_shifts(
+    #         data.transformations.unit_conversion(
+    #             validation_data,
+    #             energy_unit=energy_unit,
+    #             length_unit=length_unit
+    #         ),
+    #         atomic_energy_shifts={int(k): v for (k, v) in config.data.energy_shifts.items()}
+    #     ))
+    # else:
+    #     if config.data.shift_mode in ['custom', 'mean']:
+    #         raise NotImplementedError(
+    #             'For TFDSDataSets, energy shifting is not supported yet.'
+    #         )
+    #
+    #     # Convert the units.
+    #     training_data = training_data.map(
+    #         lambda graph: data.transformations.unit_conversion_graph(
+    #             graph,
+    #             energy_unit=energy_unit,
+    #             length_unit=length_unit
+    #         )
+    #     )
+    #     validation_data = validation_data.map(
+    #         lambda graph: data.transformations.unit_conversion_graph(
+    #             graph,
+    #             energy_unit=energy_unit,
+    #             length_unit=length_unit
+    #         )
+    #     )
+    #     #
+    #     # # Subtract energy shifts.
+    #     # train_ds = train_ds.map(
+    #     #     lambda graph: subtract_atomic_energy_shift_graph(
+    #     #         graph,
+    #     #         atomic_energy_shifts=np.zeros((119,), dtype=float)
+    #     #     )
+    #     # )
+    #     # valid_ds = valid_ds.map(
+    #     #     lambda graph: subtract_atomic_energy_shift_graph(
+    #     #         graph,
+    #     #         atomic_energy_shifts=np.zeros((119,), dtype=float)
+    #     #     )
+    #     # )
+    #
+    #     training_data = training_data.shuffle(
+    #         buffer_size=10_000,
+    #         reshuffle_each_iteration=True,
+    #         seed=config.training.training_seed
+    #     ).repeat(config.training.num_epochs)
 
     opt = make_optimizer_from_config(config)
     if model == 'so3krates':
@@ -498,6 +504,12 @@ def run_evaluation(
         config=config
     )
 
+    if config.data.neighbors_lr_bool is True:
+        if tf_record_present is True:
+            raise NotImplementedError(
+                "long-range neighbors are not supported for tf record data loader yet."
+            )
+
     # TFDSDataSets need to be processed in a special manner.
     # tf_record_present = False
 
@@ -548,7 +560,10 @@ def run_evaluation(
     if not tf_record_present:
         eval_data, data_stats = loader.load(
             # We need to do the inverse transforms, since in config everything is in ASE default units.
-            cutoff=config.model.cutoff / length_unit, pick_idx=pick_idx
+            cutoff=config.model.cutoff / length_unit,
+            cutoff_lr=config.data.neighbors_lr_cutoff / length_unit,
+            calculate_neighbors_lr=config.data.neighbors_lr_bool,
+            pick_idx=pick_idx
         )
     else:
         training_data, validation_data, test_data = loader.load(
@@ -668,6 +683,11 @@ def run_fine_tuning(
 
     """
 
+    # Currently, fine tuning is always performed with sparse neighborlist_format for long range blocks.
+    config.neighborlist_format_lr = config_dict.placeholder(str)
+    config.neighborlist_format_lr = 'sparse'
+
+    # Select a fine-tuning strategy.
     if strategy == 'full':
         # All parameters are re-fined.
         trainable_subset_keys = None
@@ -697,19 +717,22 @@ def run_fine_tuning(
             f'`first_layer_and_last_layer`)'
         )
 
+    # Determine the workdir from which to load the model for fine-tuning.
     start_from_workdir = Path(start_from_workdir).expanduser().resolve()
     if not start_from_workdir.exists():
         raise ValueError(
             f'Trying to start fine tuning from {start_from_workdir} but directory does not exist.'
         )
 
-    workdir = Path(config.workdir).expanduser().resolve()
+    # Workdir for fine-tuning experiments.
+    workdir = workdir_from_config(config=config)
     if workdir.exists():
         raise ValueError(
             f'Please specify new workdir for fine tuning. Workdir {workdir} already exists.'
         )
     workdir.mkdir(exist_ok=False)
 
+    # Save fine-tuning hyper-parameters.
     with open(workdir / 'fine_tuning.json', mode='w') as fp:
         json.dump(
             {
@@ -719,15 +742,13 @@ def run_fine_tuning(
             fp=fp
         )
 
+    # Load the parameters from the model for fine-tuning.
     params = load_params_from_workdir(start_from_workdir)
 
-    data_filepath = config.data.filepath
-    data_filepath = Path(data_filepath).expanduser().resolve()
+    # Get data filepath.
+    data_filepath = data_path_from_config(config=config)
 
-    # Get the units of the data.
-    energy_unit = eval(config.data.energy_unit)
-    length_unit = eval(config.data.length_unit)
-
+    # Create a loader and check if tf records are present.
     loader, tf_record_present = data_loader_from_config(
         config=config
     )
@@ -758,90 +779,26 @@ def run_fine_tuning(
     # else:
     #     loader = data.AseDataLoaderSparse(input_file=data_filepath)
 
-    # Get the total number of data points.
-    num_data = loader.cardinality()
-    num_train = config.training.num_train
-    num_valid = config.training.num_valid
+    # Prepare training and validation data and load the data set statistics.
+    training_data, validation_data, data_stats = prepare_training_and_validation_data(
+        config=config,
+        loader=loader,
+        tf_record_present=tf_record_present
+    )
 
-    if num_train + num_valid > num_data:
-        raise ValueError(f"num_train + num_valid = {num_train + num_valid} exceeds the number of data points {num_data}"
-                         f" in {data_filepath}.")
-    if not tf_record_present:
-        split_seed = config.data.split_seed
-        numpy_rng = np.random.RandomState(split_seed)
+    # if config.data.shift_mode == 'mean':
+    #     config.data.energy_shifts = config_dict.placeholder(dict)
+    #     energy_mean = data.transformations.calculate_energy_mean(training_data) * energy_unit
+    #     num_nodes = data.transformations.calculate_average_number_of_nodes(training_data)
+    #     energy_shifts = {str(a): float(energy_mean / num_nodes) for a in range(119)}
+    #     config.data.energy_shifts = energy_shifts
+    # elif config.data.shift_mode == 'custom':
+    #     if config.data.energy_shifts is None:
+    #         raise ValueError('For config.data.shift_mode == custom config.data.energy_shifts must be given.')
+    # else:
+    #     config.data.energy_shifts = {str(a): 0. for a in range(119)}
 
-        # Choose the data points that are used training (training + validation data).
-        all_indices = np.arange(num_data)
-        numpy_rng.shuffle(all_indices)
-        # We sort the indices after extracting them from the shuffled list, since we iteratively load the data with the
-        # data loader.
-        training_and_validation_indices = np.sort(all_indices[:(num_train + num_valid)])
-        test_indices = np.sort(all_indices[(num_train + num_valid):])
-
-        # Cutoff is in Angstrom, so we have to divide the cutoff by the length unit.
-        training_and_validation_data, data_stats = loader.load(
-            cutoff=config.model.cutoff / length_unit,
-            pick_idx=training_and_validation_indices
-        )
-        # Since the training and validation indices are sorted, the index i at the n-th entry in
-        # training_and_validation_indices corresponds to the n-th entry in training_and_validation_data which is
-        # the i-th data entry in the loaded data.
-        split_indices = np.arange(num_train + num_valid)
-        numpy_rng.shuffle(split_indices)
-        internal_train_indices = split_indices[:num_train]
-        internal_validation_indices = split_indices[num_train:]
-
-        training_data = [training_and_validation_data[i_train] for i_train in internal_train_indices]
-        validation_data = [training_and_validation_data[i_val] for i_val in internal_validation_indices]
-        del training_and_validation_data
-
-        assert len(internal_train_indices) == num_train
-        assert len(internal_validation_indices) == num_valid
-
-        # internal_*_indices only run from [0, num_train+num_valid]. To get their original position in the full data set
-        # we collect them from training_and_validation_indices. Since we will load training and validation data as
-        # training_and_validation_data[internal_*_indices], we need to make sure that training_and_validation_indices
-        # and training_and_validation_data have the same order in the sense of referencing indices. This is achieved by
-        # sorting the indices as described above.
-        train_indices = training_and_validation_indices[internal_train_indices]
-        validation_indices = training_and_validation_indices[internal_validation_indices]
-        assert len(train_indices) == num_train
-        assert len(validation_indices) == num_valid
-        with open(workdir / 'data_splits.json', 'w') as fp:
-            j = dict(
-                training=train_indices.tolist(),
-                validation=validation_indices.tolist(),
-                test=test_indices.tolist()
-            )
-            json.dump(j, fp)
-    else:
-        training_data, validation_data = loader.load(
-            cutoff=config.model.cutoff / length_unit,
-            num_train=num_train,
-            num_valid=num_valid
-        )
-        # Save the splits.
-        with open(workdir / 'data_splits.json', 'w') as fp:
-            j = dict(
-                training='tfds',
-                validation='tfds',
-                test='tfds',
-            )
-            json.dump(j, fp)
-
-    if config.data.shift_mode == 'mean':
-        config.data.energy_shifts = config_dict.placeholder(dict)
-        energy_mean = data.transformations.calculate_energy_mean(training_data) * energy_unit
-        num_nodes = data.transformations.calculate_average_number_of_nodes(training_data)
-        energy_shifts = {str(a): float(energy_mean / num_nodes) for a in range(119)}
-        config.data.energy_shifts = energy_shifts
-    elif config.data.shift_mode == 'custom':
-        if config.data.energy_shifts is None:
-            raise ValueError('For config.data.shift_mode == custom config.data.energy_shifts must be given.')
-    else:
-        config.data.energy_shifts = {str(a): 0. for a in range(119)}
-
-    # Message normalization must not change for fine tuning.
+    # Check that message normalization has not change from original model to fine-tuning model.
     hyperparams_path = start_from_workdir / 'hyperparameters.json'
     with open(hyperparams_path, mode='r') as fp:
         config_start_from_workdir = config_dict.ConfigDict(json.load(fp=fp))
@@ -867,52 +824,6 @@ def run_fine_tuning(
             f'Read average number of neighbors = {config.data.avg_num_neighbors} from original config at'
             f'{start_from_workdir}.'
         )
-
-    if not tf_record_present:
-        training_data = list(data.transformations.subtract_atomic_energy_shifts(
-            data.transformations.unit_conversion(
-                training_data,
-                energy_unit=energy_unit,
-                length_unit=length_unit
-            ),
-            atomic_energy_shifts={int(k): v for (k, v) in config.data.energy_shifts.items()}
-        ))
-
-        validation_data = list(data.transformations.subtract_atomic_energy_shifts(
-            data.transformations.unit_conversion(
-                validation_data,
-                energy_unit=energy_unit,
-                length_unit=length_unit
-            ),
-            atomic_energy_shifts={int(k): v for (k, v) in config.data.energy_shifts.items()}
-        ))
-    else:
-        if config.data.shift_mode in ['custom', 'mean']:
-            raise NotImplementedError(
-                'For TFDSDataSets, energy shifting is not supported yet.'
-            )
-
-        # Convert the units.
-        training_data = training_data.map(
-            lambda graph: data.transformations.unit_conversion_graph(
-                graph,
-                energy_unit=energy_unit,
-                length_unit=length_unit
-            )
-        )
-        validation_data = validation_data.map(
-            lambda graph: data.transformations.unit_conversion_graph(
-                graph,
-                energy_unit=energy_unit,
-                length_unit=length_unit
-            )
-        )
-
-        training_data = training_data.shuffle(
-            buffer_size=10_000,
-            reshuffle_each_iteration=True,
-            seed=config.training.training_seed
-        ).repeat(config.training.num_epochs)
 
     opt = make_optimizer_from_config(config)
 
@@ -1000,11 +911,9 @@ def data_loader_from_config(config):
 
     tf_record_present = False
 
-    data_filepath = config.data.filepath
-
-    energy_unit = eval(config.data.energy_unit)
-    length_unit = eval(config.data.length_unit)
-
+    data_filepath = data_path_from_config(config=config)
+    energy_unit = energy_unit_from_config(config=config)
+    length_unit = length_unit_from_config(config=config)
     if data_filepath.is_file():
         if data_filepath.suffix == '.npz':
             loader = data.NpzDataLoaderSparse(input_file=data_filepath)
@@ -1038,6 +947,154 @@ def data_loader_from_config(config):
             )
 
     return loader, tf_record_present
+
+
+def prepare_training_and_validation_data(config, loader, tf_record_present):
+    # Lock the config.
+    config = config.lock()
+
+    workdir = workdir_from_config(config=config)
+    data_filepath = data_path_from_config(config=config)
+    energy_unit = energy_unit_from_config(config=config)
+    length_unit = length_unit_from_config(config=config)
+
+    # Get the total number of data points.
+    num_data = loader.cardinality()
+    num_train = config.training.num_train
+    num_valid = config.training.num_valid
+
+    if num_train + num_valid > num_data:
+        raise ValueError(f"num_train + num_valid = {num_train + num_valid} exceeds the number of data points {num_data}"
+                         f" in {data_filepath}.")
+    if not tf_record_present:
+        split_seed = config.data.split_seed
+        numpy_rng = np.random.RandomState(split_seed)
+
+        # Choose the data points that are used training (training + validation data).
+        all_indices = np.arange(num_data)
+        numpy_rng.shuffle(all_indices)
+        # We sort the indices after extracting them from the shuffled list, since we iteratively load the data with the
+        # data loader.
+        training_and_validation_indices = np.sort(all_indices[:(num_train + num_valid)])
+        test_indices = np.sort(all_indices[(num_train + num_valid):])
+
+        # Cutoff is in Angstrom, so we have to divide the cutoff by the length unit.
+        training_and_validation_data, data_stats = loader.load(
+            cutoff=config.model.cutoff / length_unit,
+            cutoff_lr=config.data.neighbors_lr_cutoff / length_unit,
+            calculate_neighbors_lr=config.data.neighbors_lr_bool,
+            pick_idx=training_and_validation_indices
+        )
+        # Since the training and validation indices are sorted, the index i at the n-th entry in
+        # training_and_validation_indices corresponds to the n-th entry in training_and_validation_data which is
+        # the i-th data entry in the loaded data.
+        split_indices = np.arange(num_train + num_valid)
+        numpy_rng.shuffle(split_indices)
+        internal_train_indices = split_indices[:num_train]
+        internal_validation_indices = split_indices[num_train:]
+
+        training_data = [training_and_validation_data[i_train] for i_train in internal_train_indices]
+        validation_data = [training_and_validation_data[i_val] for i_val in internal_validation_indices]
+        del training_and_validation_data
+
+        assert len(internal_train_indices) == num_train
+        assert len(internal_validation_indices) == num_valid
+
+        # internal_*_indices only run from [0, num_train+num_valid]. To get their original position in the full data set
+        # we collect them from training_and_validation_indices. Since we will load training and validation data as
+        # training_and_validation_data[internal_*_indices], we need to make sure that training_and_validation_indices
+        # and training_and_validation_data have the same order in the sense of referencing indices. This is achieved by
+        # sorting the indices as described above.
+        train_indices = training_and_validation_indices[internal_train_indices]
+        validation_indices = training_and_validation_indices[internal_validation_indices]
+        assert len(train_indices) == num_train
+        assert len(validation_indices) == num_valid
+        with open(workdir / 'data_splits.json', 'w') as fp:
+            j = dict(
+                training=train_indices.tolist(),
+                validation=validation_indices.tolist(),
+                test=test_indices.tolist()
+            )
+            json.dump(j, fp)
+    else:
+        training_data, validation_data = loader.load(
+            cutoff=config.model.cutoff / length_unit,
+            num_train=num_train,
+            num_valid=num_valid
+        )
+        data_stats = None
+        # Save the splits.
+        with open(workdir / 'data_splits.json', 'w') as fp:
+            j = dict(
+                training='tfds',
+                validation='tfds',
+                test='tfds',
+            )
+            json.dump(j, fp)
+
+    # Explicitly unlock the config.
+    config = config.unlock()
+    if config.data.shift_mode == 'mean':
+        config.data.energy_shifts = config_dict.placeholder(dict)
+        energy_mean = data.transformations.calculate_energy_mean(training_data) * energy_unit
+        num_nodes = data.transformations.calculate_average_number_of_nodes(training_data)
+        energy_shifts = {str(a): float(energy_mean / num_nodes) for a in range(119)}
+        config.data.energy_shifts = energy_shifts
+    elif config.data.shift_mode == 'custom':
+        if config.data.energy_shifts is None:
+            raise ValueError('For config.data.shift_mode == custom config.data.energy_shifts must be given.')
+    else:
+        config.data.energy_shifts = {str(a): 0. for a in range(119)}
+    # And lock again.
+    config = config.lock()
+
+    if not tf_record_present:
+        training_data = list(data.transformations.subtract_atomic_energy_shifts(
+            data.transformations.unit_conversion(
+                training_data,
+                energy_unit=energy_unit,
+                length_unit=length_unit
+            ),
+            atomic_energy_shifts={int(k): v for (k, v) in config.data.energy_shifts.items()}
+        ))
+
+        validation_data = list(data.transformations.subtract_atomic_energy_shifts(
+            data.transformations.unit_conversion(
+                validation_data,
+                energy_unit=energy_unit,
+                length_unit=length_unit
+            ),
+            atomic_energy_shifts={int(k): v for (k, v) in config.data.energy_shifts.items()}
+        ))
+    else:
+        if config.data.shift_mode in ['custom', 'mean']:
+            raise NotImplementedError(
+                'For TFDSDataSets, energy shifting is not supported yet.'
+            )
+
+        # Convert the units.
+        training_data = training_data.map(
+            lambda graph: data.transformations.unit_conversion_graph(
+                graph,
+                energy_unit=energy_unit,
+                length_unit=length_unit
+            )
+        )
+        validation_data = validation_data.map(
+            lambda graph: data.transformations.unit_conversion_graph(
+                graph,
+                energy_unit=energy_unit,
+                length_unit=length_unit
+            )
+        )
+
+        training_data = training_data.shuffle(
+            buffer_size=10_000,
+            reshuffle_each_iteration=True,
+            seed=config.training.training_seed
+        ).repeat(config.training.num_epochs)
+
+    return training_data, validation_data, data_stats
 
 
 def load_params_from_workdir(workdir):
@@ -1087,3 +1144,25 @@ def load_params_from_workdir(workdir):
     del loaded_mngr
 
     return params
+
+
+def workdir_from_config(config):
+    workdir = config.workdir
+    workdir = Path(workdir).expanduser().resolve()
+    return workdir
+
+
+def data_path_from_config(config):
+    data_path = config.data.filepath
+    data_path = Path(data_path).expanduser().resolve()
+    return data_path
+
+
+def energy_unit_from_config(config):
+    energy_unit = eval(config.data.energy_unit)
+    return energy_unit
+
+
+def length_unit_from_config(config):
+    length_unit = eval(config.data.length_unit)
+    return length_unit

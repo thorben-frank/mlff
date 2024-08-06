@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Sequence
 import wandb
 
+from flax.core.frozen_dict import unfreeze
 
 def print_metrics(epoch, eval_metrics):
     formatted_output = f"{epoch}: "
@@ -175,12 +176,13 @@ def make_training_step_fn(optimizer, loss_fn, log_gradient_values):
         """
         (loss, metrics), grads = jax.value_and_grad(loss_fn, has_aux=True)(params, batch)
         # if log_gradient_values:
-        #     metrics['grad_norm'] = unfreeze(jax.tree_map(lambda x: jnp.linalg.norm(x.reshape(-1), axis=0), grads))
+        metrics['grad_norm'] = unfreeze(jax.tree_map(lambda x: jnp.linalg.norm(x.reshape(-1), axis=0), grads))
         updates, opt_state = optimizer.update(grads, opt_state, params)
         params = optax.apply_updates(params=params, updates=updates)
+        # jax.debug.print(params)
         # print('params', params)
         # print('number of parameters', sum(x.size for x in jax.tree_leaves(params)))
-        metrics['grad_norm'] = optax.global_norm(grads)
+        # metrics['grad_norm'] = optax.global_norm(grads)
         return params, opt_state, metrics
 
     return training_step_fn

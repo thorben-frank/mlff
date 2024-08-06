@@ -37,6 +37,7 @@ def evaluate_so3krates_sparse():
         pick_idx=pick_idx,
         on_split=args.on_split
     )
+    print('Metrics are reported in eV and Angstrom.')
     print(metrics)
 
 

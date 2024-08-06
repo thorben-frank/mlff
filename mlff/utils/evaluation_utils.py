@@ -34,6 +34,7 @@ def evaluate(
         batch_max_num_nodes (): Maximal number of nodes per batch.
         batch_max_num_edges (): Maximal number of edges per batch.
         batch_max_num_graphs (): Maximal number of graphs oer batch.
+        batch_max_num_pairs (int): Maximal number of pairs in long-range indices.
         write_batch_metrics_to (str): Path to file where metrics per batch should be written to. If not given,
             batch metrics are not written to a file. Note, that the metrics are written per batch, so one-to-one
             correspondence to the original data set can only be achieved when `batch_max_num_nodes = 2` which allows
@@ -69,8 +70,6 @@ def evaluate(
 
         node_mask = batch_testing['node_mask']
         graph_mask = batch_testing['graph_mask']
-        graph_mask_expanded = batch_testing['graph_mask_expanded']
-        # graph_mask_expanded = jnp.repeat(graph_mask,3).reshape(-1,3)
 
         inputs = {k: v for (k, v) in batch_testing.items() if k not in testing_targets}
         output_prediction = obs_fn(params, **inputs)
@@ -84,7 +83,7 @@ def evaluate(
             elif t == 'stress':
                 msk = graph_mask
             elif t == 'dipole_vec':
-                msk = graph_mask_expanded
+                msk = graph_mask
             elif t == 'hirshfeld_ratios':
                 msk = node_mask
             elif t == 'dispersion_energy':
@@ -141,7 +140,7 @@ def evaluate(
     }
 
     for t in testing_targets:
-        test_metrics[f'test_{t}_rmse'] = np.sqrt(test_metrics[f'test_{t}_mse'])
+        test_metrics[f'test_{t}_rmse'] = float(np.sqrt(test_metrics[f'test_{t}_mse']))
     return test_metrics
 
 
