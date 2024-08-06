@@ -44,6 +44,7 @@ def compute_edges_tf(
     return senders, receivers, (tf.math.reduce_min(distances), tf.math.reduce_max(distances))
 
 
+# TODO: include n_pairs
 def create_graph_tuple_tf(
         element, cutoff: float
 ) -> jraph.GraphsTuple:
@@ -86,6 +87,7 @@ def create_graph_tuple_tf(
     )
 
 
+# TODO: Think about renaming QCMLDataLoader
 @dataclass
 class TFDSDataLoaderSparse:
     input_file: str

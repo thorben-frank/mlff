@@ -171,54 +171,11 @@ def run_training(config: config_dict.ConfigDict, model: str = 'so3krates'):
     config.neighborlist_format_lr = 'sparse'
 
     # TFDSDataSets need to be processed in a special manner.
-    tf_record_present = False
+    # tf_record_present = False
 
-    if data_filepath.suffix == '.npz':
-        loader = data.NpzDataLoaderSparse(input_file=data_filepath)
-    elif data_filepath.stem[:5].lower() == 'spice':
-        logging.mlff(f'Found SPICE dataset at {data_filepath}.')
-        if data_filepath.suffix != '.hdf5':
-            raise ValueError(
-                f'Loader assumes that SPICE is in hdf5 format. Found {data_filepath.suffix} as'
-                f'suffix.')
-        loader = data.SpiceDataLoaderSparse(input_file=data_filepath)
-    # elif data_filepath.stem[:4].lower() == 'qcml':
-    #     logging.mlff(f'Found QCML dataset at {data_filepath}.')
-    #     if data_filepath.suffix != '.hdf5':
-    #         raise ValueError(
-    #             f'Loader assumes that QCML is in hdf5 format. Found {data_filepath.suffix} as'
-    #             f'suffix.')
-    #     loader = data.QCMLLoaderSparse(
-    #         input_file=data_filepath,
-    #         # We need to do the inverse transforms, since in config everything is in ASE default units.
-    #         min_distance_filter=config.data.filter.min_distance / length_unit,
-    #         max_force_filter=config.data.filter.max_force / energy_unit * length_unit,
-    #     )
-    # elif data_filepath.is_dir():
-    #     tf_record_present = len([1 for x in os.scandir(data_filepath) if Path(x).suffix[:9] == '.tfrecord']) > 0
-    #     if tf_record_present:
-    #         loader = data.TFDSDataLoaderSparse(
-    #             input_file=data_filepath,
-    #             split='train',
-    #             max_force_filter=config.data.filter.max_force / energy_unit * length_unit
-    #         )
-    elif data_filepath.is_dir():
-        # tf_record_present = len([1 for x in os.scandir(data_filepath) if Path(x).suffix[:9] == '.tfrecord']) > 0
-        loader = data.AseDataLoaderSparse(input_folder=data_filepath)
-            # loader = data.TFRecordDataLoaderSparse(
-            #     input_file=data_filepath,
-            #     # We need to do the inverse transforms, since in config everything is in ASE default units.
-            #     min_distance_filter=config.data.filter.min_distance / length_unit,
-            #     max_force_filter=config.data.filter.max_force / energy_unit * length_unit,
-            # )
-        # else:
-        #     raise ValueError(
-        #         f"Specifying a directory for `data_filepath` is only supported for directories that contain .tfrecord "
-        #         f"files. No .tfrecord files found at {data_filepath}."
-        #     )
-
-    else:
-        loader = data.AseDataLoaderSparse(input_file=data_filepath)
+    loader, tf_record_present = data_loader_from_config(
+        config=config
+    )
 
     # Get the total number of data points
     num_data = loader.cardinality()
@@ -288,6 +245,7 @@ def run_training(config: config_dict.ConfigDict, model: str = 'so3krates'):
                 test=test_indices.tolist()
             )
             json.dump(j, fp)
+    # tensorflow records are present
     else:
         training_data, validation_data = loader.load(
             cutoff=config.model.cutoff / length_unit,
@@ -416,7 +374,6 @@ def run_training(config: config_dict.ConfigDict, model: str = 'so3krates'):
 
     if config.training.batch_max_num_nodes is None:
         assert config.training.batch_max_num_edges is None
-        assert config.training.batch_max_num_pairs is None
 
         if tf_record_present:
             raise ValueError(
@@ -428,16 +385,22 @@ def run_training(config: config_dict.ConfigDict, model: str = 'so3krates'):
         batch_max_num_nodes = data_stats['max_num_of_nodes'] * (config.training.batch_max_num_graphs - 1) + 1
         batch_max_num_edges = data_stats['max_num_of_edges'] * (config.training.batch_max_num_graphs - 1) + 1
 
+        config.training.batch_max_num_nodes = batch_max_num_nodes
+        config.training.batch_max_num_edges = batch_max_num_edges
+
+    if config.training.batch_max_num_pairs is None:
         if config.data.neighbors_lr_bool is True:
+            if tf_record_present:
+                raise NotImplementedError(
+                    "long-range neighbors are not supported for tf record data loader yet."
+                )
             # TODO: This always creates num_pairs to be quadratic in the number of nodes. Add data_stats about max
             #  num_pairs which is important for the case of lr_cutoff smaller than largest separation in the data
             #  as this allows to safe cost.
-            batch_max_num_pairs = data_stats['max_num_of_nodes'] * (data_stats['max_num_of_nodes'] - 1) * (config.training.batch_max_num_graphs - 1) + 1
+            batch_max_num_pairs = config.training.batch_max_num_nodes * (config.training.batch_max_num_nodes - 1) * (config.training.batch_max_num_graphs - 1) + 1
         else:
             batch_max_num_pairs = 0
 
-        config.training.batch_max_num_nodes = batch_max_num_nodes
-        config.training.batch_max_num_edges = batch_max_num_edges
         config.training.batch_max_num_pairs = batch_max_num_pairs
 
     with open(workdir / 'hyperparameters.json', 'w') as fp:
@@ -480,6 +443,7 @@ def run_training(config: config_dict.ConfigDict, model: str = 'so3krates'):
             batch_max_num_edges=config.training.batch_max_num_edges,
             batch_max_num_nodes=config.training.batch_max_num_nodes,
             batch_max_num_graphs=config.training.batch_max_num_graphs,
+            batch_max_num_pairs=config.training.batch_max_num_pairs,
             training_iterator=training_data,
             validation_iterator=validation_data,
             ckpt_dir=workdir / 'checkpoints',
@@ -530,52 +494,56 @@ def run_evaluation(
 
     targets = testing_targets if testing_targets is not None else list(config.training.loss_weights.keys())
 
-    # TFDSDataSets need to be processed in a special manner.
-    tf_record_present = False
+    loader, tf_record_present = data_loader_from_config(
+        config=config
+    )
 
-    if data_filepath.suffix == '.npz':
-        loader = data.NpzDataLoaderSparse(input_file=data_filepath)
-    elif data_filepath.stem[:5].lower() == 'spice':
-        logging.mlff(f'Found SPICE dataset at {data_filepath}.')
-        if data_filepath.suffix != '.hdf5':
-            raise ValueError(
-                f'Loader assumes that SPICE is in hdf5 format. Found {data_filepath.suffix} as'
-                f'suffix.')
-        loader = data.SpiceDataLoaderSparse(input_file=data_filepath)
-    # elif data_filepath.stem[:4].lower() == 'qcml':
-    #     logging.mlff(f'Found QCML dataset at {data_filepath}.')
+    # TFDSDataSets need to be processed in a special manner.
+    # tf_record_present = False
+
+    # if data_filepath.suffix == '.npz':
+    #     loader = data.NpzDataLoaderSparse(input_file=data_filepath)
+    # elif data_filepath.stem[:5].lower() == 'spice':
+    #     logging.mlff(f'Found SPICE dataset at {data_filepath}.')
     #     if data_filepath.suffix != '.hdf5':
     #         raise ValueError(
-    #             f'Loader assumes that QCML is in hdf5 format. Found {data_filepath.suffix} as'
+    #             f'Loader assumes that SPICE is in hdf5 format. Found {data_filepath.suffix} as'
     #             f'suffix.')
-    #     loader = data.QCMLLoaderSparse(
-    #         input_file=data_filepath,
-    #         # We need to do the inverse transforms, since in config everything is in ASE default units.
-    #         min_distance_filter=config.data.filter.min_distance / length_unit,
-    #         max_force_filter=config.data.filter.max_force / energy_unit * length_unit,
-    #     )
-    elif data_filepath.is_dir():
-        tf_record_present = len([1 for x in os.scandir(data_filepath) if Path(x).suffix[:9] == '.tfrecord']) > 0
-        if tf_record_present:
-            loader = data.TFDSDataLoaderSparse(
-                input_file=data_filepath,
-                split='train',
-                max_force_filter=config.data.filter.max_force / energy_unit * length_unit
-            )
-        else:
-            raise ValueError(
-                f"Specifying a directory for `data_filepath` is only supported for directories that contain .tfrecord "
-                f"files. No .tfrecord files found at {data_filepath}."
-            )
-        # if tf_record_present:
-        #     loader = data.TFRecordDataLoaderSparse(
-        #         input_file=data_filepath,
-        #         # We need to do the inverse transforms, since in config everything is in ASE default units.
-        #         min_distance_filter=config.data.filter.min_distance / length_unit,
-        #         max_force_filter=config.data.filter.max_force / energy_unit * length_unit,
-        #     )
-    else:
-        loader = data.AseDataLoaderSparse(input_file=data_filepath)
+    #     loader = data.SpiceDataLoaderSparse(input_file=data_filepath)
+    # # elif data_filepath.stem[:4].lower() == 'qcml':
+    # #     logging.mlff(f'Found QCML dataset at {data_filepath}.')
+    # #     if data_filepath.suffix != '.hdf5':
+    # #         raise ValueError(
+    # #             f'Loader assumes that QCML is in hdf5 format. Found {data_filepath.suffix} as'
+    # #             f'suffix.')
+    # #     loader = data.QCMLLoaderSparse(
+    # #         input_file=data_filepath,
+    # #         # We need to do the inverse transforms, since in config everything is in ASE default units.
+    # #         min_distance_filter=config.data.filter.min_distance / length_unit,
+    # #         max_force_filter=config.data.filter.max_force / energy_unit * length_unit,
+    # #     )
+    # elif data_filepath.is_dir():
+    #     tf_record_present = len([1 for x in os.scandir(data_filepath) if Path(x).suffix[:9] == '.tfrecord']) > 0
+    #     if tf_record_present:
+    #         loader = data.TFDSDataLoaderSparse(
+    #             input_file=data_filepath,
+    #             split='train',
+    #             max_force_filter=config.data.filter.max_force / energy_unit * length_unit
+    #         )
+    #     else:
+    #         raise ValueError(
+    #             f"Specifying a directory for `data_filepath` is only supported for directories that contain .tfrecord "
+    #             f"files. No .tfrecord files found at {data_filepath}."
+    #         )
+    #     # if tf_record_present:
+    #     #     loader = data.TFRecordDataLoaderSparse(
+    #     #         input_file=data_filepath,
+    #     #         # We need to do the inverse transforms, since in config everything is in ASE default units.
+    #     #         min_distance_filter=config.data.filter.min_distance / length_unit,
+    #     #         max_force_filter=config.data.filter.max_force / energy_unit * length_unit,
+    #     #     )
+    # else:
+    #     loader = data.AseDataLoaderSparse(input_file=data_filepath)
 
     if not tf_record_present:
         eval_data, data_stats = loader.load(
@@ -760,31 +728,35 @@ def run_fine_tuning(
     energy_unit = eval(config.data.energy_unit)
     length_unit = eval(config.data.length_unit)
 
-    tf_record_present = False
-    if data_filepath.suffix == '.npz':
-        loader = data.NpzDataLoaderSparse(input_file=data_filepath)
-    elif data_filepath.stem[:5].lower() == 'spice':
-        logging.mlff(f'Found SPICE dataset at {data_filepath}.')
-        if data_filepath.suffix != '.hdf5':
-            raise ValueError(
-                f'Loader assumes that SPICE is in hdf5 format. Found {data_filepath.suffix} as'
-                f'suffix.')
-        loader = data.SpiceDataLoaderSparse(input_file=data_filepath)
-    elif data_filepath.is_dir():
-        tf_record_present = len([1 for x in os.scandir(data_filepath) if Path(x).suffix[:9] == '.tfrecord']) > 0
-        if tf_record_present:
-            loader = data.TFDSDataLoaderSparse(
-                input_file=data_filepath,
-                split='train',
-                max_force_filter=config.data.filter.max_force / energy_unit * length_unit
-            )
-        else:
-            raise ValueError(
-                f"Specifying a directory for `data_filepath` is only supported for directories that contain .tfrecord "
-                f"files. No .tfrecord files found at {data_filepath}."
-            )
-    else:
-        loader = data.AseDataLoaderSparse(input_file=data_filepath)
+    loader, tf_record_present = data_loader_from_config(
+        config=config
+    )
+
+    # tf_record_present = False
+    # if data_filepath.suffix == '.npz':
+    #     loader = data.NpzDataLoaderSparse(input_file=data_filepath)
+    # elif data_filepath.stem[:5].lower() == 'spice':
+    #     logging.mlff(f'Found SPICE dataset at {data_filepath}.')
+    #     if data_filepath.suffix != '.hdf5':
+    #         raise ValueError(
+    #             f'Loader assumes that SPICE is in hdf5 format. Found {data_filepath.suffix} as'
+    #             f'suffix.')
+    #     loader = data.SpiceDataLoaderSparse(input_file=data_filepath)
+    # elif data_filepath.is_dir():
+    #     tf_record_present = len([1 for x in os.scandir(data_filepath) if Path(x).suffix[:9] == '.tfrecord']) > 0
+    #     if tf_record_present:
+    #         loader = data.TFDSDataLoaderSparse(
+    #             input_file=data_filepath,
+    #             split='train',
+    #             max_force_filter=config.data.filter.max_force / energy_unit * length_unit
+    #         )
+    #     else:
+    #         raise ValueError(
+    #             f"Specifying a directory for `data_filepath` is only supported for directories that contain .tfrecord "
+    #             f"files. No .tfrecord files found at {data_filepath}."
+    #         )
+    # else:
+    #     loader = data.AseDataLoaderSparse(input_file=data_filepath)
 
     # Get the total number of data points.
     num_data = loader.cardinality()
@@ -980,6 +952,7 @@ def run_fine_tuning(
 
         batch_max_num_nodes = data_stats['max_num_of_nodes'] * (config.training.batch_max_num_graphs - 1) + 1
         batch_max_num_edges = data_stats['max_num_of_edges'] * (config.training.batch_max_num_graphs - 1) + 1
+        # TODO: handle max_num_pairs as for run_training(...)
         batch_max_num_pairs = data_stats['max_num_of_nodes'] * (data_stats['max_num_of_nodes'] - 1) * (config.training.batch_max_num_graphs - 1) + 1
 
         config.training.batch_max_num_nodes = batch_max_num_nodes
@@ -1008,6 +981,7 @@ def run_fine_tuning(
         batch_max_num_edges=config.training.batch_max_num_edges,
         batch_max_num_nodes=config.training.batch_max_num_nodes,
         batch_max_num_graphs=config.training.batch_max_num_graphs,
+        batch_max_num_pairs=config.training.batch_max_num_pairs,
         training_data=training_data,
         validation_data=validation_data,
         params=params,
@@ -1020,6 +994,50 @@ def run_fine_tuning(
         log_gradient_values=config.training.log_gradient_values
     )
     logging.mlff('Training has finished!')
+
+
+def data_loader_from_config(config):
+
+    tf_record_present = False
+
+    data_filepath = config.data.filepath
+
+    energy_unit = eval(config.data.energy_unit)
+    length_unit = eval(config.data.length_unit)
+
+    if data_filepath.is_file():
+        if data_filepath.suffix == '.npz':
+            loader = data.NpzDataLoaderSparse(input_file=data_filepath)
+        elif data_filepath.stem[:5].lower() == 'spice':
+            logging.mlff(f'Found SPICE dataset at {data_filepath}.')
+            if data_filepath.suffix != '.hdf5':
+                raise ValueError(
+                    f'Loader assumes that SPICE is in hdf5 format. Found {data_filepath.suffix} as'
+                    f'suffix.')
+            loader = data.SpiceDataLoaderSparse(input_file=data_filepath)
+        else:
+            loader = data.AseDataLoaderSparse(input_file=data_filepath)
+
+    elif data_filepath.is_dir():
+        tf_record_present = len([1 for x in os.scandir(data_filepath) if Path(x).suffix[:9] == '.tfrecord']) > 0
+        npz_record_present = len([1 for x in os.scandir(data_filepath) if Path(x).suffix == '.npz']) > 0
+
+        if tf_record_present:
+            loader = data.TFDSDataLoaderSparse(
+                input_file=data_filepath,
+                split='train',
+                max_force_filter=config.data.filter.max_force / energy_unit * length_unit
+            )
+        elif npz_record_present:
+            loader = data.NpzDataLoaderSparse(
+                input_folder=data_filepath
+            )
+        else:
+            loader = data.AseDataLoaderSparse(
+                input_folder=data_filepath
+            )
+
+    return loader, tf_record_present
 
 
 def load_params_from_workdir(workdir):

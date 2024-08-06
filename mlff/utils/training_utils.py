@@ -416,6 +416,7 @@ def fit_from_iterator(
         batch_max_num_nodes,
         batch_max_num_edges,
         batch_max_num_graphs,
+        batch_max_num_pairs,
         params=None,
         ckpt_dir: str = None,
         ckpt_manager_options: dict = None,
@@ -439,6 +440,7 @@ def fit_from_iterator(
         batch_max_num_nodes (int): Maximal number of nodes per batch.
         batch_max_num_edges (int): Maximal number of edges per batch.
         batch_max_num_graphs (int): Maximal number of graphs per batch.
+        batch_max_num_pairs (int): Maximal number of pairs in long-range indices.
         params: Parameters to start from during training. If not given, either new parameters are initialized randomly
             or loaded from ckpt_dir if the checkpoint already exists and `allow_restart=True`.
         ckpt_dir (str): Checkpoint path.
@@ -490,7 +492,8 @@ def fit_from_iterator(
         training_iterator.as_numpy_iterator(),
         n_node=batch_max_num_nodes,
         n_edge=batch_max_num_edges,
-        n_graph=batch_max_num_graphs
+        n_graph=batch_max_num_graphs,
+        n_pairs=batch_max_num_pairs
     )
 
     # Start iteration over batched graphs.
@@ -544,7 +547,8 @@ def fit_from_iterator(
                 validation_iterator.as_numpy_iterator(),
                 n_node=batch_max_num_nodes,
                 n_edge=batch_max_num_edges,
-                n_graph=batch_max_num_graphs
+                n_graph=batch_max_num_graphs,
+                n_pairs=batch_max_num_pairs
             )
 
             # Start iteration over validation batches.
