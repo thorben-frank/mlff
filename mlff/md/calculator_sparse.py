@@ -87,7 +87,8 @@ class mlffCalculatorSparse(Calculator):
             add_energy_shift: bool = False,
             dtype: np.dtype = np.float32,
             model: str = 'so3krates',
-            has_aux: bool = False
+            has_aux: bool = False,
+            from_file: bool = False
     ):
 
         mlff_potential = MLFFPotentialSparse.create_from_ckpt_dir(
@@ -100,6 +101,7 @@ class mlffCalculatorSparse(Calculator):
             ),
             dtype=dtype,
             model=model,
+            from_file=from_file
         )
 
         return cls(potential=mlff_potential,

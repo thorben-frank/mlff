@@ -22,7 +22,12 @@ def load_hyperparameters(workdir: str):
     return cfg
 
 
-def load_model_from_workdir(workdir: str, model='so3krates', long_range_kwargs: Dict[str, Any] = None):
+def load_model_from_workdir(
+        workdir: str,
+        model='so3krates',
+        long_range_kwargs: Dict[str, Any] = None,
+        from_file: bool = False
+):
     cfg = load_hyperparameters(workdir)
 
     dispersion_energy_bool = cfg.model.dispersion_energy_bool
@@ -66,18 +71,24 @@ def load_model_from_workdir(workdir: str, model='so3krates', long_range_kwargs: 
                     )
             cfg.model.dispersion_energy_cutoff_lr_damping = dispersion_energy_cutoff_lr_damping
 
-    loaded_mngr = checkpoint.CheckpointManager(
-        pathlib.Path(workdir) / "checkpoints",
-        item_names=('params',),
-        item_handlers={'params': checkpoint.StandardCheckpointHandler()},
-        options=checkpoint.CheckpointManagerOptions(step_prefix="ckpt"),
-    )
+    if from_file is True:
+        import pickle
 
-    mngr_state = loaded_mngr.restore(
-        loaded_mngr.latest_step()
-    )
+        with open(pathlib.Path(workdir) / 'params.pkl', 'rb') as f:
+            params = pickle.load(f)
+    else:
+        loaded_mngr = checkpoint.CheckpointManager(
+            pathlib.Path(workdir) / "checkpoints",
+            item_names=('params',),
+            item_handlers={'params': checkpoint.StandardCheckpointHandler()},
+            options=checkpoint.CheckpointManagerOptions(step_prefix="ckpt"),
+        )
 
-    params = mngr_state.get('params')
+        mngr_state = loaded_mngr.restore(
+            loaded_mngr.latest_step()
+        )
+
+        params = mngr_state.get('params')
 
     if model == 'so3krates':
         net = from_config.make_so3krates_sparse_from_config(cfg)
@@ -106,6 +117,7 @@ class MLFFPotentialSparse(MachineLearningPotential):
     def create_from_ckpt_dir(
             cls,
             ckpt_dir: str,
+            from_file: bool = False,
             add_shift: bool = False,
             long_range_kwargs: Dict[str, Any] = None,
             dtype=jnp.float32,
@@ -117,6 +129,7 @@ class MLFFPotentialSparse(MachineLearningPotential):
         )
         return cls.create_from_workdir(
             ckpt_dir,
+            from_file,
             add_shift,
             long_range_kwargs,
             dtype,
@@ -127,6 +140,7 @@ class MLFFPotentialSparse(MachineLearningPotential):
     def create_from_workdir(
             cls,
             workdir: str,
+            from_file: bool = False,
             add_shift: bool = False,
             long_range_kwargs: Dict[str, Any] = None,
             dtype=jnp.float32,
@@ -137,6 +151,7 @@ class MLFFPotentialSparse(MachineLearningPotential):
 
         Args:
             workdir ():
+            from_file ():
             add_shift ():
             long_range_kwargs (): Dictionary with keyword arguments for the long-range modules.
             dtype ():
@@ -157,6 +172,7 @@ class MLFFPotentialSparse(MachineLearningPotential):
 
         net, params = load_model_from_workdir(
             workdir=workdir,
+            from_file=from_file,
             model=model,
             long_range_kwargs=long_range_kwargs
         )

@@ -561,7 +561,7 @@ def run_evaluation(
         eval_data, data_stats = loader.load(
             # We need to do the inverse transforms, since in config everything is in ASE default units.
             cutoff=config.model.cutoff / length_unit,
-            cutoff_lr=config.data.neighbors_lr_cutoff / length_unit,
+            cutoff_lr=config.data.neighbors_lr_cutoff / length_unit if config.data.neighbors_lr_bool is True else None,
             calculate_neighbors_lr=config.data.neighbors_lr_bool,
             pick_idx=pick_idx
         )
@@ -981,7 +981,7 @@ def prepare_training_and_validation_data(config, loader, tf_record_present):
         # Cutoff is in Angstrom, so we have to divide the cutoff by the length unit.
         training_and_validation_data, data_stats = loader.load(
             cutoff=config.model.cutoff / length_unit,
-            cutoff_lr=config.data.neighbors_lr_cutoff / length_unit,
+            cutoff_lr=config.data.neighbors_lr_cutoff / length_unit if config.data.neighbors_lr_bool is True else None,
             calculate_neighbors_lr=config.data.neighbors_lr_bool,
             pick_idx=training_and_validation_indices
         )
