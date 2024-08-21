@@ -256,7 +256,7 @@ class mlffCalculatorSparse(Calculator):
     def calculate(self, atoms=None, *args, **kwargs):
         super(mlffCalculatorSparse, self).calculate(atoms, *args, **kwargs)
 
-        system = atoms_to_system(atoms)
+        system = atoms_to_system(atoms, dtype=self.dtype)
 
         if atoms.get_pbc().any():
             cell = jnp.array(np.array(atoms.get_cell()), dtype=self.dtype).T  # (3, 3)
