@@ -130,9 +130,13 @@ assumes the following relations between property and key
 ```
 {
  atomic_position: R,     # shape: (n_data, n, 3) 
- atomic_type: z,  # shape: (n_data, n) or (n)
- energy: E,       # shape: (n_data, 1)
- force: F         # shape: (n_data, n, 3)
+ atomic_type: z,         # shape: (n_data, n) or (n)
+ energy: E,              # shape: (n_data, 1)
+ force: F                # shape: (n_data, n, 3)
+
+ # in case mic should be applied (via --mic keyword)
+ unit_cell: unit_cell    # shape: (n_data, 3, 3)  # lattice vectors are row-wise
+ pbc: pbc                # shape: (n_data, 3)
 }
 ```
 If you have an `*.npz` file which uses a different convention, you can specify the keys customizing the property keys
@@ -155,7 +159,7 @@ train_so3krates --ckpt_dir dha_module --train_file dha.npz --n_train 1000 --n_va
 Note the character strings for the units, which are necessary in the course of internal processing. This will internally
 rescale the energy and the forces to `eV` and `eV/Ang`.
 ### Minimal Image Convention
-In [3] `So3krates` was used to calculate EOS and heat flux in solids, such that it must be capable of
+In [3] `SO3krates` was used to calculate EOS and heat flux in solids, such that it must be capable of
 handling periodic boundary conditions. If you want to apply the minimal image convention, you can specify this by 
 adding the corresponding flag to the training command 
 ```
