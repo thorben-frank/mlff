@@ -76,6 +76,8 @@ calculator = mlffCalculator.create_from_ckpt_dir(
 )
 ```
 ## Molecular Dynamics
+**WARNING: MD is currently under re-write so do not expect to work.**
+ 
 You can use the `mdx` package which is the `mlff` internal MD package, fully relying on `jax` and thus fully 
 optimized for XLA compilation on GPU.
 First, lets create a relaxed structure, using the LBFGS optimizer
