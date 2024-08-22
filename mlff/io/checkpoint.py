@@ -11,22 +11,29 @@ __STEP_PREFIX__: str = 'ckpt'
 
 def load_params_from_ckpt_dir(ckpt_dir):
     try:
-        loaded_mngr = checkpoint.CheckpointManager(
-            pathlib.Path(ckpt_dir).resolve(),
-            item_names=('state',),
-            item_handlers={'state': checkpoint.StandardCheckpointHandler()},
-            options=checkpoint.CheckpointManagerOptions(step_prefix="ckpt"),
-        )
-
-        mngr_state = loaded_mngr.restore(
-            loaded_mngr.latest_step()
-        )
-
-        state = mngr_state.get('state')
-
-        return state['valid_params']
-    except FileNotFoundError:
         return load_state_from_ckpt_dir(ckpt_dir)['valid_params']
+    except ValueError:
+        try:
+            loaded_mngr = checkpoint.CheckpointManager(
+                pathlib.Path(ckpt_dir).resolve(),
+                item_names=('state',),
+                item_handlers={'state': checkpoint.StandardCheckpointHandler()},
+                options=checkpoint.CheckpointManagerOptions(step_prefix="ckpt"),
+            )
+
+            mngr_state = loaded_mngr.restore(
+                loaded_mngr.latest_step()
+            )
+
+            state = mngr_state.get('state')
+
+            return state['valid_params']
+        except ValueError:
+            raise RuntimeError(
+                f'Loading model parameters from checkpoint saved at {ckpt_dir} failed. '
+                'This error typically occurs if within the ckpt_XXX directory there is another folder. '
+                'Consider moving the folder somewhere else.'
+            )
 
 
 def load_state_from_ckpt_dir(ckpt_dir: str):
