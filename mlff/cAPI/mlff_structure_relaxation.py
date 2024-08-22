@@ -213,16 +213,17 @@ def run_relaxation():
                                      save_dir=save_dir)
         optimizer.minimize(atomsx, max_steps=qn_max_steps, tol=qn_tol)
     else:
-        if n_interactions_max is None:
-            n_atoms = len(molecule.get_atomic_numbers())
-            n_interactions_max = n_atoms ** 2
+        from mlff import mdx
 
-        scales = read_json(os.path.join(ckpt_dir, 'scales.json'))
+        # if n_interactions_max is None:
+        #     n_atoms = len(molecule.get_atomic_numbers())
+        #     n_interactions_max = n_atoms ** 2
+        #
+        # scales = read_json(os.path.join(ckpt_dir, 'scales.json'))
 
-        calc = mlffCalculator(params=params,
-                              stack_net=net,
-                              scales=scales,
-                              n_interactions_max=n_interactions_max,
+        potential = mdx.MLFFPotential.create_from_ckpt_dir(ckpt_dir=ckpt_dir, dtype=_mdx_dtype)
+        calc = mlffCalculator(potential=potential,
+                              capacity_multiplier=1.25,
                               F_to_eV_Ang=default_access(conversion_table, key=F_key, default=eV),
                               E_to_eV=default_access(conversion_table, key=E_key, default=eV),
                               mic=mic)
