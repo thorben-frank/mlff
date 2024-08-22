@@ -2,6 +2,7 @@ import argparse
 import os
 import logging
 import numpy as np
+import jax
 
 from ase.units import *
 from ase import Atoms
