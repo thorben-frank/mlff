@@ -4,7 +4,7 @@ import logging
 
 from ase.units import *
 from ase import Atoms
-from ase.optimize import QuasiNewton
+import ase.optimize as ase_opt
 
 from mlff.md.calculator import mlffCalculator
 from mlff.io import read_json, create_directory, load_params_from_ckpt_dir
@@ -234,7 +234,7 @@ def run_relaxation():
         from ase.io import write
         write(os.path.join(save_dir, 'init_structure.xyz'), molecule)
         # do a geometry relaxation
-        qn = QuasiNewton(molecule)
+        qn = ase_opt.LBFGS(molecule)
         converged = qn.run(qn_tol, qn_max_steps)
         if converged:
             write(os.path.join(save_dir, 'relaxed_structure.xyz'), molecule)
