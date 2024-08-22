@@ -3,8 +3,27 @@ from pathlib import Path
 import os
 
 from orbax.checkpoint import PyTreeCheckpointer, Checkpointer, PyTreeCheckpointHandler
+from orbax import checkpoint
+import pathlib
 
 __STEP_PREFIX__: str = 'ckpt'
+
+
+def load_params_from_ckpt_dir(ckpt_dir):
+    loaded_mngr = checkpoint.CheckpointManager(
+        pathlib.Path(ckpt_dir).resolve(),
+        item_names=('state',),
+        item_handlers={'state': checkpoint.StandardCheckpointHandler()},
+        options=checkpoint.CheckpointManagerOptions(step_prefix="ckpt"),
+    )
+
+    mngr_state = loaded_mngr.restore(
+        loaded_mngr.latest_step()
+    )
+
+    state = mngr_state.get('state')
+
+    return state['valid_params']
 
 
 def load_state_from_ckpt_dir(ckpt_dir: str):
@@ -27,5 +46,5 @@ def load_state_from_ckpt_dir(ckpt_dir: str):
     return ckptr.restore(abs_ckpt_dir / f'{__STEP_PREFIX__}_{max_step}/state', item=None)
 
 
-def load_params_from_ckpt_dir(ckpt_dir: str):
+def _load_params_from_ckpt_dir(ckpt_dir: str):
     return load_state_from_ckpt_dir(ckpt_dir)['valid_params']
