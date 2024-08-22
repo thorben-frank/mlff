@@ -10,20 +10,23 @@ __STEP_PREFIX__: str = 'ckpt'
 
 
 def load_params_from_ckpt_dir(ckpt_dir):
-    loaded_mngr = checkpoint.CheckpointManager(
-        pathlib.Path(ckpt_dir).resolve(),
-        item_names=('state',),
-        item_handlers={'state': checkpoint.StandardCheckpointHandler()},
-        options=checkpoint.CheckpointManagerOptions(step_prefix="ckpt"),
-    )
+    try:
+        loaded_mngr = checkpoint.CheckpointManager(
+            pathlib.Path(ckpt_dir).resolve(),
+            item_names=('state',),
+            item_handlers={'state': checkpoint.StandardCheckpointHandler()},
+            options=checkpoint.CheckpointManagerOptions(step_prefix="ckpt"),
+        )
 
-    mngr_state = loaded_mngr.restore(
-        loaded_mngr.latest_step()
-    )
+        mngr_state = loaded_mngr.restore(
+            loaded_mngr.latest_step()
+        )
 
-    state = mngr_state.get('state')
+        state = mngr_state.get('state')
 
-    return state['valid_params']
+        return state['valid_params']
+    except FileNotFoundError:
+        return load_state_from_ckpt_dir(ckpt_dir)['valid_params']
 
 
 def load_state_from_ckpt_dir(ckpt_dir: str):
