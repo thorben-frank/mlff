@@ -226,7 +226,7 @@ def run_relaxation():
                               capacity_multiplier=1.25,
                               F_to_eV_Ang=default_access(conversion_table, key=F_key, default=eV),
                               E_to_eV=default_access(conversion_table, key=E_key, default=eV),
-                              mic=mic)
+                              )
 
         molecule.set_calculator(calc)
 
