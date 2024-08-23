@@ -1,4 +1,5 @@
 import argparse
+import numpy as np
 import os
 import logging
 
@@ -56,6 +57,8 @@ def run_relaxation():
 
     parser.add_argument('--qn_tol', type=float, required=False, default=1e-4)
     parser.add_argument('--qn_max_steps', type=int, required=False, default=200)
+
+    parser.add_argument('--optimizer', type=str, required=False, default='QuasiNewton')
 
     parser.add_argument('--mic', type=str, required=False, default=None,
                         help='Minimal image convention.')
@@ -221,12 +224,14 @@ def run_relaxation():
         #
         # scales = read_json(os.path.join(ckpt_dir, 'scales.json'))
 
-        potential = mdx.MLFFPotential.create_from_ckpt_dir(ckpt_dir=ckpt_dir, dtype=_mdx_dtype)
-        calc = mlffCalculator(potential=potential,
-                              capacity_multiplier=1.25,
-                              F_to_eV_Ang=default_access(conversion_table, key=F_key, default=eV),
-                              E_to_eV=default_access(conversion_table, key=E_key, default=eV),
-                              )
+        calc = mlffCalculator.create_from_ckpt_dir(
+            ckpt_dir=ckpt_dir,
+            capacity_multiplier=1.25,
+            add_energy_shift=False,
+            F_to_eV_Ang=default_access(conversion_table, key=F_key, default=eV),
+            E_to_eV=default_access(conversion_table, key=E_key, default=eV),
+            dtype=np.float64,
+        )
 
         molecule.set_calculator(calc)
 
@@ -234,7 +239,7 @@ def run_relaxation():
         from ase.io import write
         write(os.path.join(save_dir, 'init_structure.xyz'), molecule)
         # do a geometry relaxation
-        qn = ase_opt.LBFGS(molecule)
+        qn = getattr(ase_opt, args.optimizer)(molecule)
         converged = qn.run(qn_tol, qn_max_steps)
         if converged:
             write(os.path.join(save_dir, 'relaxed_structure.xyz'), molecule)

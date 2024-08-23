@@ -37,7 +37,7 @@ class mlffCalculator(Calculator):
                              F_to_eV_Ang: float = 1.,
                              capacity_multiplier: float = 1.25,
                              add_energy_shift: bool = False,
-                             dtype: np.dtype = np.float32):
+                             dtype: np.dtype = np.float64):
 
         mlff_potential = MLFFPotential.create_from_ckpt_dir(
             ckpt_dir=ckpt_dir,
@@ -60,7 +60,7 @@ class mlffCalculator(Calculator):
             F_to_eV_Ang: float = 1.,
             capacity_multiplier: float = 1.25,
             calculate_stress: bool = False,
-            dtype: np.dtype = np.float32,
+            dtype: np.dtype = np.float64,
             *args,
             **kwargs
     ):
@@ -144,7 +144,7 @@ class mlffCalculator(Calculator):
 
         output = self.calculate_fn(System(R=R, Z=z, cell=cell), neighbors=neighbors)  # note different cell convention
 
-        self.results = jax.tree_map(lambda x: np.array(x), output)
+        self.results = jax.tree_map(lambda x: np.array(x, dtype=self.dtype), output)
 
 
 def to_displacement(cell):
