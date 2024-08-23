@@ -85,7 +85,7 @@ class mlffCalculatorSparse(Calculator):
             buffer_size_multiplier: float = 1.25,
             skin: float = 0.,
             add_energy_shift: bool = False,
-            dtype: np.dtype = np.float32,
+            dtype: np.dtype = np.float64,
             model: str = 'so3krates',
             has_aux: bool = False,
             from_file: bool = False
@@ -294,7 +294,7 @@ class mlffCalculatorSparse(Calculator):
                 )
 
         output = self.calculate_fn(system, neighbors)  # note different cell convention
-        self.results = jax.tree_map(lambda x: np.array(x), output)
+        self.results = jax.tree_map(lambda x: np.array(x, self.dtype), output)
 
 
 def to_displacement(cell):
