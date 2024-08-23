@@ -36,7 +36,7 @@ class MLFFPotential(MachineLearningPotential):
     dtype: Type = struct.field(pytree_node=False)  # TODO: remove and determine based on dtype of atomsx
 
     @classmethod
-    def create_from_ckpt_dir(cls, ckpt_dir: str, add_shift: bool = True, dtype=jnp.float32):
+    def create_from_ckpt_dir(cls, ckpt_dir: str, add_shift: bool = False, dtype=jnp.float32):
         """
 
 
