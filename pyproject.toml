@@ -26,7 +26,7 @@ pytest = "*"
 h5py = "*"
 ml_collections = "*"
 jraph = { git = "https://github.com/kabylda/jraph.git", branch = "master", optional = false }
-jax-md = { git = "https://github.com/kabylda/jax-md.git", branch = "main" , optional = false }
+jax-md = { git = "https://github.com/kabylda/jax-md.git", branch = "fix-high-precision-sum" , optional = false }
 glp = { git = "https://github.com/kabylda/glp.git", branch = "electrostatics_neighbourlist", optional = false }
 
 
