@@ -375,7 +375,7 @@ def vdw_QDO_disp_damp(
 
     C8 = 5 / gamma * C6
     C10 = 245 / 8 / gamma ** 2 * C6
-    p = gamma_scale * 2 * 2.54 * alpha_ij ** 1 / 7
+    p = gamma_scale * 2 * 2.54 * alpha_ij ** (1 / 7)
 
     C8 = jnp.asarray(C8, dtype=input_dtype)
     C10 = jnp.asarray(C10, dtype=input_dtype)
